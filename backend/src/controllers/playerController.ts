@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { MatchRecord } from '@/db/models/MatchRecord';
+import { God } from '@/db/models/God';
 import { normalizeLP } from '@/lib/normalizeLP';
 import { QUERY_LIMITS } from '@/constants';
 import {
@@ -10,6 +11,7 @@ import {
   getPlayerByDiscordId,
   updatePlayerProfile,
 } from '@/services/playerService';
+import { computePlayerScoreBreakdown, computePlayerDailyBreakdown } from '@/services/scoringEngine';
 
 export async function listPlayers(_req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -108,6 +110,21 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
       };
     }).filter(Boolean);
 
-    res.json({ player, snapshots, matches, matchPoints });
+    const god = player.godSlug ? await God.findOne({ slug: player.godSlug }).lean() : null;
+    const scoreBreakdown = await computePlayerScoreBreakdown(player.discordId);
+    const dailyPoints = await computePlayerDailyBreakdown(player.discordId);
+
+    res.json({
+      player,
+      snapshots,
+      matches,
+      matchPoints,
+      godSlug: player.godSlug,
+      godName: god?.name ?? null,
+      godTitle: god?.title ?? null,
+      scorePoints: scoreBreakdown.total,
+      pointBreakdown: scoreBreakdown,
+      dailyPoints,
+    });
   } catch (err) { next(err); }
 }

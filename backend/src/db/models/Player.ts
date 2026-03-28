@@ -15,8 +15,10 @@ const PlayerSchema = new Schema<PlayerDocument>({
   currentLP:     { type: Number, default: 0 },
   currentWins:      { type: Number, default: 0 },
   currentLosses:    { type: Number, default: 0 },
-  discordAvatarUrl: { type: String, default: '' },
-  discordUsername:   { type: String, default: '' },
+  discordAvatarUrl:    { type: String, default: '' },
+  discordUsername:     { type: String, default: '' },
+  godSlug:             { type: String, default: null },
+  isEliminatedFromGod: { type: Boolean, default: false },
 });
 
 export const Player = mongoose.model<PlayerDocument>('Player', PlayerSchema, 'players');

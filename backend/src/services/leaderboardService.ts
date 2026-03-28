@@ -1,5 +1,7 @@
 import { LpSnapshot } from '@/db/models/LpSnapshot';
+import { God } from '@/db/models/God';
 import { getTournamentSettings } from '@/services/tournamentService';
+import { computePlayerScore, computePlayerDailyPointGain } from '@/services/scoringEngine';
 import { normalizeLP } from '@/lib/normalizeLP';
 import { getDayBoundsUTC8, getTodayUTC8 } from '@/lib/dateUtils';
 import { listActivePlayers } from '@/services/playerService';
@@ -8,7 +10,12 @@ import type { LeaderboardEntry, LeaderboardResponse } from '@/types/Leaderboard'
 export async function computeLeaderboard(): Promise<LeaderboardResponse> {
   const settings = await getTournamentSettings();
   const players = await listActivePlayers();
-  const { dayStart, dayEnd } = getDayBoundsUTC8(getTodayUTC8());
+  const today = getTodayUTC8();
+  const { dayStart, dayEnd } = getDayBoundsUTC8(today);
+
+  // Cache god lookup
+  const gods = await God.find().lean();
+  const godMap = new Map(gods.map((g) => [g.slug, g]));
 
   const entries = await Promise.all(
     players.map(async (player): Promise<LeaderboardEntry & { _tournamentLpGain: number }> => {
@@ -32,6 +39,11 @@ export async function computeLeaderboard(): Promise<LeaderboardResponse> {
         ? currentNorm - normalizeLP(dailyBaseline.tier, dailyBaseline.rank, dailyBaseline.leaguePoints)
         : 0;
 
+      const scorePoints = await computePlayerScore(player.discordId);
+      const dailyPointGain = await computePlayerDailyPointGain(player.discordId, today);
+
+      const god = player.godSlug ? godMap.get(player.godSlug) : null;
+
       return {
         rank: 0,
         discordId:     player.discordId,
@@ -45,6 +57,11 @@ export async function computeLeaderboard(): Promise<LeaderboardResponse> {
         currentWins:   player.currentWins,
         currentLosses:    player.currentLosses,
         lpGain:           dailyLpGain,
+        scorePoints,
+        godSlug:          player.godSlug,
+        godName:          god?.name ?? null,
+        isEliminatedFromGod: player.isEliminatedFromGod,
+        dailyPointGain,
         discordAvatarUrl: player.discordAvatarUrl ?? '',
         discordUsername:   player.discordUsername ?? '',
         _tournamentLpGain: currentNorm - tournamentBaseNorm,
@@ -52,15 +69,15 @@ export async function computeLeaderboard(): Promise<LeaderboardResponse> {
     })
   );
 
-  // Primary sort: current ranking hierarchy (tier → division → LP)
-  // Secondary sort: total tournament LP gain (tiebreaker)
+  // Primary sort: scorePoints descending
+  // Secondary sort: normalized LP (tiebreaker)
+  // Tertiary sort: tournament LP gain (tiebreaker)
   entries.sort((a, b) => {
+    if (a.scorePoints !== b.scorePoints) return b.scorePoints - a.scorePoints;
+
     const aNorm = normalizeLP(a.currentTier, a.currentRank, a.currentLP);
     const bNorm = normalizeLP(b.currentTier, b.currentRank, b.currentLP);
-
-    if (aNorm !== bNorm) {
-      return bNorm - aNorm;
-    }
+    if (aNorm !== bNorm) return bNorm - aNorm;
 
     return b._tournamentLpGain - a._tournamentLpGain;
   });

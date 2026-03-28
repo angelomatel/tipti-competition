@@ -16,6 +16,8 @@ export interface IPlayer {
   currentLosses: number;
   discordAvatarUrl: string;
   discordUsername: string;
+  godSlug: string | null;
+  isEliminatedFromGod: boolean;
 }
 
 export interface ILpSnapshot {

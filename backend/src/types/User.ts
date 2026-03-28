@@ -5,4 +5,5 @@ export interface RegisterPlayerRequest {
   addedBy: string;
   discordAvatarUrl?: string;
   discordUsername?: string;
+  godSlug: string;
 }

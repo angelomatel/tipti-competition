@@ -3,7 +3,7 @@ import { getHealth } from '@/controllers/healthController';
 import { listPlayers, createPlayer, deletePlayer, patchPlayer, getPlayer } from '@/controllers/playerController';
 import { getLeaderboard } from '@/controllers/leaderboardController';
 import { getSnapshots } from '@/controllers/snapshotController';
-import { triggerCron } from '@/controllers/cronController';
+import { triggerCron, triggerDailyCron } from '@/controllers/cronController';
 import { getTournament, updateTournament } from '@/controllers/tournamentController';
 import { lookupAccount } from '@/controllers/riotLookupController';
 import {
@@ -12,6 +12,16 @@ import {
   getNotificationDailySummary,
   getNotificationDailyGraph,
 } from '@/controllers/notificationController';
+import {
+  listGods,
+  getGod,
+  seedGods,
+  assignGod,
+  eliminateGodHandler,
+  getGodStandings,
+} from '@/controllers/godController';
+import { getPlayerPoints, getPlayerDailyPoints } from '@/controllers/pointsController';
+import { wipePlayerData } from '@/controllers/adminController';
 
 export function configureRoutes(app: Express): void {
   app.get('/api/health', getHealth);
@@ -32,7 +42,24 @@ export function configureRoutes(app: Express): void {
   app.get('/api/riot/account/:gameName/:tagLine', lookupAccount);
 
   app.post('/api/cron/run', triggerCron);
+  app.post('/api/cron/run-daily', triggerDailyCron);
 
+  // God system
+  app.get('/api/gods', listGods);
+  app.get('/api/gods/standings', getGodStandings);
+  app.post('/api/gods/seed', seedGods);
+  app.get('/api/gods/:slug', getGod);
+  app.post('/api/gods/:slug/assign', assignGod);
+  app.post('/api/gods/:slug/eliminate', eliminateGodHandler);
+
+  // Points
+  app.get('/api/points/:discordId', getPlayerPoints);
+  app.get('/api/points/:discordId/daily', getPlayerDailyPoints);
+
+  // Admin
+  app.post('/api/admin/wipe-data', wipePlayerData);
+
+  // Notifications
   app.get('/api/notifications/feed', getNotificationFeed);
   app.post('/api/notifications/feed/ack', ackNotificationFeed);
   app.get('/api/notifications/daily-summary', getNotificationDailySummary);

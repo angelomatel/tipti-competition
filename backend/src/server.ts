@@ -5,6 +5,7 @@ import { connectDB } from '@/db/connection';
 import { configureRoutes } from '@/routing/routes';
 import { errorHandler } from '@/middleware/errorHandler';
 import { startCronJob } from '@/jobs/cronJob';
+import { startDailyCronJob } from '@/jobs/dailyCronJob';
 import { BACKEND_PORT } from '@/constants';
 import { logger } from '@/lib/logger';
 
@@ -18,6 +19,7 @@ app.use(errorHandler);
 async function start(): Promise<void> {
   await connectDB();
   startCronJob();
+  startDailyCronJob();
   app.listen(BACKEND_PORT, () => {
     logger.info(`Server running on http://localhost:${BACKEND_PORT}`);
   });

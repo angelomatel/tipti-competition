@@ -6,7 +6,7 @@ import type { PlayerDocument } from '@/types/Player';
 import type { RegisterPlayerRequest } from '@/types/User';
 
 export async function registerPlayer(data: RegisterPlayerRequest): Promise<PlayerDocument> {
-  const { discordId, gameName, tagLine, addedBy, discordAvatarUrl, discordUsername } = data;
+  const { discordId, gameName, tagLine, addedBy, discordAvatarUrl, discordUsername, godSlug } = data;
 
   const existing = await Player.findOne({ discordId });
   if (existing) {
@@ -17,6 +17,8 @@ export async function registerPlayer(data: RegisterPlayerRequest): Promise<Playe
       const ranked = findRankedEntry(leagueEntries);
 
       existing.isActive = true;
+      existing.godSlug = godSlug;
+      existing.isEliminatedFromGod = false;
       existing.currentTier   = ranked?.tier        ?? 'UNRANKED';
       existing.currentRank   = ranked?.rank        ?? '';
       existing.currentLP     = ranked?.leaguePoints ?? 0;
@@ -60,6 +62,7 @@ export async function registerPlayer(data: RegisterPlayerRequest): Promise<Playe
     currentLosses:    ranked?.losses      ?? 0,
     discordAvatarUrl: discordAvatarUrl ?? '',
     discordUsername:   discordUsername ?? '',
+    godSlug,
   });
 
   // Save initial snapshot as the tournament baseline

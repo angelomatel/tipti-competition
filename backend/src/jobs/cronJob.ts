@@ -10,17 +10,17 @@ export async function runCronCycle(): Promise<void> {
   const now = new Date();
 
   if (now < settings.startDate) {
-    logger.info('[cron] Tournament has not started yet. Skipping cycle.');
+    logger.warn('[cron] Tournament has not started yet. Skipping cycle.');
     return;
   }
   if (now > settings.endDate) {
-    logger.info('[cron] Tournament has ended. Skipping cycle.');
+    logger.warn('[cron] Tournament has ended. Skipping cycle.');
     return;
   }
 
-  logger.info('[cron] Starting snapshot cycle...');
+  logger.debug('[cron] Starting snapshot cycle...');
   const players = await listActivePlayers();
-  logger.info(`[cron] Processing ${players.length} active players`);
+  logger.debug(`[cron] Processing ${players.length} active players`);
 
   for (const player of players) {
     logger.debug({ discordId: player.discordId, gameName: player.gameName }, `[cron] Processing player ${player.gameName}#${player.tagLine}`);
@@ -33,7 +33,7 @@ export async function runCronCycle(): Promise<void> {
     }
   }
 
-  logger.info('[cron] Cycle complete.');
+  logger.debug('[cron] Cycle complete.');
 }
 
 export function startCronJob(): void {
@@ -41,6 +41,6 @@ export function startCronJob(): void {
   cron.schedule('*/15 * * * *', () => {
     void runCronCycle();
   });
-  logger.info('[cron] 15-minute snapshot job scheduled.');
+  logger.debug('[cron] 15-minute snapshot job scheduled.');
 }
 

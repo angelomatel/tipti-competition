@@ -11,6 +11,11 @@ export interface LeaderboardEntry {
   currentWins: number;
   currentLosses: number;
   lpGain: number;
+  scorePoints: number;
+  godSlug: string | null;
+  godName: string | null;
+  isEliminatedFromGod: boolean;
+  dailyPointGain: number;
   discordAvatarUrl: string;
   discordUsername: string;
 }
