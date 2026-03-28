@@ -3,8 +3,10 @@
 import { useEffect } from 'react';
 import { usePlayer } from '@/src/hooks/usePlayer';
 import { formatTier } from '@/src/types/Rank';
+import { COLORS } from '@/src/lib/theme';
 import RankImage from '@/src/components/images/RankImage/RankImage';
 import LPGraph from '@/src/components/LPGraph/LPGraph';
+import Avatar from '@/src/components/Avatar/Avatar';
 
 interface ProfileModalProps {
   discordId: string | null;
@@ -60,17 +62,12 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose }) => {
           <>
             {/* Header */}
             <div className="flex items-center gap-4 p-6 pb-4">
-              {data.player.discordAvatarUrl ? (
-                <img
-                  src={data.player.discordAvatarUrl}
-                  alt={data.player.discordUsername || data.player.gameName}
-                  className="w-14 h-14 rounded-full object-cover"
-                />
-              ) : (
-                <div className="w-14 h-14 rounded-full bg-violet-800 flex items-center justify-center text-white font-bold text-xl">
-                  {data.player.gameName.charAt(0).toUpperCase()}
-                </div>
-              )}
+              <Avatar
+                src={data.player.discordAvatarUrl}
+                alt={data.player.discordUsername || data.player.gameName}
+                initials={data.player.gameName.charAt(0).toUpperCase()}
+                size="lg"
+              />
               <div>
                 <h2 className="text-lg font-bold text-white">
                   {data.player.gameName}
@@ -94,7 +91,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose }) => {
                 <p className="text-xs text-violet-400/60">Rank</p>
               </div>
               <div className="bg-violet-950/30 rounded-lg p-3 text-center">
-                <p className="text-sm font-semibold text-[#00d4ff]">{data.player.currentLP} LP</p>
+                <p className="text-sm font-semibold" style={{ color: COLORS.cyan }}>{data.player.currentLP} LP</p>
                 <p className="text-xs text-violet-400/60">League Points</p>
               </div>
               <div className="bg-violet-950/30 rounded-lg p-3 text-center">

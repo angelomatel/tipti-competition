@@ -4,19 +4,14 @@ import { useState } from 'react';
 import { useLeaderboard } from '@/src/hooks/useLeaderboard';
 import UserBanner from '@/src/components/UserBanner/UserBanner';
 import ProfileModal from '@/src/components/ProfileModal/ProfileModal';
+import LeaderboardSkeleton from '@/src/components/LeaderboardSkeleton/LeaderboardSkeleton';
 
 const Leaderboard = () => {
   const { data, error, isLoading } = useLeaderboard();
   const [selectedDiscordId, setSelectedDiscordId] = useState<string | null>(null);
 
   if (isLoading) {
-    return (
-      <div className="flex flex-col gap-3">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="h-20 rounded-xl bg-[#0d0d2b] border border-violet-900/40 animate-pulse" />
-        ))}
-      </div>
-    );
+    return <LeaderboardSkeleton />;
   }
 
   if (error || !data) {

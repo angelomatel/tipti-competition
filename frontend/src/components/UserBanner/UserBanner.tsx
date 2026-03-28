@@ -1,7 +1,8 @@
 import type { LeaderboardEntry } from '@/src/types/LeaderboardEntry';
 import { formatTier } from '@/src/types/Rank';
-import { PODIUM_COLORS, DEFAULT_RANK_COLOR } from '@/src/lib/theme';
+import { PODIUM_COLORS, DEFAULT_RANK_COLOR, COLORS } from '@/src/lib/theme';
 import RankImage from '@/src/components/images/RankImage/RankImage';
+import Avatar from '@/src/components/Avatar/Avatar';
 
 interface UserBannerProps {
   entry: LeaderboardEntry;
@@ -25,17 +26,12 @@ const UserBanner: React.FC<UserBannerProps> = ({ entry, onClick }) => {
       </span>
 
       {/* Discord avatar */}
-      {entry.discordAvatarUrl ? (
-        <img
-          src={entry.discordAvatarUrl}
-          alt={entry.discordUsername || entry.gameName}
-          className="w-10 h-10 rounded-full object-cover"
-        />
-      ) : (
-        <div className="w-10 h-10 rounded-full bg-violet-800 flex items-center justify-center text-white font-bold text-sm">
-          {initials}
-        </div>
-      )}
+      <Avatar
+        src={entry.discordAvatarUrl}
+        alt={entry.discordUsername || entry.gameName}
+        initials={initials}
+        size="md"
+      />
 
       {/* Player info */}
       <div className="flex-1 min-w-0">
@@ -50,11 +46,10 @@ const UserBanner: React.FC<UserBannerProps> = ({ entry, onClick }) => {
       </div>
 
       {/* LP gain badge */}
-      <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-        entry.lpGain >= 0
-          ? 'bg-cyan-950/60 text-[#00d4ff]'
-          : 'bg-red-950/60 text-red-400'
-      }`}>
+      <span
+        className={`px-3 py-1 rounded-full text-sm font-bold ${entry.lpGain >= 0 ? 'bg-cyan-950/60' : 'bg-red-950/60 text-red-400'}`}
+        style={entry.lpGain >= 0 ? { color: COLORS.cyan } : undefined}
+      >
         {lpGainStr} LP
       </span>
     </div>
