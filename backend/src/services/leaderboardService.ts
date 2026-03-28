@@ -1,27 +1,39 @@
 import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { getTournamentSettings } from '@/services/tournamentService';
 import { normalizeLP } from '@/lib/normalizeLP';
+import { getDayBoundsUTC8, getTodayUTC8 } from '@/lib/dateUtils';
 import { listActivePlayers } from '@/services/playerService';
 import type { LeaderboardEntry, LeaderboardResponse } from '@/types/Leaderboard';
 
 export async function computeLeaderboard(): Promise<LeaderboardResponse> {
   const settings = await getTournamentSettings();
   const players = await listActivePlayers();
+  const { dayStart, dayEnd } = getDayBoundsUTC8(getTodayUTC8());
 
   const entries = await Promise.all(
-    players.map(async (player): Promise<LeaderboardEntry> => {
-      const firstSnapshot = await LpSnapshot.findOne({
+    players.map(async (player): Promise<LeaderboardEntry & { _tournamentLpGain: number }> => {
+      const currentNorm = normalizeLP(player.currentTier, player.currentRank, player.currentLP);
+
+      // Tournament baseline: first snapshot on/after tournament start
+      const tournamentBaseline = await LpSnapshot.findOne({
         puuid: player.puuid,
         capturedAt: { $gte: settings.startDate },
       }).sort({ capturedAt: 1 });
-
-      const currentNorm = normalizeLP(player.currentTier, player.currentRank, player.currentLP);
-      const baseNorm = firstSnapshot
-        ? normalizeLP(firstSnapshot.tier, firstSnapshot.rank, firstSnapshot.leaguePoints)
+      const tournamentBaseNorm = tournamentBaseline
+        ? normalizeLP(tournamentBaseline.tier, tournamentBaseline.rank, tournamentBaseline.leaguePoints)
         : currentNorm;
 
+      // Daily baseline: first snapshot of today (UTC+8)
+      const dailyBaseline = await LpSnapshot.findOne({
+        puuid: player.puuid,
+        capturedAt: { $gte: dayStart, $lte: dayEnd },
+      }).sort({ capturedAt: 1 });
+      const dailyLpGain = dailyBaseline
+        ? currentNorm - normalizeLP(dailyBaseline.tier, dailyBaseline.rank, dailyBaseline.leaguePoints)
+        : 0;
+
       return {
-        rank: 0, // filled below after sort
+        rank: 0,
         discordId:     player.discordId,
         puuid:         player.puuid,
         gameName:      player.gameName,
@@ -32,15 +44,16 @@ export async function computeLeaderboard(): Promise<LeaderboardResponse> {
         currentLP:     player.currentLP,
         currentWins:   player.currentWins,
         currentLosses:    player.currentLosses,
-        lpGain:           currentNorm - baseNorm,
+        lpGain:           dailyLpGain,
         discordAvatarUrl: player.discordAvatarUrl ?? '',
         discordUsername:   player.discordUsername ?? '',
+        _tournamentLpGain: currentNorm - tournamentBaseNorm,
       };
     })
   );
 
   // Primary sort: current ranking hierarchy (tier → division → LP)
-  // Secondary sort: LP gain since tournament start
+  // Secondary sort: total tournament LP gain (tiebreaker)
   entries.sort((a, b) => {
     const aNorm = normalizeLP(a.currentTier, a.currentRank, a.currentLP);
     const bNorm = normalizeLP(b.currentTier, b.currentRank, b.currentLP);
@@ -49,9 +62,12 @@ export async function computeLeaderboard(): Promise<LeaderboardResponse> {
       return bNorm - aNorm;
     }
 
-    return b.lpGain - a.lpGain;
+    return b._tournamentLpGain - a._tournamentLpGain;
   });
   entries.forEach((e, i) => { e.rank = i + 1; });
 
-  return { entries, updatedAt: new Date().toISOString() };
+  // Strip internal field before returning
+  const cleaned: LeaderboardEntry[] = entries.map(({ _tournamentLpGain, ...entry }) => entry);
+
+  return { entries: cleaned, updatedAt: new Date().toISOString() };
 }

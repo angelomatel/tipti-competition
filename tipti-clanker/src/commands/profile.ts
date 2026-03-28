@@ -55,7 +55,7 @@ export class Profile {
         .addFields(
           { name: 'Rank', value: tierDisplay, inline: true },
           { name: 'W/L', value: `${player.currentWins}W / ${player.currentLosses}L`, inline: true },
-          { name: 'LP Gain (tournament)', value: lpGain, inline: true },
+          { name: 'LP Gain (today)', value: lpGain, inline: true },
           { name: 'Leaderboard Position', value: rankPos, inline: true },
         )
         .setColor(EMBED_COLORS.PRIMARY)
