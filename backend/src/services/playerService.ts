@@ -11,8 +11,30 @@ export async function registerPlayer(data: RegisterPlayerRequest): Promise<Playe
   const existing = await Player.findOne({ discordId });
   if (existing) {
     if (!existing.isActive) {
+      // Re-fetch current rank from Riot and create a fresh baseline
+      const riot = getRiotClient();
+      const leagueEntries = await riot.getTftLeagueByPuuid(existing.puuid);
+      const ranked = findRankedEntry(leagueEntries);
+
       existing.isActive = true;
+      existing.currentTier   = ranked?.tier        ?? 'UNRANKED';
+      existing.currentRank   = ranked?.rank        ?? '';
+      existing.currentLP     = ranked?.leaguePoints ?? 0;
+      existing.currentWins   = ranked?.wins        ?? 0;
+      existing.currentLosses = ranked?.losses      ?? 0;
       await existing.save();
+
+      if (ranked) {
+        await LpSnapshot.create({
+          puuid:         existing.puuid,
+          tier:          ranked.tier,
+          rank:          ranked.rank,
+          leaguePoints:  ranked.leaguePoints,
+          wins:          ranked.wins,
+          losses:        ranked.losses,
+        });
+      }
+
       return existing;
     }
     throw new Error(`Player with discordId ${discordId} is already registered.`);
@@ -68,4 +90,11 @@ export async function listActivePlayers(): Promise<PlayerDocument[]> {
 
 export async function getPlayerByDiscordId(discordId: string): Promise<PlayerDocument | null> {
   return Player.findOne({ discordId });
+}
+
+export async function updatePlayerProfile(
+  discordId: string,
+  updates: Partial<Pick<PlayerDocument, 'discordAvatarUrl' | 'discordUsername'>>,
+): Promise<void> {
+  await Player.updateOne({ discordId }, { $set: updates });
 }

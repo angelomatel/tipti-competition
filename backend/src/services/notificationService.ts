@@ -3,7 +3,9 @@ import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { Player } from '@/db/models/Player';
 import { normalizeLP } from '@/lib/normalizeLP';
 import { listActivePlayers } from '@/services/playerService';
-import { NOTIFICATION_PLACEMENTS, DAILY_GRAPH_TOP_N, UTC8_OFFSET_MS } from '@/constants';
+import { getTournamentSettings } from '@/services/tournamentService';
+import { NOTIFICATION_PLACEMENTS, DAILY_GRAPH_TOP_N } from '@/constants';
+import { getDayBoundsUTC8 } from '@/lib/dateUtils';
 
 export interface FeedNotification {
   matchId: string;
@@ -16,9 +18,11 @@ export interface FeedNotification {
 }
 
 export async function getFeedNotifications(): Promise<FeedNotification[]> {
+  const settings = await getTournamentSettings();
   const matches = await MatchRecord.find({
     placement: { $in: NOTIFICATION_PLACEMENTS },
     notifiedAt: null,
+    playedAt: { $gte: settings.startDate, $lte: settings.endDate },
   }).sort({ playedAt: 1 });
 
   const results: FeedNotification[] = [];
@@ -83,13 +87,6 @@ export interface DailySummary {
   date: string;
 }
 
-/** Returns the start/end of a calendar day in UTC+8 as UTC Date objects. */
-function getDayBoundsUTC8(dateStr: string): { dayStart: Date; dayEnd: Date } {
-  // dateStr is YYYY-MM-DD in UTC+8; convert to UTC bounds
-  const dayStart = new Date(new Date(dateStr + 'T00:00:00.000Z').getTime() - UTC8_OFFSET_MS);
-  const dayEnd = new Date(new Date(dateStr + 'T23:59:59.999Z').getTime() - UTC8_OFFSET_MS);
-  return { dayStart, dayEnd };
-}
 
 export async function getDailySummary(date: string): Promise<DailySummary> {
   const { dayStart, dayEnd } = getDayBoundsUTC8(date);

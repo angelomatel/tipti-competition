@@ -12,14 +12,25 @@ export async function captureSnapshotForPlayer(player: PlayerDocument): Promise<
   const ranked = findRankedEntry(entries);
   if (!ranked) return;
 
-  await LpSnapshot.create({
-    puuid:         player.puuid,
-    tier:          ranked.tier,
-    rank:          ranked.rank,
-    leaguePoints:  ranked.leaguePoints,
-    wins:          ranked.wins,
-    losses:        ranked.losses,
-  });
+  // Only create a new snapshot if rank data has changed since the last one
+  const lastSnapshot = await LpSnapshot.findOne({ puuid: player.puuid }).sort({ capturedAt: -1 });
+  const unchanged = lastSnapshot
+    && lastSnapshot.tier          === ranked.tier
+    && lastSnapshot.rank          === ranked.rank
+    && lastSnapshot.leaguePoints  === ranked.leaguePoints
+    && lastSnapshot.wins          === ranked.wins
+    && lastSnapshot.losses        === ranked.losses;
+
+  if (!unchanged) {
+    await LpSnapshot.create({
+      puuid:         player.puuid,
+      tier:          ranked.tier,
+      rank:          ranked.rank,
+      leaguePoints:  ranked.leaguePoints,
+      wins:          ranked.wins,
+      losses:        ranked.losses,
+    });
+  }
 
   await Player.updateOne({ _id: player._id }, {
     currentTier:   ranked.tier,
