@@ -1,27 +1,24 @@
 import { type CommandInteraction, EmbedBuilder } from 'discord.js';
 import { Discord, Slash } from 'discordx';
 import { getLeaderboard } from '@/lib/backendClient';
+import { formatTierName, formatLpGain } from '@/lib/format';
+import { EMBED_COLORS, LEADERBOARD_TOP_N } from '@/lib/constants';
+import { Tier } from '@/types/Rank';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
-const RANK_EMOJIS: Record<string, string> = {
-  IRON: '<:iron:1457026116001988763>',
-  BRONZE: '<:bronze:1457026206674194556>',
-  SILVER: '<:silver:1457026070854373619>',
-  GOLD: '<:gold:1457026180694933650>',
-  PLATINUM: '<:platinum:1461948180471218267>',
-  EMERALD: '<:emerald:1457026255894478890>',
-  DIAMOND: '<:diamond:1457026145739346012>',
-  MASTER: '<:master:1457026279210483743>',
-  GRANDMASTER: '<:grandmaster:1457026329148002395>',
-  CHALLENGER: '<:challenger:1457026304279974063>',
+const RANK_EMOJIS: Partial<Record<Tier, string>> = {
+  [Tier.IRON]:        '<:iron:1457026116001988763>',
+  [Tier.BRONZE]:      '<:bronze:1457026206674194556>',
+  [Tier.SILVER]:      '<:silver:1457026070854373619>',
+  [Tier.GOLD]:        '<:gold:1457026180694933650>',
+  [Tier.PLATINUM]:    '<:platinum:1461948180471218267>',
+  [Tier.EMERALD]:     '<:emerald:1457026255894478890>',
+  [Tier.DIAMOND]:     '<:diamond:1457026145739346012>',
+  [Tier.MASTER]:      '<:master:1457026279210483743>',
+  [Tier.GRANDMASTER]: '<:grandmaster:1457026329148002395>',
+  [Tier.CHALLENGER]:  '<:challenger:1457026304279974063>',
 };
-
-function formatTierName(tier: string): string {
-  if (!tier) return '';
-  const lower = tier.toLowerCase();
-  return lower.charAt(0).toUpperCase() + lower.slice(1);
-}
 
 @Discord()
 export class Leaderboard {
@@ -41,7 +38,7 @@ export class Leaderboard {
         return;
       }
 
-      const top = entries.slice(0, 10);
+      const top = entries.slice(0, LEADERBOARD_TOP_N);
       const nameByDiscordId = new Map<string, string>();
 
       if (interaction.guild) {
@@ -65,9 +62,9 @@ export class Leaderboard {
         const displayName = (e.discordId && nameByDiscordId.get(e.discordId)) || e.gameName;
 
         const riotId = `${e.gameName}#${e.tagLine}`;
-        const tierName = e.currentTier === 'UNRANKED' ? 'Unranked' : formatTierName(e.currentTier);
-        const tierEmoji = RANK_EMOJIS[e.currentTier as string] ?? '';
-        const gain = e.lpGain >= 0 ? `+${e.lpGain}` : `${e.lpGain}`;
+        const tierName = formatTierName(e.currentTier === 'UNRANKED' ? '' : e.currentTier) || 'Unranked';
+        const tierEmoji = RANK_EMOJIS[e.currentTier as Tier] ?? '';
+        const gain = formatLpGain(e.lpGain);
 
         const line1 = `${prefix} ${mention} (${displayName}) \`${riotId}\``;
         const line2 = `${tierEmoji} **${tierName}** ${e.currentLP} LP (\`${gain} LP\` today)`;
@@ -78,7 +75,7 @@ export class Leaderboard {
       const embed = new EmbedBuilder()
         .setTitle('Space Gods — eulbeulb bootcamp leaderboard')
         .setDescription(lines.join('\n\n'))
-        .setColor(0x7b2fff)
+        .setColor(EMBED_COLORS.PRIMARY)
         .setFooter({ text: `Updated ${new Date(data.updatedAt).toLocaleString()}` })
         .setTimestamp();
 

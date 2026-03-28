@@ -6,6 +6,8 @@ import {
 } from 'discord.js';
 import { Discord, Slash, SlashOption } from 'discordx';
 import { getPlayer, getLeaderboard } from '@/lib/backendClient';
+import { formatTierDisplay, formatLpGain } from '@/lib/format';
+import { EMBED_COLORS } from '@/lib/constants';
 
 @Discord()
 export class Profile {
@@ -43,13 +45,8 @@ export class Profile {
         (e: any) => e.discordId === targetId
       );
 
-      const tierDisplay = player.currentTier === 'UNRANKED'
-        ? 'Unranked'
-        : `${player.currentTier} ${player.currentRank} — ${player.currentLP} LP`;
-
-      const lpGain = leaderboardEntry
-        ? (leaderboardEntry.lpGain >= 0 ? `+${leaderboardEntry.lpGain}` : `${leaderboardEntry.lpGain}`)
-        : 'N/A';
+      const tierDisplay = formatTierDisplay(player.currentTier, player.currentRank, player.currentLP);
+      const lpGain = leaderboardEntry ? formatLpGain(leaderboardEntry.lpGain) : 'N/A';
 
       const rankPos = leaderboardEntry ? `#${leaderboardEntry.rank}` : 'N/A';
 
@@ -61,7 +58,7 @@ export class Profile {
           { name: 'LP Gain (tournament)', value: lpGain, inline: true },
           { name: 'Leaderboard Position', value: rankPos, inline: true },
         )
-        .setColor(0x7b2fff)
+        .setColor(EMBED_COLORS.PRIMARY)
         .setTimestamp();
 
       await interaction.editReply({ embeds: [embed] });
