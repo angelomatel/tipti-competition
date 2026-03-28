@@ -7,6 +7,7 @@ import {
   getDailySummary,
   getDailyGraphData,
   updatePlayerProfile,
+  getGodStandings,
 } from '@/lib/backendClient';
 import { renderLpGraph } from '@/lib/chartRenderer';
 import { logger } from '@/lib/logger';
@@ -134,9 +135,44 @@ async function runDailyJob(client: Client): Promise<void> {
       await channel.send({ embeds: [embed] });
     }
 
-    logger.info({ date }, '[daily-job] Posted daily recap');
+    logger.debug({ date }, '[daily-job] Posted daily recap');
   } catch (err) {
     logger.error({ err }, '[daily-job] Error in daily job');
+  }
+}
+
+async function runGodStandingsJob(client: Client): Promise<void> {
+  try {
+    const settingsRes = await getTournamentSettings();
+    const settings = settingsRes.settings;
+    if (!settings.isActive || !settings.godStandingsChannelId) return;
+
+    const channel = await getTextChannel(client, settings.godStandingsChannelId);
+    if (!channel) {
+      logger.warn('[god-standings-job] godStandingsChannelId is set but channel not found');
+      return;
+    }
+
+    const data = await getGodStandings();
+    const standings: any[] = data.standings ?? [];
+    if (standings.length === 0) return;
+
+    const lines = standings.map((god: any, i: number) => {
+      const status = god.isEliminated ? '~~' : '';
+      const prefix = god.isEliminated ? '💀' : `#${i + 1}`;
+      return `${prefix} ${status}**${god.name}** — ${god.title}${status}\n   Score: **${Math.round(god.score)}** | Players: ${god.playerCount}`;
+    });
+
+    const embed = new EmbedBuilder()
+      .setTitle('God Standings Update')
+      .setDescription(lines.join('\n\n'))
+      .setColor(EMBED_COLORS.GOD_STANDINGS)
+      .setTimestamp();
+
+    await channel.send({ embeds: [embed] });
+    logger.debug('[god-standings-job] Posted god standings update');
+  } catch (err) {
+    logger.error({ err }, '[god-standings-job] Error in god standings job');
   }
 }
 
@@ -149,5 +185,9 @@ export function startNotificationJobs(client: Client): void {
     void runDailyJob(client);
   });
 
-  logger.info('[notifications] Feed job (*/5 min) and daily job (16:00 UTC) scheduled');
+  cron.schedule(CRON_SCHEDULES.GOD_STANDINGS_JOB, () => {
+    void runGodStandingsJob(client);
+  });
+
+  logger.debug('[notifications] Feed (*/5 min), daily (16:00 UTC), and god standings (16:05 UTC) jobs scheduled');
 }

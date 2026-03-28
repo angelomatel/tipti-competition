@@ -71,9 +71,10 @@ export class Leaderboard {
         const tierName = formatTierName(e.currentTier === 'UNRANKED' ? '' : e.currentTier) || 'Unranked';
         const tierEmoji = RANK_EMOJIS[e.currentTier as Tier] ?? '';
         const gain = formatLpGain(e.lpGain);
+        const godTag = e.godName ? ` [${e.godName}]` : '';
 
-        const line1 = `${prefix} ${mention} (${displayName}) \`${riotId}\``;
-        const line2 = `${tierEmoji} **${tierName}** ${e.currentLP} LP (\`${gain} LP\` today)`;
+        const line1 = `${prefix} ${mention} (${displayName}) \`${riotId}\`${godTag}`;
+        const line2 = `${tierEmoji} **${tierName}** ${e.currentLP} LP | **${e.scorePoints ?? 0}** pts (\`${gain} LP\` today)`;
 
         return `${line1}\n${line2}`;
       });

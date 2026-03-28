@@ -49,6 +49,7 @@ export interface RegisterPlayerRequest {
   addedBy: string;
   discordAvatarUrl?: string;
   discordUsername?: string;
+  godSlug: string;
 }
 
 export function registerPlayer(data: RegisterPlayerRequest): Promise<any> {
@@ -101,4 +102,41 @@ export function getDailySummary(date: string): Promise<any> {
 
 export function getDailyGraphData(date: string): Promise<any> {
   return request('GET', `/api/notifications/daily-graph?date=${encodeURIComponent(date)}`);
+}
+
+// God system endpoints
+export function listGods(): Promise<any> {
+  return request('GET', '/api/gods');
+}
+
+export function getGodStandings(): Promise<any> {
+  return request('GET', '/api/gods/standings');
+}
+
+export function getGod(slug: string): Promise<any> {
+  return request('GET', `/api/gods/${encodeURIComponent(slug)}`);
+}
+
+export function assignPlayerToGod(slug: string, discordId: string): Promise<any> {
+  return request('POST', `/api/gods/${encodeURIComponent(slug)}/assign`, { discordId });
+}
+
+export function eliminateGod(slug: string, phase: number): Promise<any> {
+  return request('POST', `/api/gods/${encodeURIComponent(slug)}/eliminate`, { phase });
+}
+
+export function getPlayerPoints(discordId: string): Promise<any> {
+  return request('GET', `/api/points/${encodeURIComponent(discordId)}`);
+}
+
+export function triggerDailyCron(day?: string): Promise<any> {
+  return request('POST', '/api/cron/run-daily', day ? { day } : {});
+}
+
+export function seedGods(): Promise<any> {
+  return request('POST', '/api/gods/seed');
+}
+
+export function wipePlayerData(): Promise<any> {
+  return request('POST', '/api/admin/wipe-data');
 }

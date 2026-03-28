@@ -2,37 +2,27 @@ import {
   ApplicationCommandOptionType,
   type CommandInteraction,
   EmbedBuilder,
-  PermissionFlagsBits,
-  type GuildMember,
   ActionRowBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
   ComponentType,
 } from 'discord.js';
 import { Discord, Slash, SlashOption } from 'discordx';
-import { registerPlayer, removePlayer, triggerCron, listGods, lookupRiotAccount } from '@/lib/backendClient';
+import { registerPlayer, listGods, lookupRiotAccount } from '@/lib/backendClient';
 import { parseRiotId } from '@/lib/riotId';
 import { formatTierDisplay } from '@/lib/format';
 import { EMBED_COLORS, GOD_CHOICES } from '@/lib/constants';
 
 @Discord()
-export class AdminCommands {
+export class Register {
   @Slash({
-    name: 'add-player',
-    description: 'Register a player in the tournament (admin only)',
-    defaultMemberPermissions: [PermissionFlagsBits.Administrator],
+    name: 'register',
+    description: 'Register for the tournament with your Riot account (e.g. /register account:PlayerName#TAG)',
   })
-  async addPlayer(
-    @SlashOption({
-      name: 'user',
-      description: 'The Discord user to register',
-      required: true,
-      type: ApplicationCommandOptionType.User,
-    })
-    member: GuildMember,
+  async register(
     @SlashOption({
       name: 'account',
-      description: 'Riot ID with tag, e.g. PlayerName#1234',
+      description: 'Your Riot ID with tag, e.g. PlayerName#1234',
       required: true,
       type: ApplicationCommandOptionType.String,
     })
@@ -44,7 +34,7 @@ export class AdminCommands {
     const { gameName, tagLine, isValid } = parseRiotId(account);
 
     if (!isValid) {
-      await interaction.editReply({ content: '❌ Invalid format. Use `username#TAG`.' });
+      await interaction.editReply({ content: '❌ Invalid format. Use `username#TAG` (the #TAG is required).' });
       return;
     }
 
@@ -52,11 +42,11 @@ export class AdminCommands {
     try {
       await lookupRiotAccount(gameName, tagLine);
     } catch {
-      await interaction.editReply({ content: '❌ Could not find that Riot account.' });
+      await interaction.editReply({ content: '❌ Could not find that Riot account. Double-check the username and tag.' });
       return;
     }
 
-    // Fetch gods for selection
+    // Fetch current gods to show availability
     let gods: any[] = [];
     try {
       gods = await listGods();
@@ -64,6 +54,7 @@ export class AdminCommands {
       gods = GOD_CHOICES.map((g) => ({ ...g, isEliminated: false, playerCount: 0 }));
     }
 
+    // Build god selection dropdown
     const options = GOD_CHOICES.map((god) => {
       const godData = gods.find((g: any) => g.slug === god.slug);
       const eliminated = godData?.isEliminated ?? false;
@@ -72,12 +63,13 @@ export class AdminCommands {
       return new StringSelectMenuOptionBuilder()
         .setLabel(`${god.name} — ${god.title}`)
         .setDescription(`${playerCount} player${playerCount !== 1 ? 's' : ''}${eliminated ? ' (ELIMINATED)' : ''}`)
-        .setValue(god.slug);
+        .setValue(god.slug)
+        .setDefault(false);
     });
 
     const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId('god_select_admin')
-      .setPlaceholder('Choose a God for this player...')
+      .setCustomId('god_select')
+      .setPlaceholder('Choose your God...')
       .addOptions(options);
 
     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
@@ -95,16 +87,20 @@ export class AdminCommands {
     ];
 
     const embed = new EmbedBuilder()
-      .setTitle('Choose God for Player')
+      .setTitle('Choose Your God')
       .setDescription(
-        `Registering <@${member.id}> as **${gameName}#${tagLine}**\n\n` +
+        `Account: **${gameName}#${tagLine}**\n\n` +
         '> God buffs activate **after Phase 1** (Day 6+). During Phase 1, all gods play without buffs.\n\n' +
         buffSummaries.join('\n'),
       )
       .setColor(EMBED_COLORS.PRIMARY);
 
-    const reply = await interaction.editReply({ embeds: [embed], components: [row] });
+    const reply = await interaction.editReply({
+      embeds: [embed],
+      components: [row],
+    });
 
+    // Wait for selection (60 second timeout)
     try {
       const selection = await reply.awaitMessageComponent({
         componentType: ComponentType.StringSelect,
@@ -118,12 +114,12 @@ export class AdminCommands {
       const godInfo = GOD_CHOICES.find((g) => g.slug === godSlug);
 
       const result = await registerPlayer({
-        discordId: member.id,
+        discordId: interaction.user.id,
         gameName,
         tagLine,
         addedBy: interaction.user.id,
-        discordAvatarUrl: member.displayAvatarURL({ extension: 'png', size: 128 }),
-        discordUsername: member.user.username,
+        discordAvatarUrl: interaction.user.displayAvatarURL({ extension: 'png', size: 128 }),
+        discordUsername: interaction.user.username,
         godSlug,
       });
 
@@ -133,8 +129,8 @@ export class AdminCommands {
       const confirmEmbed = new EmbedBuilder()
         .setTitle(`✅ Registered: ${player.gameName}#${player.tagLine}`)
         .addFields(
-          { name: 'Discord', value: `<@${member.id}>`, inline: true },
           { name: 'Rank', value: tierDisplay, inline: true },
+          { name: 'W/L', value: `${player.currentWins}W / ${player.currentLosses}L`, inline: true },
           { name: 'God', value: `${godInfo?.name ?? godSlug} — ${godInfo?.title ?? ''}`, inline: true },
         )
         .setColor(EMBED_COLORS.PRIMARY)
@@ -144,58 +140,21 @@ export class AdminCommands {
     } catch (err: any) {
       const msg = err?.message ?? String(err);
       if (msg.includes('time') || msg.includes('Collector')) {
-        await interaction.editReply({ content: '❌ Selection timed out.', embeds: [], components: [] });
+        await interaction.editReply({
+          content: '❌ God selection timed out. Run `/register` again.',
+          embeds: [],
+          components: [],
+        });
       } else {
-        await interaction.editReply({ content: `❌ Failed to register player: ${msg}`, embeds: [], components: [] });
+        const already = msg.includes('already registered') || msg.includes('409');
+        await interaction.editReply({
+          content: already
+            ? '❌ Your account is already linked. Contact an admin if you need to change it.'
+            : `❌ Failed to register: ${msg}`,
+          embeds: [],
+          components: [],
+        });
       }
-    }
-  }
-
-  @Slash({
-    name: 'remove-player',
-    description: 'Remove a player from the tournament (admin only)',
-    defaultMemberPermissions: [PermissionFlagsBits.Administrator],
-  })
-  async removePlayer(
-    @SlashOption({
-      name: 'user',
-      description: 'The Discord user to remove',
-      required: true,
-      type: ApplicationCommandOptionType.User,
-    })
-    member: GuildMember,
-    interaction: CommandInteraction,
-  ): Promise<void> {
-    await interaction.deferReply({ ephemeral: true });
-
-    try {
-      await removePlayer(member.id);
-      await interaction.editReply({ content: `✅ <@${member.id}> has been removed from the tournament.` });
-    } catch (err: any) {
-      const notFound = err?.message?.includes('not found') || err?.message?.includes('404');
-      await interaction.editReply({
-        content: notFound
-          ? `❌ <@${member.id}> is not registered in the tournament.`
-          : `❌ Failed to remove player: ${err?.message ?? err}`,
-      });
-    }
-  }
-
-  @Slash({
-    name: 'refresh-data',
-    description: 'Manually trigger a data refresh for all players (admin only)',
-    defaultMemberPermissions: [PermissionFlagsBits.Administrator],
-  })
-  async refreshData(
-    interaction: CommandInteraction,
-  ): Promise<void> {
-    await interaction.deferReply({ ephemeral: true });
-
-    try {
-      await triggerCron();
-      await interaction.editReply({ content: '✅ Data refresh triggered. Snapshots and match records are being updated for all active players.' });
-    } catch (err: any) {
-      await interaction.editReply({ content: `❌ Failed to trigger refresh: ${err?.message ?? err}` });
     }
   }
 }
