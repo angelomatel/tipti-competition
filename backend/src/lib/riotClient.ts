@@ -1,4 +1,5 @@
 import { RiotRequestQueue } from '@/lib/riotQueue';
+import { Tier, Division } from '@/types/Rank';
 
 export enum TftQueueType {
   RANKED      = 'RANKED_TFT',
@@ -29,8 +30,8 @@ export interface MiniSeriesDTO {
 export interface TFTLeagueEntryDTO {
   leagueId: string;
   queueType: TftQueueType;
-  tier: string;
-  rank: string;
+  tier: Tier;
+  rank: Division;
   leaguePoints: number;
   wins: number;
   losses: number;

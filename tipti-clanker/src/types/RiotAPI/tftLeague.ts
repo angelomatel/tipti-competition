@@ -1,3 +1,5 @@
+import { Tier, Division } from '@/types/Rank';
+
 // Types for TFT League API responses
 export interface MiniSeriesDTO {
   losses: number;
@@ -9,8 +11,8 @@ export interface MiniSeriesDTO {
 export interface TFTLeagueEntryDTO {
   leagueId: string;
   queueType: string;
-  tier: string;
-  rank: string;
+  tier: Tier;
+  rank: Division;
   leaguePoints: number;
   wins: number;
   losses: number;
