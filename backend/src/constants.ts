@@ -23,3 +23,6 @@ export const DATE_PARAM_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Milliseconds offset for UTC+8 (Asia/Manila) timezone. */
 export const UTC8_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+/** Timeout in milliseconds for outbound Riot API requests. */
+export const RIOT_REQUEST_TIMEOUT_MS = 15_000;

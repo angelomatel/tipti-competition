@@ -1,6 +1,6 @@
 import type { Express } from 'express';
 import { getHealth } from '@/controllers/healthController';
-import { listPlayers, createPlayer, deletePlayer, getPlayer } from '@/controllers/playerController';
+import { listPlayers, createPlayer, deletePlayer, patchPlayer, getPlayer } from '@/controllers/playerController';
 import { getLeaderboard } from '@/controllers/leaderboardController';
 import { getSnapshots } from '@/controllers/snapshotController';
 import { triggerCron } from '@/controllers/cronController';
@@ -21,6 +21,7 @@ export function configureRoutes(app: Express): void {
   app.get('/api/players', listPlayers);
   app.post('/api/players', createPlayer);
   app.delete('/api/players/:discordId', deletePlayer);
+  app.patch('/api/players/:discordId', patchPlayer);
   app.get('/api/players/:discordId', getPlayer);
 
   app.get('/api/snapshots/:puuid', getSnapshots);

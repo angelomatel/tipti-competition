@@ -81,9 +81,14 @@ Frontend ──/api proxy──► Backend API
 - CORS enabled, JSON middleware
 - Mongoose models: `Player` (with `discordAvatarUrl`, `discordUsername`), `LpSnapshot`, `MatchRecord`, `TournamentSettings`
 - Cron job (`*/15 * * * *`): captures LP snapshots + match records for active players, enforces tournament start/end dates
-- Tournament dates configurable via API (`GET/PUT /api/tournament/settings`) and Discord `/tournament-settings` command
+- Match capture uses Riot API `startTime` param (last captured match timestamp) to prevent gaps during outages; only stores matches within the tournament date window
+- Snapshot deduplication: skips creating a new `LpSnapshot` when rank data is unchanged from the previous snapshot
+- Player reactivation (soft-deleted → re-added) re-fetches rank from Riot and creates a fresh baseline snapshot
+- Tournament dates configurable via API (`GET/PUT/PATCH /api/tournament/settings`) and Discord `/tournament-settings` command
+- Leaderboard LP gain is **daily** (UTC+8 calendar day), not cumulative tournament gain; tiebreaker sort uses total tournament LP gain
 - `normalizeLP()` utility in `src/lib/normalizeLP.ts` — shared by leaderboard and player controller
-- Rate-limit queue (`src/lib/riotQueue.ts`) handles Riot API 429s
+- `getDayBoundsUTC8()` / `getTodayUTC8()` in `src/lib/dateUtils.ts` — shared UTC+8 date helpers used by leaderboard and notifications
+- Rate-limit queue (`src/lib/riotQueue.ts`) handles Riot API 429s with configurable request timeout (`RIOT_REQUEST_TIMEOUT_MS`)
 
 ### Logging
 - **Backend + Bot**: `pino` with `pino-pretty` (dev). Logger in `src/lib/logger.ts`. Debug logs in development, warn/error only in production.
@@ -99,6 +104,7 @@ Frontend ──/api proxy──► Backend API
 | GET | `/api/players` | List all active players |
 | POST | `/api/players` | Register player |
 | GET | `/api/players/:discordId` | Player + snapshots (with normalizedLP) + matches |
+| PATCH | `/api/players/:discordId` | Update player profile (avatar URL, username) |
 | DELETE | `/api/players/:discordId` | Soft-delete player |
 | GET | `/api/snapshots/:puuid` | LP history snapshots |
 | GET | `/api/tournament/settings` | Current tournament settings |

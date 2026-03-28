@@ -1,6 +1,6 @@
 import { type CommandInteraction, EmbedBuilder } from 'discord.js';
 import { Discord, Slash } from 'discordx';
-import { getLeaderboard } from '@/lib/backendClient';
+import { getLeaderboard, updatePlayerProfile } from '@/lib/backendClient';
 import { formatTierName, formatLpGain } from '@/lib/format';
 import { EMBED_COLORS, LEADERBOARD_TOP_N } from '@/lib/constants';
 import { Tier } from '@/types/Rank';
@@ -49,6 +49,12 @@ export class Leaderboard {
               try {
                 const member = await interaction.guild!.members.fetch(e.discordId);
                 nameByDiscordId.set(e.discordId, member.user.username);
+
+                // Refresh avatar URL if it has changed
+                const currentAvatar = member.user.displayAvatarURL({ size: 128 });
+                if (currentAvatar !== e.discordAvatarUrl) {
+                  updatePlayerProfile(e.discordId, { discordAvatarUrl: currentAvatar }).catch(() => {});
+                }
               } catch {
                 // ignore lookup failures (not in guild, missing intents, etc.)
               }

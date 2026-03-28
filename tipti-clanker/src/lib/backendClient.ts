@@ -1,6 +1,7 @@
 import http from 'http';
 import https from 'https';
 import { URL } from 'url';
+import { BACKEND_REQUEST_TIMEOUT_MS } from '@/lib/constants';
 
 const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:5000';
 
@@ -17,6 +18,7 @@ function request<T>(method: string, path: string, body?: unknown): Promise<T> {
         'Content-Type': 'application/json',
         ...(data ? { 'Content-Length': Buffer.byteLength(data) } : {}),
       },
+      timeout: BACKEND_REQUEST_TIMEOUT_MS,
     };
     const lib = url.protocol === 'https:' ? https : http;
     const req = lib.request(options, (res) => {
@@ -30,6 +32,9 @@ function request<T>(method: string, path: string, body?: unknown): Promise<T> {
           reject(new Error(`HTTP ${res.statusCode}: ${text}`));
         }
       });
+    });
+    req.on('timeout', () => {
+      req.destroy(new Error(`Request timed out after ${BACKEND_REQUEST_TIMEOUT_MS}ms: ${method} ${path}`));
     });
     req.on('error', reject);
     if (data) req.write(data);
@@ -52,6 +57,10 @@ export function registerPlayer(data: RegisterPlayerRequest): Promise<any> {
 
 export function removePlayer(discordId: string): Promise<any> {
   return request('DELETE', `/api/players/${encodeURIComponent(discordId)}`);
+}
+
+export function updatePlayerProfile(discordId: string, updates: { discordAvatarUrl?: string; discordUsername?: string }): Promise<any> {
+  return request('PATCH', `/api/players/${encodeURIComponent(discordId)}`, updates);
 }
 
 export function getLeaderboard(): Promise<any> {

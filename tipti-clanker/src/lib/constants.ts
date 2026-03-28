@@ -13,3 +13,6 @@ export const CRON_SCHEDULES = {
 
 /** Maximum entries shown in the /leaderboard command. */
 export const LEADERBOARD_TOP_N = 10;
+
+/** Timeout in milliseconds for outbound HTTP requests to the backend API. */
+export const BACKEND_REQUEST_TIMEOUT_MS = 10_000;

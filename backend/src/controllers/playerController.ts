@@ -8,6 +8,7 @@ import {
   removePlayer,
   listActivePlayers,
   getPlayerByDiscordId,
+  updatePlayerProfile,
 } from '@/services/playerService';
 
 export async function listPlayers(_req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -41,6 +42,15 @@ export async function deletePlayer(req: Request, res: Response, next: NextFuncti
     }
     next(err);
   }
+}
+
+export async function patchPlayer(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const discordId = req.params['discordId'] as string;
+    const { discordAvatarUrl, discordUsername } = req.body;
+    await updatePlayerProfile(discordId, { discordAvatarUrl, discordUsername });
+    res.status(204).send();
+  } catch (err) { next(err); }
 }
 
 export async function getPlayer(req: Request, res: Response, next: NextFunction): Promise<void> {

@@ -6,6 +6,7 @@ import {
   ackNotificationFeed,
   getDailySummary,
   getDailyGraphData,
+  updatePlayerProfile,
 } from '@/lib/backendClient';
 import { renderLpGraph } from '@/lib/chartRenderer';
 import { logger } from '@/lib/logger';
@@ -47,6 +48,15 @@ async function runFeedJob(client: Client): Promise<void> {
     if (notifications.length === 0) return;
 
     for (const notif of notifications) {
+      // Refresh avatar URL when we have access to the guild
+      if (channel.guild && notif.discordId) {
+        try {
+          const member = await channel.guild.members.fetch(notif.discordId);
+          const currentAvatar = member.user.displayAvatarURL({ size: 128 });
+          updatePlayerProfile(notif.discordId, { discordAvatarUrl: currentAvatar }).catch(() => {});
+        } catch { /* member not in guild */ }
+      }
+
       const lpStr = formatLpDelta(notif.lpDelta);
       const lpPart = lpStr ? ` (${lpStr})` : '';
 

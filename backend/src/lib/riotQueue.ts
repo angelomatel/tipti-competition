@@ -1,4 +1,5 @@
 import https from 'https';
+import { RIOT_REQUEST_TIMEOUT_MS } from '@/constants';
 
 interface QueuedRequest {
   path: string;
@@ -50,6 +51,7 @@ export class RiotRequestQueue {
         'X-Riot-Token': item.apiKey,
         'Accept': 'application/json',
       },
+      timeout: RIOT_REQUEST_TIMEOUT_MS,
     };
 
     const req = https.request(options, (res) => {
@@ -81,6 +83,10 @@ export class RiotRequestQueue {
 
         this.processNext();
       });
+    });
+
+    req.on('timeout', () => {
+      req.destroy(new Error(`Request timed out after ${RIOT_REQUEST_TIMEOUT_MS}ms [${item.host}${item.path}]`));
     });
 
     req.on('error', (e) => {
