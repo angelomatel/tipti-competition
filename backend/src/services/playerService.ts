@@ -1,8 +1,8 @@
 import { Player } from '@/db/models/Player';
 import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { getRiotClient } from '@/services/riotService';
-import { TftQueueType } from '@/lib/riotClient';
-import type { IPlayer, PlayerDocument } from '@/types/Player';
+import { findRankedEntry } from '@/lib/riotUtils';
+import type { PlayerDocument } from '@/types/Player';
 import type { RegisterPlayerRequest } from '@/types/User';
 
 export async function registerPlayer(data: RegisterPlayerRequest): Promise<PlayerDocument> {
@@ -21,7 +21,7 @@ export async function registerPlayer(data: RegisterPlayerRequest): Promise<Playe
   const riot = getRiotClient();
   const puuid = await riot.getPuuidByRiotId(gameName, tagLine);
   const leagueEntries = await riot.getTftLeagueByPuuid(puuid);
-  const ranked = leagueEntries.find((e) => e.queueType === TftQueueType.RANKED);
+  const ranked = findRankedEntry(leagueEntries);
 
   const player = await Player.create({
     discordId,

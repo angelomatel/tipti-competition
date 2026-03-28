@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { getRiotClient } from '@/services/riotService';
-import { TftQueueType } from '@/lib/riotClient';
+import { findRankedEntry } from '@/lib/riotUtils';
 
 export async function lookupAccount(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -11,7 +11,7 @@ export async function lookupAccount(req: Request, res: Response, next: NextFunct
     const puuid = await riot.getPuuidByRiotId(gameName, tagLine);
     const account = await riot.getAccountByPuuid(puuid);
     const leagueEntries = await riot.getTftLeagueByPuuid(puuid);
-    const ranked = leagueEntries.find((e) => e.queueType === TftQueueType.RANKED);
+    const ranked = findRankedEntry(leagueEntries);
 
     res.json({
       gameName: account.gameName ?? gameName,

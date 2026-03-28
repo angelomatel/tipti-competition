@@ -1,8 +1,8 @@
 import cron from 'node-cron';
-import { Player } from '@/db/models/Player';
 import { captureSnapshotForPlayer } from '@/services/snapshotService';
 import { captureMatchesForPlayer } from '@/services/matchService';
 import { getTournamentSettings } from '@/services/tournamentService';
+import { listActivePlayers } from '@/services/playerService';
 import { logger } from '@/lib/logger';
 
 export async function runCronCycle(): Promise<void> {
@@ -19,7 +19,7 @@ export async function runCronCycle(): Promise<void> {
   }
 
   logger.info('[cron] Starting snapshot cycle...');
-  const players = await Player.find({ isActive: true });
+  const players = await listActivePlayers();
   logger.info(`[cron] Processing ${players.length} active players`);
 
   for (const player of players) {

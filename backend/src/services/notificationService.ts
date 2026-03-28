@@ -2,6 +2,8 @@ import { MatchRecord } from '@/db/models/MatchRecord';
 import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { Player } from '@/db/models/Player';
 import { normalizeLP } from '@/lib/normalizeLP';
+import { listActivePlayers } from '@/services/playerService';
+import { NOTIFICATION_PLACEMENTS, DAILY_GRAPH_TOP_N, UTC8_OFFSET_MS } from '@/constants';
 
 export interface FeedNotification {
   matchId: string;
@@ -15,7 +17,7 @@ export interface FeedNotification {
 
 export async function getFeedNotifications(): Promise<FeedNotification[]> {
   const matches = await MatchRecord.find({
-    placement: { $in: [1, 8] },
+    placement: { $in: NOTIFICATION_PLACEMENTS },
     notifiedAt: null,
   }).sort({ playedAt: 1 });
 
@@ -84,15 +86,14 @@ export interface DailySummary {
 /** Returns the start/end of a calendar day in UTC+8 as UTC Date objects. */
 function getDayBoundsUTC8(dateStr: string): { dayStart: Date; dayEnd: Date } {
   // dateStr is YYYY-MM-DD in UTC+8; convert to UTC bounds
-  const tzOffsetMs = 8 * 60 * 60 * 1000;
-  const dayStart = new Date(new Date(dateStr + 'T00:00:00.000Z').getTime() - tzOffsetMs);
-  const dayEnd = new Date(new Date(dateStr + 'T23:59:59.999Z').getTime() - tzOffsetMs);
+  const dayStart = new Date(new Date(dateStr + 'T00:00:00.000Z').getTime() - UTC8_OFFSET_MS);
+  const dayEnd = new Date(new Date(dateStr + 'T23:59:59.999Z').getTime() - UTC8_OFFSET_MS);
   return { dayStart, dayEnd };
 }
 
 export async function getDailySummary(date: string): Promise<DailySummary> {
   const { dayStart, dayEnd } = getDayBoundsUTC8(date);
-  const players = await Player.find({ isActive: true });
+  const players = await listActivePlayers();
 
   const stats: DailyPlayerStat[] = [];
 
@@ -138,13 +139,13 @@ export interface DailyGraphData {
 
 export async function getDailyGraphData(date: string): Promise<DailyGraphData> {
   const { dayStart, dayEnd } = getDayBoundsUTC8(date);
-  const players = await Player.find({ isActive: true });
+  const players = await listActivePlayers();
 
-  // Rank players by current normalized LP to pick top 5
+  // Rank players by current normalized LP to pick top N
   const ranked = players
     .map((p) => ({ player: p, norm: normalizeLP(p.currentTier, p.currentRank, p.currentLP) }))
     .sort((a, b) => b.norm - a.norm)
-    .slice(0, 5);
+    .slice(0, DAILY_GRAPH_TOP_N);
 
   const series: PlayerGraphSeries[] = [];
 

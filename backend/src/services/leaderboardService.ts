@@ -1,12 +1,12 @@
-import { Player } from '@/db/models/Player';
 import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { getTournamentSettings } from '@/services/tournamentService';
 import { normalizeLP } from '@/lib/normalizeLP';
+import { listActivePlayers } from '@/services/playerService';
 import type { LeaderboardEntry, LeaderboardResponse } from '@/types/Leaderboard';
 
 export async function computeLeaderboard(): Promise<LeaderboardResponse> {
   const settings = await getTournamentSettings();
-  const players = await Player.find({ isActive: true });
+  const players = await listActivePlayers();
 
   const entries = await Promise.all(
     players.map(async (player): Promise<LeaderboardEntry> => {
