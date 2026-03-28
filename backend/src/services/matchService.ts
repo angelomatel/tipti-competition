@@ -3,6 +3,7 @@ import { getRiotClient } from '@/services/riotService';
 import { getTournamentSettings } from '@/services/tournamentService';
 import { TftQueueId } from '@/lib/riotClient';
 import { logger } from '@/lib/logger';
+import { withRetry } from '@/lib/withRetry';
 import type { PlayerDocument } from '@/types/Player';
 
 export async function captureMatchesForPlayer(player: PlayerDocument): Promise<void> {
@@ -31,12 +32,12 @@ export async function captureMatchesForPlayer(player: PlayerDocument): Promise<v
       const participant = match.info.participants.find((p) => p.puuid === player.puuid);
       if (!participant) continue;
 
-      await MatchRecord.create({
+      await withRetry('MatchRecord.create', () => MatchRecord.create({
         puuid:      player.puuid,
         matchId,
         placement:  participant.placement,
         playedAt:   matchDate,
-      });
+      }));
     } catch (err) {
       logger.error({ err, matchId }, `Match fetch failed for ${matchId}`);
     }

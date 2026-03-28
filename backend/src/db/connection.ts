@@ -1,11 +1,12 @@
 import mongoose from 'mongoose';
-import { MONGODB_URI, MONGODB_DB_NAME } from '@/constants';
+import { MONGODB_URI, MONGODB_DB_NAME, MONGODB_BUFFER_TIMEOUT_MS } from '@/constants';
 import { logger } from '@/lib/logger';
 
 let connected = false;
 
 export async function connectDB(): Promise<void> {
   if (connected) return;
+  mongoose.set('bufferTimeoutMS', MONGODB_BUFFER_TIMEOUT_MS);
   try {
     await mongoose.connect(MONGODB_URI, {
       dbName: MONGODB_DB_NAME,

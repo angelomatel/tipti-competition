@@ -3,6 +3,7 @@ import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { getRiotClient } from '@/services/riotService';
 import { findRankedEntry } from '@/lib/riotUtils';
 import { logger } from '@/lib/logger';
+import { withRetry } from '@/lib/withRetry';
 import { listActivePlayers } from '@/services/playerService';
 import type { PlayerDocument } from '@/types/Player';
 
@@ -22,23 +23,23 @@ export async function captureSnapshotForPlayer(player: PlayerDocument): Promise<
     && lastSnapshot.losses        === ranked.losses;
 
   if (!unchanged) {
-    await LpSnapshot.create({
+    await withRetry('LpSnapshot.create', () => LpSnapshot.create({
       puuid:         player.puuid,
       tier:          ranked.tier,
       rank:          ranked.rank,
       leaguePoints:  ranked.leaguePoints,
       wins:          ranked.wins,
       losses:        ranked.losses,
-    });
+    }));
   }
 
-  await Player.updateOne({ _id: player._id }, {
+  await withRetry('Player.updateOne', () => Player.updateOne({ _id: player._id }, {
     currentTier:   ranked.tier,
     currentRank:   ranked.rank,
     currentLP:     ranked.leaguePoints,
     currentWins:   ranked.wins,
     currentLosses: ranked.losses,
-  });
+  }));
 }
 
 export async function captureAllSnapshots(): Promise<void> {

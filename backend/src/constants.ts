@@ -26,3 +26,12 @@ export const UTC8_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 /** Timeout in milliseconds for outbound Riot API requests. */
 export const RIOT_REQUEST_TIMEOUT_MS = 15_000;
+
+/** How long Mongoose buffers commands while disconnected before failing them. */
+export const MONGODB_BUFFER_TIMEOUT_MS = 30_000;
+
+/** Maximum retry attempts for transient MongoDB write failures. */
+export const MONGODB_WRITE_RETRY_ATTEMPTS = 3;
+
+/** Base delay in milliseconds for MongoDB write retry backoff (doubles each attempt). */
+export const MONGODB_WRITE_RETRY_BASE_DELAY_MS = 1_000;
