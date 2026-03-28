@@ -5,6 +5,8 @@ import {
 } from "discord.js";
 import { Discord, Slash, SlashOption } from "discordx";
 import { lookupRiotAccount } from "@/lib/backendClient";
+import { parseRiotId } from "@/lib/riotId";
+import { formatTierDisplay } from "@/lib/format";
 
 @Discord()
 export class GetUserByAccount {
@@ -25,26 +27,20 @@ export class GetUserByAccount {
   ): Promise<void> {
     await interaction.deferReply();
 
-    const parsed = typeof account === "string" ? account.trim() : "";
-    const parts = parsed.split("#");
-    const username = parts[0];
-    const tag = parts[1];
+    const { gameName, tagLine, isValid } = parseRiotId(typeof account === "string" ? account : "");
 
-    if (!username || !tag) {
+    if (!isValid) {
       await interaction.editReply({
-        content:
-          "Invalid account format. Use `username#tag` (the #tag is required).",
+        content: "Invalid account format. Use `username#tag` (the #tag is required).",
       });
       return;
     }
 
     try {
-      const info = await lookupRiotAccount(username, tag);
+      const info = await lookupRiotAccount(gameName, tagLine);
 
       const usernameDisplay = `${info.gameName}#${info.tagLine}`;
-      const tierDisplay = info.tier === 'UNRANKED'
-        ? 'Unranked'
-        : `${info.tier} ${info.rank}`;
+      const tierDisplay = formatTierDisplay(info.tier, info.rank);
 
       const embed = new EmbedBuilder()
         .setTitle(usernameDisplay)

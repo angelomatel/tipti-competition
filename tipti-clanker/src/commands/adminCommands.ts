@@ -7,6 +7,9 @@ import {
 } from 'discord.js';
 import { Discord, Slash, SlashOption } from 'discordx';
 import { registerPlayer, removePlayer, triggerCron } from '@/lib/backendClient';
+import { parseRiotId } from '@/lib/riotId';
+import { formatTierDisplay } from '@/lib/format';
+import { EMBED_COLORS } from '@/lib/constants';
 
 @Discord()
 export class AdminCommands {
@@ -34,11 +37,9 @@ export class AdminCommands {
   ): Promise<void> {
     await interaction.deferReply({ ephemeral: true });
 
-    const parts = account.trim().split('#');
-    const gameName = parts[0];
-    const tagLine = parts[1];
+    const { gameName, tagLine, isValid } = parseRiotId(account);
 
-    if (!gameName || !tagLine) {
+    if (!isValid) {
       await interaction.editReply({ content: '❌ Invalid format. Use `username#TAG`.' });
       return;
     }
@@ -54,9 +55,7 @@ export class AdminCommands {
       });
 
       const player = result.player;
-      const tierDisplay = player.currentTier === 'UNRANKED'
-        ? 'Unranked'
-        : `${player.currentTier} ${player.currentRank} — ${player.currentLP} LP`;
+      const tierDisplay = formatTierDisplay(player.currentTier, player.currentRank, player.currentLP);
 
       const embed = new EmbedBuilder()
         .setTitle(`✅ Registered: ${player.gameName}#${player.tagLine}`)
@@ -64,7 +63,7 @@ export class AdminCommands {
           { name: 'Discord', value: `<@${member.id}>`, inline: true },
           { name: 'Rank', value: tierDisplay, inline: true },
         )
-        .setColor(0x7b2fff)
+        .setColor(EMBED_COLORS.PRIMARY)
         .setTimestamp();
 
       await interaction.editReply({ embeds: [embed] });
