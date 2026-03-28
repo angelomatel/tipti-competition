@@ -52,6 +52,7 @@ export interface TftMatchDTO {
   metadata: { match_id: string; participants: string[] };
   info: {
     game_datetime: number;
+    queue_id: number;
     participants: TftMatchParticipantDTO[];
     [key: string]: any;
   };
@@ -115,10 +116,9 @@ export class RiotClient {
     return this.request(path, region);
   }
 
-  async getMatchIdsByPuuid(puuid: string, count = 20, region = 'SEA_REGIONAL', queue?: TftQueueId, startTime?: number): Promise<string[]> {
+  async getMatchIdsByPuuid(puuid: string, count = 20, region = 'SEA_REGIONAL', startTime?: number): Promise<string[]> {
     let path = `/tft/match/v1/matches/by-puuid/${encodeURIComponent(puuid)}/ids?count=${count}`;
-    if (queue !== undefined) path += `&queue=${queue}`;
-    if (startTime !== undefined) path += `&startTime=${startTime}`;
+    if (startTime !== undefined) path += `&start_time=${startTime}`;
     return this.request(path, region);
   }
 

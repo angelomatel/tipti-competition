@@ -16,7 +16,7 @@ export async function captureMatchesForPlayer(player: PlayerDocument): Promise<v
     ? Math.floor(lastMatch.playedAt.getTime() / 1000)
     : Math.floor(settings.startDate.getTime() / 1000);
 
-  const matchIds = await riot.getMatchIdsByPuuid(player.puuid, 50, 'SEA_REGIONAL', TftQueueId.RANKED, startTime);
+  const matchIds = await riot.getMatchIdsByPuuid(player.puuid, 50, 'SEA_REGIONAL', startTime);
 
   for (const matchId of matchIds) {
     const exists = await MatchRecord.exists({ puuid: player.puuid, matchId });
@@ -24,6 +24,10 @@ export async function captureMatchesForPlayer(player: PlayerDocument): Promise<v
 
     try {
       const match = await riot.getMatchById(matchId);
+
+      // Defensive guard: skip non-ranked matches (Riot API ?queue filter is not always reliable)
+      if (match.info.queue_id !== TftQueueId.RANKED) continue;
+
       const matchDate = new Date(match.info.game_datetime);
 
       // Skip matches outside the tournament window
