@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { MatchRecord } from '@/db/models/MatchRecord';
 import { normalizeLP } from '@/lib/normalizeLP';
+import { QUERY_LIMITS } from '@/constants';
 import {
   registerPlayer,
   removePlayer,
@@ -50,7 +51,7 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
     // Snapshots in ascending order (oldest first)
     const rawSnapshots = await LpSnapshot.find({ puuid: player.puuid })
       .sort({ capturedAt: 1 })
-      .limit(200);
+      .limit(QUERY_LIMITS.SNAPSHOTS);
 
     const snapshots = rawSnapshots.map((s) => ({
       capturedAt: s.capturedAt,
@@ -65,7 +66,7 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
     // Match records in ascending order
     const rawMatches = await MatchRecord.find({ puuid: player.puuid })
       .sort({ playedAt: 1 })
-      .limit(50);
+      .limit(QUERY_LIMITS.MATCHES);
 
     const matches = rawMatches.map((m) => ({
       matchId: m.matchId,

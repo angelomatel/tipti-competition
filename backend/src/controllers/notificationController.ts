@@ -5,6 +5,11 @@ import {
   getDailySummary,
   getDailyGraphData,
 } from '@/services/notificationService';
+import { DATE_PARAM_REGEX } from '@/constants';
+
+function isValidDateParam(date: unknown): date is string {
+  return typeof date === 'string' && DATE_PARAM_REGEX.test(date);
+}
 
 export async function getNotificationFeed(_req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -27,8 +32,8 @@ export async function ackNotificationFeed(req: Request, res: Response, next: Nex
 
 export async function getNotificationDailySummary(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const date = req.query.date as string;
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const date = req.query.date;
+    if (!isValidDateParam(date)) {
       res.status(400).json({ error: 'date query param required (YYYY-MM-DD)' });
       return;
     }
@@ -39,8 +44,8 @@ export async function getNotificationDailySummary(req: Request, res: Response, n
 
 export async function getNotificationDailyGraph(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const date = req.query.date as string;
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const date = req.query.date;
+    if (!isValidDateParam(date)) {
       res.status(400).json({ error: 'date query param required (YYYY-MM-DD)' });
       return;
     }
