@@ -1,6 +1,8 @@
 import {
   ApplicationCommandOptionType,
+  ChannelType,
   type CommandInteraction,
+  type TextChannel,
   EmbedBuilder,
   PermissionFlagsBits,
 } from 'discord.js';
@@ -12,7 +14,7 @@ export class TournamentSettingsCommand {
   @Slash({
     name: 'tournament-settings',
     description: 'View or update tournament settings (admin only)',
-    defaultMemberPermissions: [PermissionFlagsBits.Administrator],
+    defaultMemberPermissions: [PermissionFlagsBits.Administrator, PermissionFlagsBits.ManageGuild, PermissionFlagsBits.ManageChannels],
   })
   async tournamentSettings(
     @SlashOption({
@@ -30,23 +32,33 @@ export class TournamentSettingsCommand {
     })
     end: string | undefined,
     @SlashOption({
-      name: 'name',
-      description: 'Tournament name',
+      name: 'feed_channel',
+      description: 'Channel to post 1st/8th place notifications',
       required: false,
-      type: ApplicationCommandOptionType.String,
+      type: ApplicationCommandOptionType.Channel,
+      channelTypes: [ChannelType.GuildText],
     })
-    name: string | undefined,
+    feedChannel: TextChannel | undefined,
+    @SlashOption({
+      name: 'daily_channel',
+      description: 'Channel to post daily recap and LP graph',
+      required: false,
+      type: ApplicationCommandOptionType.Channel,
+      channelTypes: [ChannelType.GuildText],
+    })
+    dailyChannel: TextChannel | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     await interaction.deferReply({ ephemeral: true });
 
     try {
       // If any update params provided, update first
-      if (start || end || name) {
+      if (start || end || feedChannel || dailyChannel) {
         const updates: Record<string, unknown> = {};
         if (start) updates.startDate = start;
         if (end) updates.endDate = end;
-        if (name) updates.name = name;
+        if (feedChannel) updates.feedChannelId = feedChannel.id;
+        if (dailyChannel) updates.dailyChannelId = dailyChannel.id;
         await updateTournamentSettings(updates);
       }
 
@@ -60,11 +72,13 @@ export class TournamentSettingsCommand {
           { name: 'Start', value: new Date(s.startDate).toLocaleString(), inline: true },
           { name: 'End', value: new Date(s.endDate).toLocaleString(), inline: true },
           { name: 'Active', value: s.isActive ? 'Yes' : 'No', inline: true },
+          { name: 'Feed Channel', value: s.feedChannelId ? `<#${s.feedChannelId}>` : 'Not set', inline: true },
+          { name: 'Daily Channel', value: s.dailyChannelId ? `<#${s.dailyChannelId}>` : 'Not set', inline: true },
         )
         .setColor(0x7b2fff)
         .setTimestamp();
 
-      const msg = start || end || name ? '✅ Tournament settings updated.' : '';
+      const msg = (start || end || feedChannel || dailyChannel) ? '✅ Tournament settings updated.' : '';
       await interaction.editReply({ content: msg || undefined, embeds: [embed] });
     } catch (err: any) {
       await interaction.editReply({ content: `❌ Failed: ${err?.message ?? err}` });
