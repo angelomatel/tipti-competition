@@ -9,6 +9,8 @@ import {
 } from '@/lib/backendClient';
 import { renderLpGraph } from '@/lib/chartRenderer';
 import { logger } from '@/lib/logger';
+import { formatLpDelta } from '@/lib/format';
+import { EMBED_COLORS, CRON_SCHEDULES } from '@/lib/constants';
 
 async function getTextChannel(client: Client, channelId: string): Promise<TextChannel | null> {
   try {
@@ -18,12 +20,6 @@ async function getTextChannel(client: Client, channelId: string): Promise<TextCh
   } catch {
     return null;
   }
-}
-
-/** Formats LP delta as "+42 LP" or "-45 LP" */
-function formatLpDelta(delta: number | null): string {
-  if (delta === null) return '';
-  return delta >= 0 ? `+${delta} LP` : `${delta} LP`;
 }
 
 /** Returns yesterday's date string in UTC+8 as YYYY-MM-DD */
@@ -58,11 +54,11 @@ async function runFeedJob(client: Client): Promise<void> {
 
       if (notif.placement === 1) {
         embed
-          .setColor(0xffd700)
+          .setColor(EMBED_COLORS.GOLD)
           .setDescription(`👑 <@${notif.discordId}> just secured a **1st Place**${lpPart}!`);
       } else {
         embed
-          .setColor(0xff4444)
+          .setColor(EMBED_COLORS.DANGER)
           .setDescription(`🚨 <@${notif.discordId}> just went **8th**${lpPart}! The tilt is real!`);
       }
 
@@ -96,7 +92,7 @@ async function runDailyJob(client: Client): Promise<void> {
     // Build recap embed
     const embed = new EmbedBuilder()
       .setTitle(`📅 Daily Recap — ${date}`)
-      .setColor(0x7b2fff)
+      .setColor(EMBED_COLORS.PRIMARY)
       .setTimestamp();
 
     if (summary.climber) {
@@ -135,13 +131,11 @@ async function runDailyJob(client: Client): Promise<void> {
 }
 
 export function startNotificationJobs(client: Client): void {
-  // Feed check every 5 minutes
-  cron.schedule('*/5 * * * *', () => {
+  cron.schedule(CRON_SCHEDULES.FEED_JOB, () => {
     void runFeedJob(client);
   });
 
-  // Daily recap at 16:00 UTC (midnight UTC+8)
-  cron.schedule('0 16 * * *', () => {
+  cron.schedule(CRON_SCHEDULES.DAILY_JOB, () => {
     void runDailyJob(client);
   });
 

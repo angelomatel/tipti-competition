@@ -8,6 +8,7 @@ import {
 } from 'discord.js';
 import { Discord, Slash, SlashOption } from 'discordx';
 import { getTournamentSettings, updateTournamentSettings } from '@/lib/backendClient';
+import { EMBED_COLORS } from '@/lib/constants';
 
 @Discord()
 export class TournamentSettingsCommand {
@@ -75,7 +76,7 @@ export class TournamentSettingsCommand {
           { name: 'Feed Channel', value: s.feedChannelId ? `<#${s.feedChannelId}>` : 'Not set', inline: true },
           { name: 'Daily Channel', value: s.dailyChannelId ? `<#${s.dailyChannelId}>` : 'Not set', inline: true },
         )
-        .setColor(0x7b2fff)
+        .setColor(EMBED_COLORS.PRIMARY)
         .setTimestamp();
 
       const msg = (start || end || feedChannel || dailyChannel) ? '✅ Tournament settings updated.' : '';
