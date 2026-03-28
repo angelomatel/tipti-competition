@@ -5,6 +5,6 @@ import { logger } from "@/lib/logger";
 export class Example {
   @On()
   messageDelete([message]: ArgsOf<"messageDelete">, client: Client): void {
-    logger.debug("Message Deleted", client.user?.username, message.content);
+    logger.debug({ username: client.user?.username, content: message.content }, "Message Deleted");
   }
 }
