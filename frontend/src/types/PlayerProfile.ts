@@ -41,9 +41,34 @@ export interface PlayerProfileData {
   discordUsername: string;
 }
 
+export interface DailyPointTransaction {
+  type: string;
+  value: number;
+  source: string;
+}
+
+export interface DailyPointEntry {
+  day: string;
+  transactions: DailyPointTransaction[];
+}
+
+export interface PlayerScoreBreakdown {
+  match: number;
+  buff: number;
+  penalty: number;
+  godPlacementBonus: number;
+  total: number;
+}
+
 export interface PlayerProfileResponse {
   player: PlayerProfileData;
   snapshots: SnapshotPoint[];
   matches: MatchEntry[];
   matchPoints: MatchPoint[];
+  godSlug: string | null;
+  godName: string | null;
+  godTitle: string | null;
+  scorePoints: number;
+  pointBreakdown: PlayerScoreBreakdown;
+  dailyPoints: DailyPointEntry[];
 }
