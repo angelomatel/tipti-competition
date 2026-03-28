@@ -1,4 +1,4 @@
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000';
+import { BACKEND_URL } from '@/src/lib/constants';
 
 export async function fetchPlayer(discordId: string): Promise<any> {
   const res = await fetch(`${BACKEND_URL}/api/players/${encodeURIComponent(discordId)}`, {

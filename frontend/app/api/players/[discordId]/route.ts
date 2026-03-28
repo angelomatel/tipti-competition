@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000';
+import { BACKEND_URL } from '@/src/lib/constants';
 
 export async function GET(
   _request: Request,
