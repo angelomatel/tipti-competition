@@ -6,6 +6,12 @@ import { getSnapshots } from '@/controllers/snapshotController';
 import { triggerCron } from '@/controllers/cronController';
 import { getTournament, updateTournament } from '@/controllers/tournamentController';
 import { lookupAccount } from '@/controllers/riotLookupController';
+import {
+  getNotificationFeed,
+  ackNotificationFeed,
+  getNotificationDailySummary,
+  getNotificationDailyGraph,
+} from '@/controllers/notificationController';
 
 export function configureRoutes(app: Express): void {
   app.get('/api/health', getHealth);
@@ -25,4 +31,9 @@ export function configureRoutes(app: Express): void {
   app.get('/api/riot/account/:gameName/:tagLine', lookupAccount);
 
   app.post('/api/cron/run', triggerCron);
+
+  app.get('/api/notifications/feed', getNotificationFeed);
+  app.post('/api/notifications/feed/ack', ackNotificationFeed);
+  app.get('/api/notifications/daily-summary', getNotificationDailySummary);
+  app.get('/api/notifications/daily-graph', getNotificationDailyGraph);
 }

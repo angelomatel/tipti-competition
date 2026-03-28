@@ -4,6 +4,7 @@ import { dirname, importx } from "@discordx/importer";
 import { IntentsBitField, type Interaction, type Message } from "discord.js";
 import { Client } from "discordx";
 import { logger } from "@/lib/logger";
+import { startNotificationJobs } from "@/jobs/notificationJobs";
 
 export const bot = new Client({
   intents: [
@@ -22,6 +23,7 @@ export const bot = new Client({
 
 bot.once("ready", () => {
   void bot.initApplicationCommands();
+  startNotificationJobs(bot);
   logger.info("Bot started");
 });
 

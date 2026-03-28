@@ -77,3 +77,19 @@ export function triggerCron(): Promise<any> {
 export function lookupRiotAccount(gameName: string, tagLine: string): Promise<any> {
   return request('GET', `/api/riot/account/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`);
 }
+
+export function getNotificationFeed(): Promise<any> {
+  return request('GET', '/api/notifications/feed');
+}
+
+export function ackNotificationFeed(matchIds: string[]): Promise<any> {
+  return request('POST', '/api/notifications/feed/ack', { matchIds });
+}
+
+export function getDailySummary(date: string): Promise<any> {
+  return request('GET', `/api/notifications/daily-summary?date=${encodeURIComponent(date)}`);
+}
+
+export function getDailyGraphData(date: string): Promise<any> {
+  return request('GET', `/api/notifications/daily-graph?date=${encodeURIComponent(date)}`);
+}

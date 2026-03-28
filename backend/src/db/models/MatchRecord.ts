@@ -7,6 +7,7 @@ const MatchRecordSchema = new Schema<MatchRecordDocument>({
   placement:   { type: Number, required: true },
   playedAt:    { type: Date, required: true },
   capturedAt:  { type: Date, default: () => new Date() },
+  notifiedAt:  { type: Date, default: null },
 });
 
 MatchRecordSchema.index({ puuid: 1, matchId: 1 }, { unique: true });

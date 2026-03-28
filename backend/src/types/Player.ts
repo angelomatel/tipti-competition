@@ -34,6 +34,7 @@ export interface IMatchRecord {
   placement: number;
   playedAt: Date;
   capturedAt: Date;
+  notifiedAt: Date | null;
 }
 
 export type PlayerDocument = IPlayer & Document;
