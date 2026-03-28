@@ -5,3 +5,5 @@ export type {
   TftMatchParticipantDTO,
   TftMatchDTO,
 } from '@/lib/riotClient';
+
+export { TftQueueType, TftQueueId } from '@/lib/riotClient';

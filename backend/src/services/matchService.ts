@@ -1,11 +1,12 @@
 import { MatchRecord } from '@/db/models/MatchRecord';
 import { getRiotClient } from '@/services/riotService';
+import { TftQueueId } from '@/lib/riotClient';
 import { logger } from '@/lib/logger';
 import type { PlayerDocument } from '@/types/Player';
 
 export async function captureMatchesForPlayer(player: PlayerDocument): Promise<void> {
   const riot = getRiotClient();
-  const matchIds = await riot.getMatchIdsByPuuid(player.puuid, 10);
+  const matchIds = await riot.getMatchIdsByPuuid(player.puuid, 10, 'SEA_REGIONAL', TftQueueId.RANKED);
 
   for (const matchId of matchIds) {
     const exists = await MatchRecord.exists({ puuid: player.puuid, matchId });

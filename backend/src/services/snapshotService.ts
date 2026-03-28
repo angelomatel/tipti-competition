@@ -1,13 +1,14 @@
 import { Player } from '@/db/models/Player';
 import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { getRiotClient } from '@/services/riotService';
+import { TftQueueType } from '@/lib/riotClient';
 import { logger } from '@/lib/logger';
 import type { PlayerDocument } from '@/types/Player';
 
 export async function captureSnapshotForPlayer(player: PlayerDocument): Promise<void> {
   const riot = getRiotClient();
   const entries = await riot.getTftLeagueByPuuid(player.puuid);
-  const ranked = entries.find((e) => e.queueType === 'RANKED_TFT');
+  const ranked = entries.find((e) => e.queueType === TftQueueType.RANKED);
   if (!ranked) return;
 
   await LpSnapshot.create({

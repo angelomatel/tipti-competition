@@ -1,5 +1,18 @@
 import { RiotRequestQueue } from '@/lib/riotQueue';
 
+export enum TftQueueType {
+  RANKED      = 'RANKED_TFT',
+  TURBO       = 'RANKED_TFT_TURBO',
+  DOUBLE_UP   = 'RANKED_TFT_PAIRS',
+}
+
+export enum TftQueueId {
+  RANKED    = 1100,
+  NORMAL    = 1090,
+  TURBO     = 1130,
+  DOUBLE_UP = 1160,
+}
+
 export interface AccountDTO {
   puuid: string;
   gameName?: string;
@@ -15,7 +28,7 @@ export interface MiniSeriesDTO {
 
 export interface TFTLeagueEntryDTO {
   leagueId: string;
-  queueType: string;
+  queueType: TftQueueType;
   tier: string;
   rank: string;
   leaguePoints: number;
@@ -101,8 +114,9 @@ export class RiotClient {
     return this.request(path, region);
   }
 
-  async getMatchIdsByPuuid(puuid: string, count = 10, region = 'SEA_REGIONAL'): Promise<string[]> {
-    const path = `/tft/match/v1/matches/by-puuid/${encodeURIComponent(puuid)}/ids?count=${count}`;
+  async getMatchIdsByPuuid(puuid: string, count = 10, region = 'SEA_REGIONAL', queue?: TftQueueId): Promise<string[]> {
+    let path = `/tft/match/v1/matches/by-puuid/${encodeURIComponent(puuid)}/ids?count=${count}`;
+    if (queue !== undefined) path += `&queue=${queue}`;
     return this.request(path, region);
   }
 

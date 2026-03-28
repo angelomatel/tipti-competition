@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 TFT (Teamfight Tactics) tournament management platform with three components:
 - **frontend/** — Next.js web app (leaderboard with 30s auto-refresh, player profile modals, LP graph)
 - **backend/** — Express.js REST API (business logic, cron job, Riot API integration)
-- **tipti-clanker/** — Discord bot for player registration and admin commands
+- **tipti-clanker/** — Discord bot (Discordx + TypeScript) for player registration and admin commands
 
 ## Commands
 
