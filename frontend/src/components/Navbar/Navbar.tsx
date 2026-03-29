@@ -1,12 +1,86 @@
+'use client';
+
+import { Suspense } from 'react';
+import { usePathname, useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useTournament } from '@/src/hooks/useTournament';
+import PillToggle from '@/src/components/shared/PillToggle';
+import PhaseCountdown from '@/src/components/shared/PhaseCountdown';
+import { isEventStarted, getDaysUntilStart } from '@/src/lib/tournament';
+
+const TAB_OPTIONS = [
+  { label: 'Players', value: 'players' },
+  { label: 'Gods', value: 'gods' },
+];
+
+function NavbarInner() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { data } = useTournament();
+
+  const activeTab = searchParams.get('tab') || 'players';
+
+  const handleTabChange = (value: string) => {
+    router.replace('/leaderboard?tab=' + value, { scroll: false });
+  };
+
+  const settings = data?.settings;
+  const started = isEventStarted(settings);
+
+  const navLinkClass = (href: string) =>
+    `text-sm font-medium tracking-wide uppercase transition-colors ${
+      pathname === href
+        ? 'text-text-primary'
+        : 'text-text-muted hover:text-text-secondary'
+    }`;
+
+  return (
+    <nav
+      className="sticky top-0 z-50 h-16 backdrop-blur-xl border-b border-border-default"
+      style={{ background: 'rgba(10, 6, 24, 0.82)' }}
+    >
+      <div className="max-w-5xl mx-auto px-6 h-full flex items-center justify-between gap-4">
+        {/* Left: nav links */}
+        <div className="flex items-center gap-6">
+          <Link href="/" className={navLinkClass('/')}>
+            Home
+          </Link>
+          <Link href="/rules" className={navLinkClass('/rules')}>
+            How It Works
+          </Link>
+        </div>
+
+        {/* Center: tab toggle (leaderboard only) */}
+        {pathname === '/leaderboard' && (
+          <div className="flex-1 flex justify-center">
+            <PillToggle
+              options={TAB_OPTIONS}
+              activeValue={activeTab}
+              onChange={handleTabChange}
+            />
+          </div>
+        )}
+
+        {/* Right: phase badge + countdown or pre-event status */}
+        <div className="hidden sm:flex items-center gap-3 text-sm">
+          {settings && started ? (
+            <PhaseCountdown settings={settings} />
+          ) : settings?.startDate ? (
+            <span className="font-medium text-text-muted">
+              Starts in {getDaysUntilStart(settings.startDate)}d
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </nav>
+  );
+}
+
 const Navbar: React.FC = () => (
-  <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0a0a1a]/90 backdrop-blur-md border-b border-violet-900/40">
-    <div className="max-w-4xl mx-auto px-6 h-14 flex items-center justify-between">
-      <span className="text-lg font-bold tracking-tight uppercase bg-gradient-to-r from-[#7b2fff] to-[#00d4ff] bg-clip-text text-transparent">
-        Space Gods Bootcamp
-      </span>
-      <span className="text-xs text-violet-400 tracking-wider uppercase">In Development</span>
-    </div>
-  </nav>
+  <Suspense>
+    <NavbarInner />
+  </Suspense>
 );
 
 export default Navbar;

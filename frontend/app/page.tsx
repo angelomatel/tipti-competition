@@ -1,24 +1,21 @@
-import Navbar from '@/src/components/Navbar/Navbar';
-import Leaderboard from '@/src/components/Leaderboard/Leaderboard';
+import HeroSection from '@/src/components/home/HeroSection';
+import StatsBar from '@/src/components/home/StatsBar';
+import Link from 'next/link';
 
 export default function Home() {
   return (
-    <>
-      <div className="stars" aria-hidden="true" />
-      <Navbar />
-
-      <main className="relative z-10 max-w-4xl mx-auto px-4 pt-24 pb-16">
-        <div className="text-center mb-12">
-          <h1 className="text-5xl font-extrabold tracking-tight mb-3 bg-gradient-to-r from-[#7b2fff] via-white to-[#00d4ff] bg-clip-text text-transparent">
-            SPACE GODS BOOTCAMP
-          </h1>
-          <p className="text-violet-300/70 text-sm tracking-widest uppercase">
-            a tipti Tournament
-          </p>
-        </div>
-
-        <Leaderboard />
-      </main>
-    </>
+    <main className="relative z-10 max-w-5xl mx-auto px-4 pt-32 pb-16">
+      <HeroSection />
+      <StatsBar />
+      <div className="text-center mt-10">
+        <Link
+          href="/leaderboard"
+          className="inline-flex items-center gap-2 px-6 py-3 rounded-full text-sm font-semibold text-white transition-all hover:scale-105"
+          style={{ background: 'linear-gradient(135deg, var(--nebula-purple), var(--nebula-pink))', boxShadow: '0 4px 20px rgba(167,139,250,0.3)' }}
+        >
+          View Leaderboard →
+        </Link>
+      </div>
+    </main>
   );
 }

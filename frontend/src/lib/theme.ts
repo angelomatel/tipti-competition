@@ -1,18 +1,34 @@
-/** Hex color values used across the app. */
 export const COLORS = {
-  cyan: '#00d4ff',
-  purple: '#7b2fff',
-  darkBg: '#0d0d2b',
-  navBg: '#0a0a1a',
+  cyan: '#67e8f9',
+  purple: '#a78bfa',
+  pink: '#f472b6',
+  rose: '#e879f9',
+  blue: '#60a5fa',
+  peach: '#fb923c',
+  surface0: 'rgba(15, 10, 30, 0.92)',
+  surface1: 'rgba(22, 15, 45, 0.88)',
   grid: '#2a1a5e',
-  mutedText: '#8b7baf',
+  mutedText: '#7c6fa0',
 } as const;
 
-/** Tailwind classes for top-3 leaderboard positions. */
 export const PODIUM_COLORS: Readonly<Record<number, string>> = {
-  1: 'text-yellow-400',
-  2: 'text-slate-300',
-  3: 'text-amber-600',
+  1: 'text-[var(--gold)]',
+  2: 'text-[var(--silver)]',
+  3: 'text-[var(--bronze)]',
 };
 
-export const DEFAULT_RANK_COLOR = 'text-violet-300';
+export const DEFAULT_RANK_COLOR = 'text-[var(--text-secondary)]';
+
+export const TIER_COLORS: Record<string, string> = {
+  CHALLENGER: '#fde68a',
+  GRANDMASTER: '#fca5a5',
+  MASTER: '#c4b5fd',
+  DIAMOND: '#93c5fd',
+  EMERALD: '#6ee7b7',
+  PLATINUM: '#a5f3fc',
+  GOLD: '#fcd34d',
+  SILVER: '#cbd5e1',
+  BRONZE: '#fb923c',
+  IRON: '#9ca3af',
+  UNRANKED: '#7c6fa0',
+};

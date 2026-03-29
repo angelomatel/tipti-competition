@@ -1,71 +1,86 @@
 @import "tailwindcss";
 
 :root {
-  --background: #06060f;
-  --foreground: #e8e8f0;
-  --accent-violet: #7b2fff;
-  --accent-cyan: #00d4ff;
+  --background: #0a0618;
+  --foreground: #f5f0ff;
+
+  --nebula-purple: #a78bfa;
+  --nebula-pink: #f472b6;
+  --nebula-peach: #fb923c;
+  --nebula-rose: #e879f9;
+  --nebula-blue: #60a5fa;
+
+  --surface-0: rgba(15, 10, 30, 0.92);
+  --surface-1: rgba(22, 15, 45, 0.88);
+  --surface-2: rgba(30, 20, 58, 0.82);
+  --surface-hover: rgba(40, 28, 72, 0.90);
+
+  --border: rgba(167, 139, 250, 0.18);
+  --border-bright: rgba(167, 139, 250, 0.40);
+
+  --text-primary: #f5f0ff;
+  --text-secondary: #c4b5fd;
+  --text-muted: #7c6fa0;
+
+  --gold: #fbbf24;
+  --silver: #e2e8f0;
+  --bronze: #fb923c;
+  --phase-active: #4ade80;
+  --accent-cyan: #67e8f9;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-surface-0: var(--surface-0);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-hover: var(--surface-hover);
+  --color-nebula-purple: var(--nebula-purple);
+  --color-nebula-pink: var(--nebula-pink);
+  --color-nebula-rose: var(--nebula-rose);
+  --color-nebula-blue: var(--nebula-blue);
+  --color-nebula-peach: var(--nebula-peach);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-gold: var(--gold);
+  --color-silver: var(--silver);
+  --color-bronze: var(--bronze);
+  --color-phase-active: var(--phase-active);
+  --color-accent-cyan: var(--accent-cyan);
+  --color-border-default: var(--border);
+  --color-border-bright: var(--border-bright);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-lore: var(--font-cormorant);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
   min-height: 100vh;
 }
 
-/* Star field — pure CSS, no JS */
-.stars {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    radial-gradient(ellipse 80% 60% at 50% 0%, #1a0a3a 0%, transparent 70%),
-    #06060f;
-  overflow: hidden;
+@keyframes nebula-drift {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(30px, 20px) scale(1.08); }
 }
 
-.stars::before,
-.stars::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(1px 1px at 10% 15%, rgba(255,255,255,0.7) 0%, transparent 100%),
-    radial-gradient(1px 1px at 22% 45%, rgba(255,255,255,0.5) 0%, transparent 100%),
-    radial-gradient(1px 1px at 35% 72%, rgba(255,255,255,0.6) 0%, transparent 100%),
-    radial-gradient(1px 1px at 48% 8%,  rgba(255,255,255,0.8) 0%, transparent 100%),
-    radial-gradient(1px 1px at 60% 55%, rgba(255,255,255,0.5) 0%, transparent 100%),
-    radial-gradient(1px 1px at 73% 28%, rgba(255,255,255,0.7) 0%, transparent 100%),
-    radial-gradient(1px 1px at 85% 88%, rgba(255,255,255,0.6) 0%, transparent 100%),
-    radial-gradient(1px 1px at 92% 40%, rgba(255,255,255,0.5) 0%, transparent 100%),
-    radial-gradient(2px 2px at 5%  90%, rgba(123,47,255,0.6) 0%, transparent 100%),
-    radial-gradient(2px 2px at 55% 80%, rgba(0,212,255,0.5)  0%, transparent 100%);
-  animation: twinkle 6s ease-in-out infinite alternate;
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.stars::after {
-  background-image:
-    radial-gradient(1px 1px at 18% 30%, rgba(255,255,255,0.6) 0%, transparent 100%),
-    radial-gradient(1px 1px at 30% 60%, rgba(255,255,255,0.5) 0%, transparent 100%),
-    radial-gradient(1px 1px at 42% 20%, rgba(255,255,255,0.7) 0%, transparent 100%),
-    radial-gradient(1px 1px at 65% 75%, rgba(255,255,255,0.5) 0%, transparent 100%),
-    radial-gradient(1px 1px at 78% 10%, rgba(255,255,255,0.8) 0%, transparent 100%),
-    radial-gradient(2px 2px at 88% 65%, rgba(123,47,255,0.5) 0%, transparent 100%),
-    radial-gradient(2px 2px at 15% 50%, rgba(0,212,255,0.4)  0%, transparent 100%);
-  animation-delay: 3s;
-  animation-duration: 8s;
+@keyframes live-dot-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.5); }
+  50% { opacity: 0.8; box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); }
 }
 
-@keyframes twinkle {
-  0%   { opacity: 0.6; }
-  100% { opacity: 1; }
+@keyframes modal-enter {
+  from { opacity: 0; transform: translateY(60px); }
+  to { opacity: 1; transform: translateY(0); }
 }
