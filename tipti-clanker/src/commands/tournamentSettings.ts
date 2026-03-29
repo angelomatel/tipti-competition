@@ -72,7 +72,7 @@ export class TournamentSettingsCommand {
         .addFields(
           { name: 'Start', value: new Date(s.startDate).toLocaleString(), inline: true },
           { name: 'End', value: new Date(s.endDate).toLocaleString(), inline: true },
-          { name: 'Active', value: s.isActive ? 'Yes' : 'No', inline: true },
+          { name: 'Active', value: (new Date() >= new Date(s.startDate) && new Date() <= new Date(s.endDate)) ? 'Yes' : 'No', inline: true },
           { name: 'Feed Channel', value: s.feedChannelId ? `<#${s.feedChannelId}>` : 'Not set', inline: true },
           { name: 'Daily Channel', value: s.dailyChannelId ? `<#${s.dailyChannelId}>` : 'Not set', inline: true },
         )

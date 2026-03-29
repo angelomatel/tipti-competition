@@ -36,7 +36,8 @@ async function runFeedJob(client: Client): Promise<void> {
   try {
     const settingsRes = await getTournamentSettings();
     const settings = settingsRes.settings;
-    if (!settings.isActive || !settings.feedChannelId) return;
+    const now = new Date();
+    if (now < new Date(settings.startDate) || now > new Date(settings.endDate) || !settings.feedChannelId) return;
 
     const channel = await getTextChannel(client, settings.feedChannelId);
     if (!channel) {
@@ -86,7 +87,8 @@ async function runDailyJob(client: Client): Promise<void> {
   try {
     const settingsRes = await getTournamentSettings();
     const settings = settingsRes.settings;
-    if (!settings.isActive || !settings.dailyChannelId) return;
+    const now = new Date();
+    if (now < new Date(settings.startDate) || now > new Date(settings.endDate) || !settings.dailyChannelId) return;
 
     const channel = await getTextChannel(client, settings.dailyChannelId);
     if (!channel) {
@@ -145,7 +147,8 @@ async function runGodStandingsJob(client: Client): Promise<void> {
   try {
     const settingsRes = await getTournamentSettings();
     const settings = settingsRes.settings;
-    if (!settings.isActive || !settings.godStandingsChannelId) return;
+    const now = new Date();
+    if (now < new Date(settings.startDate) || now > new Date(settings.endDate) || !settings.godStandingsChannelId) return;
 
     const channel = await getTextChannel(client, settings.godStandingsChannelId);
     if (!channel) {
