@@ -13,6 +13,8 @@ export async function computeLeaderboard(): Promise<LeaderboardResponse> {
   const today = getTodayUTC8();
   const { dayStart, dayEnd } = getDayBoundsUTC8(today);
 
+  const hideGods = new Date() < settings.startDate;
+
   // Cache god lookup
   const gods = await God.find().lean();
   const godMap = new Map(gods.map((g) => [g.slug, g]));
@@ -58,8 +60,8 @@ export async function computeLeaderboard(): Promise<LeaderboardResponse> {
         currentLosses:    player.currentLosses,
         lpGain:           dailyLpGain,
         scorePoints,
-        godSlug:          player.godSlug,
-        godName:          god?.name ?? null,
+        godSlug:          hideGods ? null : player.godSlug,
+        godName:          hideGods ? 'Hidden' : (god?.name ?? null),
         isEliminatedFromGod: player.isEliminatedFromGod,
         dailyPointGain,
         discordAvatarUrl: player.discordAvatarUrl ?? '',
