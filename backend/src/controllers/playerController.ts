@@ -11,6 +11,7 @@ import {
   getPlayerByDiscordId,
   updatePlayerProfile,
 } from '@/services/playerService';
+import { getTournamentSettings } from '@/services/tournamentService';
 import { computePlayerScoreBreakdown, computePlayerDailyBreakdown } from '@/services/scoringEngine';
 
 export async function listPlayers(_req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -114,14 +115,17 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
     const scoreBreakdown = await computePlayerScoreBreakdown(player.discordId);
     const dailyPoints = await computePlayerDailyBreakdown(player.discordId);
 
+    const settings = await getTournamentSettings();
+    const hideGods = new Date() < settings.startDate;
+
     res.json({
       player,
       snapshots,
       matches,
       matchPoints,
-      godSlug: player.godSlug,
-      godName: god?.name ?? null,
-      godTitle: god?.title ?? null,
+      godSlug: hideGods ? null : player.godSlug,
+      godName: hideGods ? 'Hidden' : (god?.name ?? null),
+      godTitle: hideGods ? null : (god?.title ?? null),
       scorePoints: scoreBreakdown.total,
       pointBreakdown: scoreBreakdown,
       dailyPoints,

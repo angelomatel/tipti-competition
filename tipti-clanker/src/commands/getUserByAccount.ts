@@ -7,6 +7,8 @@ import { Discord, Slash, SlashOption } from "discordx";
 import { lookupRiotAccount } from "@/lib/backendClient";
 import { parseRiotId } from "@/lib/riotId";
 import { formatTierDisplay } from "@/lib/format";
+import { EMBED_COLORS, RANK_EMOJIS } from "@/lib/constants";
+import { Tier } from "@/types/Rank";
 
 @Discord()
 export class GetUserByAccount {
@@ -41,21 +43,19 @@ export class GetUserByAccount {
 
       const usernameDisplay = `${info.gameName}#${info.tagLine}`;
       const tierDisplay = formatTierDisplay(info.tier, info.rank);
+      const tierEmoji = RANK_EMOJIS[info.tier as Tier] ?? '';
 
       const embed = new EmbedBuilder()
         .setTitle(usernameDisplay)
         .addFields(
-          { name: "Rank", value: tierDisplay, inline: true },
+          { name: "Rank", value: `${tierEmoji} ${tierDisplay}`, inline: true },
           { name: "LP", value: info.leaguePoints?.toString() ?? "0", inline: true },
         )
         .addFields(
           { name: "Wins", value: info.wins?.toString() ?? "0", inline: true },
           { name: "Losses", value: info.losses?.toString() ?? "0", inline: true },
         )
-        .addFields(
-          { name: "Fresh Blood", value: info.freshBlood ? "Yes" : "No", inline: true },
-          { name: "Hot Streak", value: info.hotStreak ? "Yes" : "No", inline: true },
-        )
+        .setColor(EMBED_COLORS.PRIMARY)
         .setTimestamp();
 
       await interaction.editReply({ embeds: [embed] });

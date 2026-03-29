@@ -1,3 +1,5 @@
+import { Tier } from '@/types/Rank';
+
 /** Discord embed color palette. */
 export const EMBED_COLORS = {
   PRIMARY: 0x7b2fff,   // Purple — default for all command embeds
@@ -32,3 +34,30 @@ export const GOD_CHOICES = [
   { slug: 'ahri',         name: 'Ahri',         title: 'Opulence' },
   { slug: 'aurelion_sol', name: 'Aurelion Sol', title: 'Wonders' },
 ] as const;
+
+/** Custom rank emojis for Discord embeds (uploaded to the server). */
+export const RANK_EMOJIS: Partial<Record<Tier, string>> = {
+  [Tier.IRON]:        '<:iron:1457026116001988763>',
+  [Tier.BRONZE]:      '<:bronze:1457026206674194556>',
+  [Tier.SILVER]:      '<:silver:1457026070854373619>',
+  [Tier.GOLD]:        '<:gold:1457026180694933650>',
+  [Tier.PLATINUM]:    '<:platinum:1461948180471218267>',
+  [Tier.EMERALD]:     '<:emerald:1457026255894478890>',
+  [Tier.DIAMOND]:     '<:diamond:1457026145739346012>',
+  [Tier.MASTER]:      '<:master:1457026279210483743>',
+  [Tier.GRANDMASTER]: '<:grandmaster:1457026329148002395>',
+  [Tier.CHALLENGER]:  '<:challenger:1457026304279974063>',
+};
+
+/** God-specific embed colors (primary color per god). */
+export const GOD_COLORS: Record<string, number> = {
+  varus:        0xf472b6,
+  ekko:         0x67e8f9,
+  evelynn:      0xa78bfa,
+  thresh:       0x4ade80,
+  yasuo:        0x94a3b8,
+  soraka:       0xfbbf24,
+  kayle:        0xf97316,
+  ahri:         0xe879f9,
+  aurelion_sol: 0x60a5fa,
+};

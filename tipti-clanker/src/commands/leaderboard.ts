@@ -1,24 +1,11 @@
 import { type CommandInteraction, EmbedBuilder } from 'discord.js';
 import { Discord, Slash } from 'discordx';
-import { getLeaderboard, updatePlayerProfile } from '@/lib/backendClient';
+import { getLeaderboard, getTournamentSettings, updatePlayerProfile } from '@/lib/backendClient';
 import { formatTierName, formatLpGain } from '@/lib/format';
-import { EMBED_COLORS, LEADERBOARD_TOP_N } from '@/lib/constants';
+import { EMBED_COLORS, LEADERBOARD_TOP_N, RANK_EMOJIS } from '@/lib/constants';
 import { Tier } from '@/types/Rank';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
-
-const RANK_EMOJIS: Partial<Record<Tier, string>> = {
-  [Tier.IRON]:        '<:iron:1457026116001988763>',
-  [Tier.BRONZE]:      '<:bronze:1457026206674194556>',
-  [Tier.SILVER]:      '<:silver:1457026070854373619>',
-  [Tier.GOLD]:        '<:gold:1457026180694933650>',
-  [Tier.PLATINUM]:    '<:platinum:1461948180471218267>',
-  [Tier.EMERALD]:     '<:emerald:1457026255894478890>',
-  [Tier.DIAMOND]:     '<:diamond:1457026145739346012>',
-  [Tier.MASTER]:      '<:master:1457026279210483743>',
-  [Tier.GRANDMASTER]: '<:grandmaster:1457026329148002395>',
-  [Tier.CHALLENGER]:  '<:challenger:1457026304279974063>',
-};
 
 @Discord()
 export class Leaderboard {
@@ -30,6 +17,16 @@ export class Leaderboard {
     await interaction.deferReply();
 
     try {
+      const settings = await getTournamentSettings();
+      if (new Date() < new Date(settings.startDate)) {
+        const embed = new EmbedBuilder()
+          .setTitle('Event Not Started')
+          .setDescription('The tournament has not started yet.')
+          .setColor(EMBED_COLORS.DANGER);
+        await interaction.editReply({ embeds: [embed] });
+        return;
+      }
+
       const data = await getLeaderboard();
       const entries: any[] = data.entries ?? [];
 

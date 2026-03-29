@@ -9,6 +9,7 @@ import { Discord, Slash, SlashOption } from 'discordx';
 import {
   getGodStandings,
   getGod,
+  getTournamentSettings,
   assignPlayerToGod,
   eliminateGod,
 } from '@/lib/backendClient';
@@ -24,6 +25,16 @@ export class GodCommands {
     await interaction.deferReply();
 
     try {
+      const settings = await getTournamentSettings();
+      if (new Date() < new Date(settings.startDate)) {
+        const embed = new EmbedBuilder()
+          .setTitle('Event Not Started')
+          .setDescription('The tournament has not started yet.')
+          .setColor(EMBED_COLORS.DANGER);
+        await interaction.editReply({ embeds: [embed] });
+        return;
+      }
+
       const data = await getGodStandings();
       const standings: any[] = data.standings ?? [];
 
@@ -67,11 +78,21 @@ export class GodCommands {
   ): Promise<void> {
     await interaction.deferReply();
 
-    const slug = godName.toLowerCase().replace(/\s+/g, '_');
-    const godChoice = GOD_CHOICES.find((g) => g.slug === slug || g.name.toLowerCase() === godName.toLowerCase());
-    const targetSlug = godChoice?.slug ?? slug;
-
     try {
+      const settings = await getTournamentSettings();
+      if (new Date() < new Date(settings.startDate)) {
+        const embed = new EmbedBuilder()
+          .setTitle('Event Not Started')
+          .setDescription('The tournament has not started yet.')
+          .setColor(EMBED_COLORS.DANGER);
+        await interaction.editReply({ embeds: [embed] });
+        return;
+      }
+
+      const slug = godName.toLowerCase().replace(/\s+/g, '_');
+      const godChoice = GOD_CHOICES.find((g) => g.slug === slug || g.name.toLowerCase() === godName.toLowerCase());
+      const targetSlug = godChoice?.slug ?? slug;
+
       const data = await getGod(targetSlug);
       const god = data.god;
       const players: any[] = data.players ?? [];

@@ -3,7 +3,7 @@ import {
   PermissionFlagsBits,
 } from 'discord.js';
 import { Discord, Guild, Slash } from 'discordx';
-import { seedGods, wipePlayerData } from '@/lib/backendClient';
+import { seedGods, wipePlayerData, updateTournamentSettings } from '@/lib/backendClient';
 import { logger } from '@/lib/logger';
 
 const ADMIN_GUILD = '262398311007387653';
@@ -39,6 +39,15 @@ export class SetupCommands {
 
     try {
       const result = await wipePlayerData();
+
+      await updateTournamentSettings({
+        startDate: '2026-04-15T00:00:00Z',
+        endDate: '2026-04-28T23:59:59Z',
+        feedChannelId: '1487935453234466998',
+        dailyChannelId: '1487935514899124294',
+        godStandingsChannelId: '1487935550387261581',
+      });
+
       const lines = [
         `Players: ${result.players ?? 0}`,
         `Snapshots: ${result.snapshots ?? 0}`,
@@ -47,7 +56,7 @@ export class SetupCommands {
         `Daily Scores: ${result.dailyPlayerScores ?? 0}`,
       ];
       await interaction.editReply({
-        content: `✅ Data wiped:\n${lines.join('\n')}`,
+        content: `✅ Data wiped & tournament settings reset:\n${lines.join('\n')}`,
       });
       logger.info(result, `Data wiped by ${interaction.user.id}`);
     } catch (err: any) {
