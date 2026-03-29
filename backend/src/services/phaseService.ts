@@ -1,8 +1,8 @@
 import { PointTransaction } from '@/db/models/PointTransaction';
 import { Player } from '@/db/models/Player';
-import { TournamentSettings } from '@/db/models/TournamentSettings';
 import { getGodStandings, eliminateGod, getPlayersForGod } from '@/services/godService';
 import { computePlayerScore } from '@/services/scoringEngine';
+import { getTournamentSettings } from '@/services/tournamentService';
 import {
   EKKO_PHASE_FLAT_BONUS,
   AHRI_CAP,
@@ -18,8 +18,7 @@ export interface EliminationResult {
 }
 
 export async function processEndOfPhase(phase: number): Promise<EliminationResult[]> {
-  const settings = await TournamentSettings.findOne({ isActive: true });
-  if (!settings) throw new Error('No active tournament settings.');
+  const settings = await getTournamentSettings();
 
   const phaseConfig = settings.phases.find((p) => p.phase === phase);
   if (!phaseConfig) throw new Error(`Phase ${phase} not configured.`);
@@ -51,8 +50,8 @@ export async function processEndOfPhase(phase: number): Promise<EliminationResul
 }
 
 async function processEkkoBuff(phase: number): Promise<void> {
-  const settings = await TournamentSettings.findOne({ isActive: true });
-  const phaseConfig = settings?.phases.find((p) => p.phase === phase);
+  const settings = await getTournamentSettings();
+  const phaseConfig = settings.phases.find((p) => p.phase === phase);
   if (!phaseConfig) return;
 
   const ekkoPlayers = await Player.find({
@@ -77,8 +76,7 @@ async function processEkkoBuff(phase: number): Promise<void> {
 }
 
 export async function processEndOfTournament(): Promise<void> {
-  const settings = await TournamentSettings.findOne({ isActive: true });
-  if (!settings) throw new Error('No active tournament settings.');
+  const settings = await getTournamentSettings();
 
   const lastPhase = settings.phases[settings.phases.length - 1];
   const day = lastPhase?.endDay ?? '';
@@ -137,8 +135,8 @@ async function enforceAhriCap(): Promise<void> {
 
     if (total > AHRI_CAP) {
       const excess = total - AHRI_CAP;
-      const settings = await TournamentSettings.findOne({ isActive: true });
-      const lastPhase = settings?.phases[settings.phases.length - 1];
+      const settings = await getTournamentSettings();
+      const lastPhase = settings.phases[settings.phases.length - 1];
 
       await PointTransaction.create({
         playerId: player.discordId,
