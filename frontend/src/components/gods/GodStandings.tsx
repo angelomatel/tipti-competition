@@ -80,7 +80,10 @@ const GodStandings: React.FC<GodStandingsProps> = ({ onSelectGod }) => {
 
         {/* Rank badge / Eliminated badge */}
         {!isEliminated && (
-          <span className="absolute top-3 right-3 text-xs font-bold text-text-muted z-10">
+          <span 
+            className="absolute top-3 right-3 text-xs font-bold text-text-primary z-10"
+            style={{ textShadow: '0 0 4px rgba(0,0,0,0.8), 0 0 2px rgba(0,0,0,1)' }}
+          >
             #{rankIndex + 1}
           </span>
         )}
