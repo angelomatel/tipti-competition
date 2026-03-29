@@ -10,14 +10,16 @@ const PHASE_INFO = [
 
 const PhaseVisual = () => {
   const { data } = useTournament();
-  const currentPhase = data?.settings?.currentPhase ?? 1;
+  const settings = data?.settings;
+  const currentPhase = settings?.currentPhase ?? 1;
+  const isStarted = settings ? new Date(settings.startDate) <= new Date() : false;
 
   return (
     <div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {PHASE_INFO.map(({ phase, title, subtitle, detail }) => {
-          const isDone = phase < currentPhase;
-          const isActive = phase === currentPhase;
+          const isDone = isStarted && phase < currentPhase;
+          const isActive = isStarted && phase === currentPhase;
 
           return (
             <div
@@ -26,7 +28,7 @@ const PhaseVisual = () => {
               style={{
                 background: isActive ? 'var(--surface-0)' : 'var(--surface-1)',
                 border: `1px solid ${isActive ? 'var(--gold)' : isDone ? 'var(--nebula-purple)' : 'var(--border)'}`,
-                opacity: !isDone && !isActive ? 0.5 : 1,
+                opacity: isStarted && !isDone && !isActive ? 0.5 : 1,
               }}
             >
               {isActive && (
