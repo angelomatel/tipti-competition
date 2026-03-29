@@ -3,6 +3,7 @@ import { formatTier } from '@/src/types/Rank';
 import { PODIUM_COLORS, DEFAULT_RANK_COLOR, TIER_COLORS } from '@/src/lib/theme';
 import Avatar from '@/src/components/shared/Avatar';
 import GodBadge from '@/src/components/shared/GodBadge';
+import RankImage from '@/src/components/images/RankImage/RankImage';
 
 interface UserBannerProps {
   entry: LeaderboardEntry;
@@ -45,7 +46,10 @@ const UserBanner: React.FC<UserBannerProps> = ({ entry, onClick, style, hideGod 
           {!hideGod && entry.godSlug && <GodBadge slug={entry.godSlug} name={entry.godName} />}
         </div>
         <p className="text-xs flex items-center gap-1 text-text-muted">
-          <span style={{ color: TIER_COLORS[entry.currentTier] || TIER_COLORS.UNRANKED }}>{tierDisplay}</span>
+          <span className="flex items-center gap-1">
+            <RankImage tier={entry.currentTier} size={14} />
+            <span style={{ color: TIER_COLORS[entry.currentTier] || TIER_COLORS.UNRANKED }}>{tierDisplay}</span>
+          </span>
           <span>&bull;</span>
           <span>{entry.currentLP} LP</span>
           <span>&bull;</span>
@@ -53,7 +57,8 @@ const UserBanner: React.FC<UserBannerProps> = ({ entry, onClick, style, hideGod 
         </p>
       </div>
 
-      <span className="text-xs font-medium hidden sm:block" style={{ color: TIER_COLORS[entry.currentTier] || TIER_COLORS.UNRANKED }}>
+      <span className="text-xs font-medium hidden sm:flex items-center gap-1" style={{ color: TIER_COLORS[entry.currentTier] || TIER_COLORS.UNRANKED }}>
+        <RankImage tier={entry.currentTier} size={16} />
         {tierDisplay}
       </span>
 

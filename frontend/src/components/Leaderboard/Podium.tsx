@@ -1,8 +1,11 @@
 'use client';
 
 import type { LeaderboardEntry } from '@/src/types/LeaderboardEntry';
+import { formatTier } from '@/src/types/Rank';
 import Avatar from '@/src/components/shared/Avatar';
 import GodBadge from '@/src/components/shared/GodBadge';
+import { TIER_COLORS } from '@/src/lib/theme';
+import RankImage from '@/src/components/images/RankImage/RankImage';
 
 interface PodiumProps {
   entries: LeaderboardEntry[];
@@ -25,6 +28,7 @@ const Podium: React.FC<PodiumProps> = ({ entries, onSelectPlayer, hideGod }) => 
         const entry = entries[index];
         const pointGainStr = entry.dailyPointGain >= 0 ? `+${entry.dailyPointGain}` : `${entry.dailyPointGain}`;
         const isCenter = index === 0;
+        const tierDisplay = formatTier(entry.currentTier, entry.currentRank);
         return (
           <div
             key={entry.discordId}
@@ -53,6 +57,12 @@ const Podium: React.FC<PodiumProps> = ({ entries, onSelectPlayer, hideGod }) => 
               {entry.gameName}
               <span className="text-text-muted font-normal">#{entry.tagLine}</span>
             </p>
+            <div className="flex items-center gap-1 mt-1">
+              <RankImage tier={entry.currentTier} size={20} />
+              <span className="text-xs font-semibold" style={{ color: TIER_COLORS[entry.currentTier] || TIER_COLORS.UNRANKED }}>
+                {tierDisplay}
+              </span>
+            </div>
             <p className="text-2xl font-bold mt-1 text-accent-cyan">
               {entry.scorePoints}
             </p>
