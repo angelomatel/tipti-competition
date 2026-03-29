@@ -74,22 +74,26 @@ export const GOD_SCORE_TOP_N = { MIN: 2, MAX: 5 } as const;
 // ── Individual Buff Thresholds ────────────────────────────────────────
 
 /** Varus: points awarded to top player. */
-export const VARUS_TOP_BONUS = 8;
-/** Varus: points awarded to bottom player. */
-export const VARUS_BOTTOM_BONUS = 6;
+export const VARUS_TOP_BONUS = 6;
+/** Varus: points awarded to all players who played. */
+export const VARUS_EMBRACE_BONUS = 2;
 
 /** Ekko: flat bonus awarded at end of each phase. */
 export const EKKO_PHASE_FLAT_BONUS = 50;
 
 /** Evelynn: base bonus for top player. */
-export const EVELYNN_BASE_BONUS = 3;
+export const EVELYNN_BASE_BONUS = 5;
 /** Evelynn: bonus when top player's daily gain >= threshold. */
-export const EVELYNN_HIGH_BONUS = 7;
+export const EVELYNN_HIGH_BONUS = 4;
 /** Evelynn: daily gain threshold for high bonus. */
-export const EVELYNN_GAIN_THRESHOLD = 50;
+export const EVELYNN_GAIN_THRESHOLD = 300;
+/** Evelynn: bonus for all other players who played. */
+export const EVELYNN_WHISPER_BONUS = 2;
 
 /** Thresh: bonus per player in top pair. */
-export const THRESH_PAIR_BONUS = 7;
+export const THRESH_PAIR_BONUS = 5;
+/** Thresh: bonus for all players who played. */
+export const THRESH_COVENANT_BONUS = 2;
 
 /** Yasuo: bonus when daily gain >= high threshold. */
 export const YASUO_HIGH_BONUS = 10;
@@ -105,10 +109,14 @@ export const SORAKA_PLAYER_CAP = 4;
 
 /** Kayle: end-of-tournament bonuses by placement range. */
 export const KAYLE_BONUSES = {
-  TOP_2: 30,
-  TOP_3: 40,
-  TOP_5: 50,
+  TOP_2: 20,
+  TOP_3: 30,
+  TOP_5: 40,
 } as const;
+/** Kayle: daily discipline bonus for meeting match threshold. */
+export const KAYLE_DISCIPLINE_BONUS = 2;
+/** Kayle: minimum matches required for daily discipline bonus. */
+export const KAYLE_DISCIPLINE_MIN_MATCHES = 5;
 
 /** Ahri: points per 1st-place match. */
 export const AHRI_PER_FIRST = 3;
@@ -117,9 +125,9 @@ export const AHRI_CAP = 80;
 /** Ahri: max buff points per day. */
 export const AHRI_DAILY_CAP = 21;
 
-/** Aurelion Sol: point range for bonus awards. */
+/** Aurelion Sol: point range for top player bonus. */
 export const ASOL_BONUS_MIN = 5;
-export const ASOL_BONUS_MAX = 10;
-/** Aurelion Sol: min/max random players from top 2-10 to receive bonus. */
-export const ASOL_RANDOM_PLAYERS_MIN = 1;
-export const ASOL_RANDOM_PLAYERS_MAX = 3;
+export const ASOL_BONUS_MAX = 8;
+/** Aurelion Sol: stardust bonus range for all players. */
+export const ASOL_STARDUST_MIN = 1;
+export const ASOL_STARDUST_MAX = 3;

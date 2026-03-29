@@ -13,15 +13,15 @@ import { PODIUM_COLORS, DEFAULT_RANK_COLOR } from '@/src/lib/theme';
 import { getGodColor } from '@/src/lib/godColors';
 
 const GOD_LORE: Record<string, string> = {
-  varus: 'In the vast expanse between stars, Varus weaves the threads of devotion and longing. Those who pledge to Love find strength in both triumph and despair — for the heart that endures the deepest fall knows the truest rise. Under his gaze, the first and last are equal.',
+  varus: 'In the vast expanse between stars, Varus weaves the threads of devotion and longing. His love is unconditional — every follower who takes the field feels the warmth of his embrace. Yet the one who burns brightest earns the title of Beloved, lifted highest by a love that knows no equal.',
   ekko: 'Time bends to Ekko\'s will, folding in on itself like the rings of a dying star. His followers learn that the past is never truly lost — each phase of battle carries the echo of their greatest moment, summoned forth when the cosmos demands it most.',
-  evelynn: 'Evelynn\'s whisper cuts through the void like a blade through silk. She rewards those consumed by ambition, granting power to the one who burns brightest. But temptation is a double-edged star — only the truly exceptional feel her full embrace.',
-  thresh: 'In the cold silence between galaxies, Thresh forges pacts that transcend mortality. His chosen fight not alone but as bound pairs, their fates intertwined like binary stars. Together they rise; apart they are nothing but dust.',
+  evelynn: 'Evelynn\'s whisper echoes through the void, reaching every soul who dares to compete. All who fight hear her call, but the one consumed by ambition — the one who climbs beyond reason — earns her full seduction. Temptation spares no one; it simply rewards the bold beyond measure.',
+  thresh: 'In the cold silence between galaxies, Thresh forges a covenant that binds all who follow him. Every soul in his domain shares in the pact\'s power. But the two who rise highest forge a soul bond deeper than the void itself — their fates intertwined like binary stars, burning brighter than any alone.',
   yasuo: 'The Abyss speaks only in extremes. Yasuo\'s followers walk the razor\'s edge — those who soar beyond the threshold are lifted higher, while the complacent are dragged into the void. There is no middle ground in the domain of the Abyss.',
   soraka: 'Soraka reads the constellations of victory and defeat, her power flowing through the momentum of battle. Each consecutive triumph or failure compounds upon the last, building like the crescendo of a cosmic symphony that echoes across the stars.',
-  kayle: 'Order is patient. Kayle watches from her throne of light as the tournament unfolds, reserving her greatest blessings for the final reckoning. When the last star falls, those who proved worthy receive her divine judgment — and the faithful are rewarded above all.',
+  kayle: 'Order demands discipline, not merely victory. Kayle watches each day from her throne of light, blessing those who maintain the structure she demands. When the final star falls, her greatest judgment descends — but only those who proved their daily devotion will stand ready to receive it.',
   ahri: 'Opulence drips from every victory claimed in Ahri\'s name. She collects first-place finishes like gemstones, each one adding to a growing treasury of power. But even greed has its limits — her bounty is generous yet never infinite.',
-  aurelion_sol: 'The Star Forger creates and destroys with equal indifference. His blessings fall like cosmic rain — the strongest always receive their due, but fortune smiles randomly upon others. In the realm of Wonders, fate and skill dance an eternal waltz.',
+  aurelion_sol: 'The Star Forger scatters stardust across all who walk beneath his cosmos — every follower feels the touch of wonder. Yet the brightest star earns the supernova, a surge of cosmic power reserved for the one who shines above all. In the realm of Wonders, no soul is forgotten.',
 };
 
 interface GodLeaderboardProps {

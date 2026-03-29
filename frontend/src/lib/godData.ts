@@ -23,15 +23,15 @@ export const GOD_IMAGE_MAP: Record<string, string> = {
 };
 
 export const BUFF_DATA = [
-  { slug: 'varus', name: 'Varus', title: 'Love', mechanic: 'Top 1 player → +8, Bottom 1 (played) → +6' },
+  { slug: 'varus', name: 'Varus', title: 'Love', mechanic: 'Top 1 → +6, all players → +2' },
   { slug: 'ekko', name: 'Ekko', title: 'Time', mechanic: 'Flat +50 bonus at the end of each phase' },
-  { slug: 'evelynn', name: 'Evelynn', title: 'Temptation', mechanic: 'Top player: +3 base, +7 if ≥50 daily LP gain' },
-  { slug: 'thresh', name: 'Thresh', title: 'Pacts', mechanic: 'Top 2 players → +7 each' },
+  { slug: 'evelynn', name: 'Evelynn', title: 'Temptation', mechanic: 'Top player: +5, or +9 if ≥300 daily LP gain. All others → +2' },
+  { slug: 'thresh', name: 'Thresh', title: 'Pacts', mechanic: 'Top 2 → +5 each, all players → +2' },
   { slug: 'yasuo', name: 'Yasuo', title: 'Abyss', mechanic: '≥150 gain → +10, ≤100 gain → −8' },
   { slug: 'soraka', name: 'Soraka', title: 'Stars', mechanic: '+1/−1 per latest streak, cap ±4/player' },
-  { slug: 'kayle', name: 'Kayle', title: 'Order', mechanic: 'End of tournament: Top 1-2 → +30, Top 3 → +40, Top 4-5 → +50' },
+  { slug: 'kayle', name: 'Kayle', title: 'Order', mechanic: 'Daily: +2 for ≥5 matches. End of tournament: Top 1-2 → +20, Top 3 → +30, Top 4-5 → +40' },
   { slug: 'ahri', name: 'Ahri', title: 'Opulence', mechanic: '+3 per 1st place match, daily cap 21, overall cap 80' },
-  { slug: 'aurelion_sol', name: 'Aurelion Sol', title: 'Wonders', mechanic: 'Top 1 → +5-10, random 1-3 from top 2-10 → +5-10' },
+  { slug: 'aurelion_sol', name: 'Aurelion Sol', title: 'Wonders', mechanic: 'Top 1 → +5-8, all players → +1-3 (random)' },
 ];
 
 /** Lookup buff mechanic by god slug */

@@ -154,15 +154,15 @@ Frontend ──/api proxy──► Backend API
 
 | God | Buff Mechanic | Details |
 |-----|---------------|---------|
-| Varus (Love) | Top + Bottom | Top 1 → +8, Bottom 1 (played) → +6 |
+| Varus (Love) | Top + All | Top 1 → +6 (Beloved), all players → +2 (Embrace) |
 | Ekko (Time) | Phase Bonus | Flat +50 at end of each phase |
-| Evelynn (Temptation) | Performance | Top player: +3 base, +7 if ≥50 gain |
-| Thresh (Pacts) | Pairs | Top 2 → +7 each |
+| Evelynn (Temptation) | Top + All | Top player: +5, or +9 if ≥300 LP gain (Seduction). All others → +2 (Whisper) |
+| Thresh (Pacts) | Top + All | Top 2 → +5 each (Soul Bond), all players → +2 (Covenant) |
 | Yasuo (Abyss) | Volatile | ≥150 gain → +10, ≤100 gain → -8 |
 | Soraka (Stars) | Streak | +1/-1 per latest streak only, cap ±4/player |
-| Kayle (Order) | Delayed | End of tournament: Top 1-2 → +30, Top 3 → +40, Top 4-5 → +50 |
+| Kayle (Order) | Daily + Delayed | Daily: +2 for ≥5 matches (Discipline). End of tournament: Top 1-2 → +20, Top 3 → +30, Top 4-5 → +40 (Judgment) |
 | Ahri (Opulence) | Top 1s | +3 per 1st place match, daily cap 21, overall cap 80 |
-| Aurelion Sol (Wonders) | Random | Top 1 → +5-10, random 1-3 from top 2-10 → +5-10 |
+| Aurelion Sol (Wonders) | Top + All | Top 1 → +5-8 (Supernova), all players → +1-3 random (Stardust) |
 
 All daily buffs capped at +50/day per god (scale factor: `min(1, 50/totalBuffs)`).
 

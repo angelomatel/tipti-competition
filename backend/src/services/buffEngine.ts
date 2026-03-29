@@ -6,22 +6,26 @@ import { getTournamentSettings } from '@/services/tournamentService';
 import {
   BUFF_DAILY_CAP,
   VARUS_TOP_BONUS,
-  VARUS_BOTTOM_BONUS,
+  VARUS_EMBRACE_BONUS,
   EVELYNN_BASE_BONUS,
   EVELYNN_HIGH_BONUS,
   EVELYNN_GAIN_THRESHOLD,
+  EVELYNN_WHISPER_BONUS,
   THRESH_PAIR_BONUS,
+  THRESH_COVENANT_BONUS,
   YASUO_HIGH_BONUS,
   YASUO_HIGH_THRESHOLD,
   YASUO_LOW_PENALTY,
   YASUO_LOW_THRESHOLD,
   SORAKA_PLAYER_CAP,
+  KAYLE_DISCIPLINE_BONUS,
+  KAYLE_DISCIPLINE_MIN_MATCHES,
   AHRI_PER_FIRST,
   AHRI_DAILY_CAP,
   ASOL_BONUS_MIN,
   ASOL_BONUS_MAX,
-  ASOL_RANDOM_PLAYERS_MIN,
-  ASOL_RANDOM_PLAYERS_MAX,
+  ASOL_STARDUST_MIN,
+  ASOL_STARDUST_MAX,
 } from '@/constants';
 import type { IDailyPlayerScore } from '@/types/God';
 import { logger } from '@/lib/logger';
@@ -75,7 +79,10 @@ export async function processEndOfDayBuffs(day: string): Promise<void> {
       case 'aurelion_sol':
         buffs = computeAsolBuff(dailyScores);
         break;
-      // ekko and kayle are handled at end of phase/tournament
+      case 'kayle':
+        buffs = computeKayleDailyBuff(dailyScores);
+        break;
+      // ekko is handled at end of phase, kayle also has tournament-end bonuses
     }
 
     // Apply daily cap
@@ -111,7 +118,7 @@ function computeVarusBuff(scores: IDailyPlayerScore[]): BuffResult[] {
   const sorted = [...played].sort((a, b) => b.rawLpGain - a.rawLpGain);
   const results: BuffResult[] = [];
 
-  // Top 1
+  // Top 1 — Beloved
   results.push({
     playerId: sorted[0].playerId,
     value: VARUS_TOP_BONUS,
@@ -119,13 +126,12 @@ function computeVarusBuff(scores: IDailyPlayerScore[]): BuffResult[] {
     type: 'buff',
   });
 
-  // Bottom 1 (if different from top)
-  const bottom = sorted[sorted.length - 1];
-  if (bottom.playerId !== sorted[0].playerId) {
+  // All players — Embrace
+  for (const score of played) {
     results.push({
-      playerId: bottom.playerId,
-      value: VARUS_BOTTOM_BONUS,
-      source: 'varus_bottom',
+      playerId: score.playerId,
+      value: VARUS_EMBRACE_BONUS,
+      source: 'varus_embrace',
       type: 'buff',
     });
   }
@@ -139,27 +145,60 @@ function computeEvelynnBuff(scores: IDailyPlayerScore[]): BuffResult[] {
 
   const sorted = [...played].sort((a, b) => b.rawLpGain - a.rawLpGain);
   const top = sorted[0];
+  const results: BuffResult[] = [];
+
+  // Top 1 — Seduction
   const bonus = top.rawLpGain >= EVELYNN_GAIN_THRESHOLD
     ? EVELYNN_BASE_BONUS + EVELYNN_HIGH_BONUS
     : EVELYNN_BASE_BONUS;
 
-  return [{
+  results.push({
     playerId: top.playerId,
     value: bonus,
     source: top.rawLpGain >= EVELYNN_GAIN_THRESHOLD ? 'evelynn_high' : 'evelynn_base',
     type: 'buff',
-  }];
+  });
+
+  // All others — Whisper
+  for (const score of played) {
+    if (score.playerId === top.playerId) continue;
+    results.push({
+      playerId: score.playerId,
+      value: EVELYNN_WHISPER_BONUS,
+      source: 'evelynn_whisper',
+      type: 'buff',
+    });
+  }
+
+  return results;
 }
 
 function computeThreshBuff(scores: IDailyPlayerScore[]): BuffResult[] {
   const played = scores.filter((s) => s.matchCount > 0);
-  if (played.length < 2) return [];
+  if (played.length === 0) return [];
 
   const sorted = [...played].sort((a, b) => b.rawLpGain - a.rawLpGain);
-  return [
-    { playerId: sorted[0].playerId, value: THRESH_PAIR_BONUS, source: 'thresh_pair', type: 'buff' },
-    { playerId: sorted[1].playerId, value: THRESH_PAIR_BONUS, source: 'thresh_pair', type: 'buff' },
-  ];
+  const results: BuffResult[] = [];
+
+  // Top 2 — Soul Bond
+  if (sorted.length >= 2) {
+    results.push(
+      { playerId: sorted[0].playerId, value: THRESH_PAIR_BONUS, source: 'thresh_pair', type: 'buff' },
+      { playerId: sorted[1].playerId, value: THRESH_PAIR_BONUS, source: 'thresh_pair', type: 'buff' },
+    );
+  }
+
+  // All players — Covenant
+  for (const score of played) {
+    results.push({
+      playerId: score.playerId,
+      value: THRESH_COVENANT_BONUS,
+      source: 'thresh_covenant',
+      type: 'buff',
+    });
+  }
+
+  return results;
 }
 
 function computeYasuoBuff(scores: IDailyPlayerScore[]): BuffResult[] {
@@ -257,7 +296,7 @@ function computeAsolBuff(scores: IDailyPlayerScore[]): BuffResult[] {
   const sorted = [...played].sort((a, b) => b.rawLpGain - a.rawLpGain);
   const results: BuffResult[] = [];
 
-  // Top 1 gets random bonus
+  // Top 1 — Supernova
   results.push({
     playerId: sorted[0].playerId,
     value: randomInt(ASOL_BONUS_MIN, ASOL_BONUS_MAX),
@@ -265,19 +304,28 @@ function computeAsolBuff(scores: IDailyPlayerScore[]): BuffResult[] {
     type: 'buff',
   });
 
-  // Random 1-3 players from top 2-10
-  if (sorted.length > 1) {
-    const candidates = sorted.slice(1, Math.min(10, sorted.length));
-    const count = randomInt(
-      ASOL_RANDOM_PLAYERS_MIN,
-      Math.min(ASOL_RANDOM_PLAYERS_MAX, candidates.length),
-    );
-    const shuffled = [...candidates].sort(() => Math.random() - 0.5);
-    for (let i = 0; i < count; i++) {
+  // All players — Stardust
+  for (const score of played) {
+    results.push({
+      playerId: score.playerId,
+      value: randomInt(ASOL_STARDUST_MIN, ASOL_STARDUST_MAX),
+      source: 'asol_stardust',
+      type: 'buff',
+    });
+  }
+
+  return results;
+}
+
+function computeKayleDailyBuff(scores: IDailyPlayerScore[]): BuffResult[] {
+  const results: BuffResult[] = [];
+
+  for (const score of scores) {
+    if (score.matchCount >= KAYLE_DISCIPLINE_MIN_MATCHES) {
       results.push({
-        playerId: shuffled[i].playerId,
-        value: randomInt(ASOL_BONUS_MIN, ASOL_BONUS_MAX),
-        source: 'asol_random',
+        playerId: score.playerId,
+        value: KAYLE_DISCIPLINE_BONUS,
+        source: 'kayle_discipline',
         type: 'buff',
       });
     }
