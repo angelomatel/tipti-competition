@@ -2,7 +2,6 @@ import cron from 'node-cron';
 import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { MatchRecord } from '@/db/models/MatchRecord';
 import { DailyPlayerScore } from '@/db/models/DailyPlayerScore';
-import { PointTransaction } from '@/db/models/PointTransaction';
 import { getTournamentSettings } from '@/services/tournamentService';
 import { listActivePlayers } from '@/services/playerService';
 import { processEndOfDayBuffs } from '@/services/buffEngine';
@@ -76,23 +75,7 @@ export async function runDailyProcessing(day?: string): Promise<void> {
         { upsert: true, new: true },
       );
 
-      // Create match PointTransaction (skip if already exists for this day)
-      const existingMatchTx = await PointTransaction.findOne({
-        playerId: player.discordId,
-        type: 'match',
-        day: targetDay,
-      });
-      if (!existingMatchTx && rawLpGain !== 0) {
-        await PointTransaction.create({
-          playerId: player.discordId,
-          godSlug: player.godSlug,
-          type: 'match',
-          value: rawLpGain,
-          source: 'daily_lp_gain',
-          day: targetDay,
-          phase: phaseNum,
-        });
-      }
+      // Match PointTransactions are now created in real-time by the 15-min cron (lp_delta).
     } catch (err) {
       logger.error({ err, discordId: player.discordId }, `[daily-cron] Failed for ${player.discordId}`);
     }

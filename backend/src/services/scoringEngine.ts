@@ -1,6 +1,12 @@
 import { PointTransaction } from '@/db/models/PointTransaction';
+import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { Player } from '@/db/models/Player';
 import { GOD_SCORE_TOP_N } from '@/constants';
+import { normalizeLP } from '@/lib/normalizeLP';
+import { getTodayUTC8 } from '@/lib/dateUtils';
+import { logger } from '@/lib/logger';
+import type { TournamentSettingsDocument } from '@/db/models/TournamentSettings';
+import type { PlayerDocument } from '@/types/Player';
 import type { PlayerScoreBreakdown, DailyPointEntry } from '@/types/God';
 
 export async function computePlayerScore(discordId: string): Promise<number> {
@@ -94,4 +100,53 @@ export async function computeGodScore(godSlug: string): Promise<number> {
   );
   const topN = scores.slice(0, n);
   return topN.reduce((sum, s) => sum + s, 0) / topN.length;
+}
+
+/**
+ * Creates a match PointTransaction for the LP delta since the last scoring.
+ * Self-correcting: compares (currentLP - baselineLP) against sum of existing match transactions.
+ */
+export async function createLpDeltaTransaction(
+  player: PlayerDocument,
+  settings: TournamentSettingsDocument,
+): Promise<void> {
+  if (!player.godSlug) return;
+
+  const currentNorm = normalizeLP(player.currentTier, player.currentRank, player.currentLP);
+
+  // Tournament baseline: first snapshot on/after startDate
+  const baseline = await LpSnapshot.findOne({
+    puuid: player.puuid,
+    capturedAt: { $gte: settings.startDate },
+  }).sort({ capturedAt: 1 });
+
+  if (!baseline) return;
+
+  const baseNorm = normalizeLP(baseline.tier, baseline.rank, baseline.leaguePoints);
+  const expectedTotal = currentNorm - baseNorm;
+
+  // Sum existing match transactions
+  const result = await PointTransaction.aggregate([
+    { $match: { playerId: player.discordId, type: 'match' } },
+    { $group: { _id: null, total: { $sum: '$value' } } },
+  ]);
+  const existingTotal = result[0]?.total ?? 0;
+
+  const delta = expectedTotal - existingTotal;
+  if (delta === 0) return;
+
+  const today = getTodayUTC8();
+  const phase = settings.phases.find((p) => today >= p.startDay && today <= p.endDay);
+
+  await PointTransaction.create({
+    playerId: player.discordId,
+    godSlug: player.godSlug,
+    type: 'match',
+    value: delta,
+    source: 'lp_delta',
+    day: today,
+    phase: phase?.phase ?? settings.currentPhase,
+  });
+
+  logger.debug({ discordId: player.discordId, delta }, `[scoring] LP delta transaction created`);
 }

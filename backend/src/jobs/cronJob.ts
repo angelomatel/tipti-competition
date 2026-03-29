@@ -1,8 +1,10 @@
 import cron from 'node-cron';
 import { captureSnapshotForPlayer } from '@/services/snapshotService';
 import { captureMatchesForPlayer } from '@/services/matchService';
+import { createLpDeltaTransaction } from '@/services/scoringEngine';
 import { getTournamentSettings } from '@/services/tournamentService';
 import { listActivePlayers } from '@/services/playerService';
+import { Player } from '@/db/models/Player';
 import { logger } from '@/lib/logger';
 
 export async function runCronCycle(): Promise<void> {
@@ -27,6 +29,13 @@ export async function runCronCycle(): Promise<void> {
     try {
       await captureSnapshotForPlayer(player);
       await captureMatchesForPlayer(player);
+
+      // Re-fetch player to get updated LP after snapshot capture
+      const updatedPlayer = await Player.findOne({ discordId: player.discordId });
+      if (updatedPlayer) {
+        await createLpDeltaTransaction(updatedPlayer, settings);
+      }
+
       logger.debug({ discordId: player.discordId }, `[cron] Done processing ${player.gameName}#${player.tagLine}`);
     } catch (err) {
       logger.error({ err, discordId: player.discordId }, `[cron] Failed for player ${player.discordId}`);
