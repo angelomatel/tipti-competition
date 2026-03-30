@@ -162,7 +162,7 @@ Buffs are calculated **per match in real-time** during the 15-min cron cycle. Ea
 | Evelynn (Temptation) | +1/match, or +15/match if LP gain exceeds rank threshold (Unranked-Plat: 300, Emerald: 200, Diamond: 150, Master+: 100) | 75 |
 | Thresh (Pacts) | +2/match. +13 if matching Top 1's latest placement. Top 1: +8/match | 75 |
 | Yasuo (Abyss) | Top 5-7 → +10/match. Top 8 → +35/match | 140 |
-| Soraka (Stars) | +3/-1 per streak match (cap 15 streak length) | 125 |
+| Soraka (Stars) | +5/-2 per streak match (cap 15 streak length) | 100 |
 | Kayle (Order) | +3/match. +3 bonus if ≥3 matches played that day | 75 |
 | Ahri (Opulence) | +13 per 1st place match | 75 |
 | Aurelion Sol (Wonders) | Random per match based on placement (1st: 0-12, 8th: -6 to 6) | 90 |

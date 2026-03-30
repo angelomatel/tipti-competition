@@ -68,7 +68,7 @@ export const BUFF_DAILY_CAP = 75;
 /** Per-god daily cap overrides. */
 export const GOD_DAILY_CAP_OVERRIDES: Partial<Record<string, number>> = {
   yasuo: 140,
-  soraka: 125,
+  soraka: 100,
   aurelion_sol: 90,
 };
 
@@ -118,9 +118,9 @@ export const YASUO_TOP5_7_BONUS = 10;
 export const YASUO_TOP8_BONUS = 35;
 
 /** Soraka: points per win streak match. */
-export const SORAKA_WIN_STREAK_PER = 3;
+export const SORAKA_WIN_STREAK_PER = 5;
 /** Soraka: points per loss streak match. */
-export const SORAKA_LOSS_STREAK_PER = -1;
+export const SORAKA_LOSS_STREAK_PER = -2;
 /** Soraka: maximum streak length counted. */
 export const SORAKA_STREAK_CAP = 15;
 
