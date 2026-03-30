@@ -1,9 +1,10 @@
 import { PointTransaction } from '@/db/models/PointTransaction';
 import { LpSnapshot } from '@/db/models/LpSnapshot';
+import { MatchRecord } from '@/db/models/MatchRecord';
 import { Player } from '@/db/models/Player';
 import { GOD_SCORE_TOP_N } from '@/constants';
 import { normalizeLP } from '@/lib/normalizeLP';
-import { getTodayUTC8 } from '@/lib/dateUtils';
+import { dateToUTC8Str, getTodayUTC8 } from '@/lib/dateUtils';
 import { logger } from '@/lib/logger';
 import type { TournamentSettingsDocument } from '@/db/models/TournamentSettings';
 import type { PlayerDocument } from '@/types/Player';
@@ -49,9 +50,23 @@ export async function computePlayerScoreBreakdown(discordId: string): Promise<Pl
 }
 
 export async function computePlayerDailyBreakdown(discordId: string): Promise<DailyPointEntry[]> {
+  const player = await Player.findOne({ discordId }).lean();
   const transactions = await PointTransaction.find({ playerId: discordId })
     .sort({ day: 1, createdAt: 1 })
     .lean();
+
+  const matchById = new Map<string, { placement: number; playedAt: Date }>();
+  if (player?.puuid) {
+    const matches = await MatchRecord.find({ puuid: player.puuid })
+      .select({ matchId: 1, placement: 1, playedAt: 1 })
+      .lean();
+    for (const match of matches) {
+      matchById.set(match.matchId, {
+        placement: match.placement,
+        playedAt: match.playedAt,
+      });
+    }
+  }
 
   const dayMap = new Map<string, DailyPointEntry>();
   for (const tx of transactions) {
@@ -64,6 +79,9 @@ export async function computePlayerDailyBreakdown(discordId: string): Promise<Da
       type: tx.type,
       value: tx.value,
       source: tx.source,
+      matchId: tx.matchId,
+      placement: tx.matchId ? matchById.get(tx.matchId)?.placement : undefined,
+      playedAt: tx.matchId ? matchById.get(tx.matchId)?.playedAt : undefined,
     });
   }
 
@@ -138,12 +156,30 @@ export async function createLpDeltaTransaction(
   const today = getTodayUTC8();
   const phase = settings.phases.find((p) => today >= p.startDay && today <= p.endDay);
 
+  const linkedMatchIds = await PointTransaction.distinct('matchId', {
+    playerId: player.discordId,
+    source: 'lp_delta',
+    type: 'match',
+    matchId: { $ne: null },
+  });
+
+  const nextUnlinkedMatch = await MatchRecord.findOne({
+    puuid: player.puuid,
+    matchId: { $nin: linkedMatchIds },
+    playedAt: { $lte: new Date() },
+  }).sort({ playedAt: 1 });
+
+  const matchId = nextUnlinkedMatch
+    ? (dateToUTC8Str(nextUnlinkedMatch.playedAt) === today ? nextUnlinkedMatch.matchId : null)
+    : null;
+
   await PointTransaction.create({
     playerId: player.discordId,
     godSlug: player.godSlug,
     type: 'match',
     value: delta,
     source: 'lp_delta',
+    matchId,
     day: today,
     phase: phase?.phase ?? settings.currentPhase,
   });

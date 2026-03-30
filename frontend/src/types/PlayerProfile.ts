@@ -45,6 +45,9 @@ export interface DailyPointTransaction {
   type: string;
   value: number;
   source: string;
+  matchId?: string | null;
+  placement?: number;
+  playedAt?: string;
 }
 
 export interface DailyPointEntry {
@@ -63,7 +66,7 @@ export interface PlayerScoreBreakdown {
 export interface PlayerProfileResponse {
   player: PlayerProfileData;
   snapshots: SnapshotPoint[];
-  matches: MatchEntry[];
+  matches?: MatchEntry[];
   matchPoints: MatchPoint[];
   godSlug: string | null;
   godName: string | null;

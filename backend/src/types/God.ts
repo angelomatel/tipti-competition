@@ -65,5 +65,8 @@ export interface DailyPointEntry {
     type: string;
     value: number;
     source: string;
+    matchId?: string | null;
+    placement?: number;
+    playedAt?: Date;
   }>;
 }

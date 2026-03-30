@@ -4,7 +4,6 @@ import { useEffect } from 'react';
 import { usePlayer } from '@/src/hooks/usePlayer';
 import { formatTier } from '@/src/types/Rank';
 import { TIER_COLORS } from '@/src/lib/theme';
-import { MATCH_LINK_TACTICS_TOOLS, MATCH_LINK_METATFT } from '@/src/lib/constants';
 import { getGodColor } from '@/src/lib/godColors';
 import RankImage from '@/src/components/Images/RankImage/RankImage';
 import LPGraph from '@/src/components/Leaderboard/LPGraph';
@@ -196,53 +195,11 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose, hideGod
                 <h3 className="text-sm font-semibold mb-2 text-text-secondary">
                   Point History
                 </h3>
-                <PointBreakdown dailyPoints={data.dailyPoints} />
-              </div>
-            )}
-
-            {/* Recent Matches */}
-            {data.matches && data.matches.length > 0 && (
-              <div className="px-6 pb-6">
-                <h3 className="text-sm font-semibold mb-2 text-text-secondary">
-                  Recent Matches
-                </h3>
-                <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
-                  {[...data.matches].reverse().slice(0, 10).map((match) => (
-                    <div
-                      key={match.matchId}
-                      className="flex items-center justify-between px-3 py-1.5 rounded-[var(--radius-sm)] bg-surface-0"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-xs font-bold ${match.placement <= 4 ? 'text-phase-active' : 'text-[#f87171]'}`}
-                        >
-                          #{match.placement}
-                        </span>
-                        <span className="text-xs text-text-muted">
-                          {new Date(match.playedAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <div className="flex gap-2">
-                        <a
-                          href={MATCH_LINK_TACTICS_TOOLS(data.player.gameName, data.player.tagLine, match.matchId)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs transition-colors text-text-muted hover:text-accent-cyan"
-                        >
-                          tactics.tools
-                        </a>
-                        <a
-                          href={MATCH_LINK_METATFT(data.player.gameName, data.player.tagLine, match.matchId)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs transition-colors text-text-muted hover:text-accent-cyan"
-                        >
-                          metatft
-                        </a>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <PointBreakdown
+                  dailyPoints={data.dailyPoints}
+                  gameName={data.player.gameName}
+                  tagLine={data.player.tagLine}
+                />
               </div>
             )}
           </>
