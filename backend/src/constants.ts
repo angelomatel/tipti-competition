@@ -90,7 +90,7 @@ export const VARUS_TOP_N = 10;
 /** Ekko: flat bonus per match. */
 export const EKKO_FLAT_PER_MATCH = 2;
 /** Ekko: bonus when placement matches previous match. */
-export const EKKO_REPEAT_BONUS = 8;
+export const EKKO_REPEAT_BONUS = 20;
 
 /** Evelynn: flat bonus per match (below LP threshold). */
 export const EVELYNN_FLAT_PER_MATCH = 1;

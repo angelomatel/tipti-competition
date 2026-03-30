@@ -158,7 +158,7 @@ Buffs are calculated **per match in real-time** during the 15-min cron cycle. Ea
 | God | Buff Mechanic | Daily Cap |
 |-----|---------------|-----------|
 | Varus (Love) | +7/match. Top 10 in god leaderboard: +8/match | 75 |
-| Ekko (Time) | +2/match. +10 if same placement as previous match | 75 |
+| Ekko (Time) | +2/match. +20 if same placement as previous match | 75 |
 | Evelynn (Temptation) | +1/match, or +15/match if LP gain exceeds rank threshold (Unranked-Plat: 300, Emerald: 200, Diamond: 150, Master+: 100) | 75 |
 | Thresh (Pacts) | +2/match. +13 if matching Top 1's latest placement. Top 1: +8/match | 75 |
 | Yasuo (Abyss) | Top 5-7 → +10/match. Top 8 → +35/match | 140 |
