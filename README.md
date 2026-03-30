@@ -55,6 +55,38 @@ npm install
 npm run dev
 ```
 
+## Deploying frontend + backend together on Vercel
+
+This repository is now configured for a single Vercel project at the repo root.
+
+- Root config file: `vercel.json`
+- Frontend (`frontend/`) is served as the main app
+- Backend (`backend/`) is deployed as a Node function mounted at `/backend/*`
+
+How requests flow in production:
+
+- Browser/UI calls Next routes like `/api/leaderboard`
+- Next route handlers proxy to `${BACKEND_URL}/api/*`
+- On Vercel, default `BACKEND_URL` resolves to `https://<deployment>/backend`
+
+Scheduled jobs are configured via Vercel Cron (not in-process timers), and call:
+
+- `/backend/api/cron/run` every 15 minutes
+- `/backend/api/cron/run-daily` at `0 16 * * *` (midnight UTC+8)
+
+### Required Vercel environment variables
+
+Set these in your Vercel project:
+
+- `MONGODB_URI`
+- `MONGODB_DB_NAME`
+- `RIOT_API_KEY`
+- tournament and app vars used by backend/frontend `.env` files (see `CLAUDE.md`)
+
+Optional:
+
+- `NEXT_PUBLIC_BACKEND_URL` (only if you want to override the default `/backend` mount)
+
 ## API
 
 | Method | Path | Description |

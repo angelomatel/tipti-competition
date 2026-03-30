@@ -1,4 +1,9 @@
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000';
+const vercelDeploymentUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
+
+export const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL ??
+  process.env.BACKEND_URL ??
+  (vercelDeploymentUrl ? `${vercelDeploymentUrl}/backend` : 'http://localhost:5000');
 
 /** SWR polling interval for the leaderboard (ms). */
 export const LEADERBOARD_REFRESH_INTERVAL = 30_000;
