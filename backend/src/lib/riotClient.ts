@@ -118,7 +118,7 @@ export class RiotClient {
 
   async getMatchIdsByPuuid(puuid: string, count = 20, region = 'SEA_REGIONAL', startTime?: number): Promise<string[]> {
     let path = `/tft/match/v1/matches/by-puuid/${encodeURIComponent(puuid)}/ids?count=${count}`;
-    if (startTime !== undefined) path += `&start_time=${startTime}`;
+    if (startTime !== undefined) path += `&startTime=${startTime}`;
     return this.request(path, region);
   }
 
