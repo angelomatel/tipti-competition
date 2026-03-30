@@ -35,6 +35,19 @@ export const GOD_CHOICES = [
   { slug: 'aurelion_sol', name: 'Aurelion Sol', title: 'Wonders' },
 ] as const;
 
+/** Canonical god buff summary lines shown in registration/admin selection embeds. */
+export const GOD_BUFF_SUMMARIES = [
+  '**Varus** — *Love*: +7/match. Top 10 in god leaderboard: +8/match',
+  '**Ekko** — *Time*: +2/match. +20 if same placement as previous match',
+  '**Evelynn** — *Temptation*: +1/match, or +25/match if LP gain exceeds rank threshold (350/250/200/150)',
+  "**Thresh** — *Pacts*: +2/match. +13 if matching Top 1's latest placement. Top 1: +13/match",
+  '**Yasuo** — *Abyss*: Top 5-7 → +10/match. Top 8 → +35/match. Daily cap: 140',
+  '**Soraka** — *Stars*: +5/-2 per streak match (cap 15 streak). Daily cap: 100',
+  '**Kayle** — *Order*: +2/match. +15 bonus if ≥4 matches played that day',
+  '**Ahri** — *Opulence*: +13 per 1st place match',
+  '**Aurelion Sol** — *Wonders*: Random per match based on placement (1st: 0-10, 8th: -6 to 4). Daily cap: 90',
+] as const;
+
 /** Custom rank emojis for Discord embeds (uploaded to the server). */
 export const RANK_EMOJIS: Partial<Record<Tier, string>> = {
   [Tier.IRON]:        '<:iron:1457026116001988763>',

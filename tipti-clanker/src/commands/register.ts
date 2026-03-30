@@ -11,7 +11,7 @@ import { Discord, Slash, SlashOption } from 'discordx';
 import { registerPlayer, listGods, lookupRiotAccount } from '@/lib/backendClient';
 import { parseRiotId } from '@/lib/riotId';
 import { formatTierDisplay } from '@/lib/format';
-import { EMBED_COLORS, GOD_CHOICES } from '@/lib/constants';
+import { EMBED_COLORS, GOD_BUFF_SUMMARIES, GOD_CHOICES } from '@/lib/constants';
 import { sendAuditLog } from '@/lib/auditLog';
 
 @Discord()
@@ -75,24 +75,12 @@ export class Register {
 
     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
 
-    const buffSummaries = [
-      '**Varus** — *Love*: +7/match. Top 10 in god leaderboard: +8/match',
-      '**Ekko** — *Time*: +2/match. +20 if same placement as previous match',
-      '**Evelynn** — *Temptation*: +1/match, or +25/match if LP gain exceeds rank threshold (350/250/200/150)',
-      "**Thresh** — *Pacts*: +2/match. +13 if matching Top 1's latest placement. Top 1: +13/match",
-      '**Yasuo** — *Abyss*: Top 5-7 → +10/match. Top 8 → +35/match',
-      '**Soraka** — *Stars*: +5/-2 per streak match (cap 15 streak)',
-      '**Kayle** — *Order*: +2/match. +10 bonus if ≥5 matches played that day',
-      '**Ahri** — *Opulence*: +13 per 1st place match',
-      '**Aurelion Sol** — *Wonders*: Random per match based on placement (1st: 0-10, 8th: -6 to 4)',
-    ];
-
     const embed = new EmbedBuilder()
       .setTitle('Choose Your God')
       .setDescription(
         `Account: **${gameName}#${tagLine}**\n\n` +
         '> God buffs activate **after Phase 1** (Day 6+). During Phase 1, all gods play without buffs.\n\n' +
-        buffSummaries.join('\n'),
+        GOD_BUFF_SUMMARIES.join('\n'),
       )
       .setColor(EMBED_COLORS.PRIMARY);
 
