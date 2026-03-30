@@ -14,6 +14,7 @@ import { registerPlayer, removePlayer, triggerCron, listGods, lookupRiotAccount 
 import { parseRiotId } from '@/lib/riotId';
 import { formatTierDisplay } from '@/lib/format';
 import { EMBED_COLORS, GOD_CHOICES } from '@/lib/constants';
+import { sendAuditLog } from '@/lib/auditLog';
 
 @Discord()
 export class AdminCommands {
@@ -141,6 +142,16 @@ export class AdminCommands {
         .setTimestamp();
 
       await interaction.editReply({ embeds: [confirmEmbed], components: [] });
+
+      await sendAuditLog(interaction.client, {
+        action: '/add-player',
+        actorId: interaction.user.id,
+        details: [
+          `Target Discord: <@${member.id}> (${member.user.username})`,
+          `Riot: ${gameName}#${tagLine}`,
+          `God: ${godInfo?.name ?? godSlug} (${godSlug})`,
+        ],
+      });
     } catch (err: any) {
       const msg = err?.message ?? String(err);
       if (msg.includes('time') || msg.includes('Collector')) {
@@ -148,6 +159,16 @@ export class AdminCommands {
       } else {
         await interaction.editReply({ content: `❌ Failed to register player: ${msg}`, embeds: [], components: [] });
       }
+
+      await sendAuditLog(interaction.client, {
+        action: '/add-player (failed)',
+        actorId: interaction.user.id,
+        details: [
+          `Target Discord: <@${member.id}>`,
+          `Riot: ${gameName}#${tagLine}`,
+          `Reason: ${msg.slice(0, 250)}`,
+        ],
+      });
     }
   }
 
@@ -171,12 +192,29 @@ export class AdminCommands {
     try {
       await removePlayer(member.id);
       await interaction.editReply({ content: `✅ <@${member.id}> has been removed from the tournament.` });
+
+      await sendAuditLog(interaction.client, {
+        action: '/remove-player',
+        actorId: interaction.user.id,
+        details: [
+          `Target Discord: <@${member.id}> (${member.user.username})`,
+        ],
+      });
     } catch (err: any) {
       const notFound = err?.message?.includes('not found') || err?.message?.includes('404');
       await interaction.editReply({
         content: notFound
           ? `❌ <@${member.id}> is not registered in the tournament.`
           : `❌ Failed to remove player: ${err?.message ?? err}`,
+      });
+
+      await sendAuditLog(interaction.client, {
+        action: '/remove-player (failed)',
+        actorId: interaction.user.id,
+        details: [
+          `Target Discord: <@${member.id}>`,
+          `Reason: ${(err?.message ?? String(err)).slice(0, 250)}`,
+        ],
       });
     }
   }

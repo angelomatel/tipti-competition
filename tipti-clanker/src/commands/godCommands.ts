@@ -13,6 +13,7 @@ import {
   assignPlayerToGod,
 } from '@/lib/backendClient';
 import { EMBED_COLORS, GOD_CHOICES } from '@/lib/constants';
+import { sendAuditLog } from '@/lib/auditLog';
 
 @Discord()
 export class GodCommands {
@@ -155,8 +156,27 @@ export class GodCommands {
       await interaction.editReply({
         content: `✅ <@${member.id}> has been assigned to **${godChoice?.name ?? godName}**.`,
       });
+
+      await sendAuditLog(interaction.client, {
+        action: '/assign-god',
+        actorId: interaction.user.id,
+        details: [
+          `Target Discord: <@${member.id}> (${member.user.username})`,
+          `God: ${godChoice?.name ?? godName} (${targetSlug})`,
+        ],
+      });
     } catch (err: any) {
       await interaction.editReply({ content: `❌ Failed: ${err?.message ?? err}` });
+
+      await sendAuditLog(interaction.client, {
+        action: '/assign-god (failed)',
+        actorId: interaction.user.id,
+        details: [
+          `Target Discord: <@${member.id}>`,
+          `God: ${godChoice?.name ?? godName} (${targetSlug})`,
+          `Reason: ${(err?.message ?? String(err)).slice(0, 250)}`,
+        ],
+      });
     }
   }
 }

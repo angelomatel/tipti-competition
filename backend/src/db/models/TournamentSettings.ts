@@ -15,6 +15,7 @@ export interface ITournamentSettings {
   feedChannelId: string;
   dailyChannelId: string;
   godStandingsChannelId: string;
+  auditChannelId: string;
   phases: IPhase[];
   currentPhase: number;
   buffsEnabled: boolean;
@@ -37,6 +38,7 @@ const TournamentSettingsSchema = new Schema<TournamentSettingsDocument>({
   feedChannelId:         { type: String,   default: '' },
   dailyChannelId:        { type: String,   default: '' },
   godStandingsChannelId: { type: String,   default: '' },
+  auditChannelId:        { type: String,   default: '' },
   phases:                { type: [PhaseSchema], default: [] },
   currentPhase:          { type: Number,   default: 1 },
   buffsEnabled:          { type: Boolean,  default: false },

@@ -15,7 +15,7 @@ export async function updateTournament(req: Request, res: Response, next: NextFu
   try {
     const {
       name, startDate, endDate,
-      feedChannelId, dailyChannelId, godStandingsChannelId,
+      feedChannelId, dailyChannelId, godStandingsChannelId, auditChannelId,
     } = req.body;
     const updates: Record<string, unknown> = {};
     if (name !== undefined) updates.name = name;
@@ -24,6 +24,7 @@ export async function updateTournament(req: Request, res: Response, next: NextFu
     if (feedChannelId !== undefined) updates.feedChannelId = feedChannelId;
     if (dailyChannelId !== undefined) updates.dailyChannelId = dailyChannelId;
     if (godStandingsChannelId !== undefined) updates.godStandingsChannelId = godStandingsChannelId;
+  if (auditChannelId !== undefined) updates.auditChannelId = auditChannelId;
 
     const settings = await updateTournamentSettings(updates);
     res.json({ settings });

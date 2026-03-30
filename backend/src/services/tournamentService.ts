@@ -36,7 +36,7 @@ export async function getTournamentSettings(): Promise<TournamentSettingsDocumen
 }
 
 export async function updateTournamentSettings(
-  updates: Partial<Pick<TournamentSettingsDocument, 'name' | 'startDate' | 'endDate' | 'feedChannelId' | 'dailyChannelId' | 'godStandingsChannelId'>>,
+  updates: Partial<Pick<TournamentSettingsDocument, 'name' | 'startDate' | 'endDate' | 'feedChannelId' | 'dailyChannelId' | 'godStandingsChannelId' | 'auditChannelId'>>,
 ): Promise<TournamentSettingsDocument> {
   const settings = await getTournamentSettings();
   Object.assign(settings, updates);

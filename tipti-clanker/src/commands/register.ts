@@ -12,6 +12,7 @@ import { registerPlayer, listGods, lookupRiotAccount } from '@/lib/backendClient
 import { parseRiotId } from '@/lib/riotId';
 import { formatTierDisplay } from '@/lib/format';
 import { EMBED_COLORS, GOD_CHOICES } from '@/lib/constants';
+import { sendAuditLog } from '@/lib/auditLog';
 
 @Discord()
 export class Register {
@@ -137,6 +138,16 @@ export class Register {
         .setTimestamp();
 
       await interaction.editReply({ embeds: [confirmEmbed], components: [] });
+
+      await sendAuditLog(interaction.client, {
+        action: '/register',
+        actorId: interaction.user.id,
+        details: [
+          `Discord: ${interaction.user.username}`,
+          `Riot: ${gameName}#${tagLine}`,
+          `God: ${godInfo?.name ?? godSlug} (${godSlug})`,
+        ],
+      });
     } catch (err: any) {
       const msg = err?.message ?? String(err);
       if (msg.includes('time') || msg.includes('Collector')) {
@@ -155,6 +166,15 @@ export class Register {
           components: [],
         });
       }
+
+      await sendAuditLog(interaction.client, {
+        action: '/register (failed)',
+        actorId: interaction.user.id,
+        details: [
+          `Riot: ${gameName}#${tagLine}`,
+          `Reason: ${msg.slice(0, 250)}`,
+        ],
+      });
     }
   }
 }

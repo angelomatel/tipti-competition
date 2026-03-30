@@ -48,18 +48,27 @@ export class TournamentSettingsCommand {
       channelTypes: [ChannelType.GuildText],
     })
     dailyChannel: TextChannel | undefined,
+    @SlashOption({
+      name: 'audit_channel',
+      description: 'Channel to post command audit logs',
+      required: false,
+      type: ApplicationCommandOptionType.Channel,
+      channelTypes: [ChannelType.GuildText],
+    })
+    auditChannel: TextChannel | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     await interaction.deferReply({ ephemeral: true });
 
     try {
       // If any update params provided, update first
-      if (start || end || feedChannel || dailyChannel) {
+      if (start || end || feedChannel || dailyChannel || auditChannel) {
         const updates: Record<string, unknown> = {};
         if (start) updates.startDate = start;
         if (end) updates.endDate = end;
         if (feedChannel) updates.feedChannelId = feedChannel.id;
         if (dailyChannel) updates.dailyChannelId = dailyChannel.id;
+        if (auditChannel) updates.auditChannelId = auditChannel.id;
         await updateTournamentSettings(updates);
       }
 
@@ -75,11 +84,12 @@ export class TournamentSettingsCommand {
           { name: 'Active', value: (new Date() >= new Date(s.startDate) && new Date() <= new Date(s.endDate)) ? 'Yes' : 'No', inline: true },
           { name: 'Feed Channel', value: s.feedChannelId ? `<#${s.feedChannelId}>` : 'Not set', inline: true },
           { name: 'Daily Channel', value: s.dailyChannelId ? `<#${s.dailyChannelId}>` : 'Not set', inline: true },
+          { name: 'Audit Channel', value: s.auditChannelId ? `<#${s.auditChannelId}>` : 'Not set', inline: true },
         )
         .setColor(EMBED_COLORS.PRIMARY)
         .setTimestamp();
 
-      const msg = (start || end || feedChannel || dailyChannel) ? '✅ Tournament settings updated.' : '';
+      const msg = (start || end || feedChannel || dailyChannel || auditChannel) ? '✅ Tournament settings updated.' : '';
       await interaction.editReply({ content: msg || undefined, embeds: [embed] });
     } catch (err: any) {
       await interaction.editReply({ content: `❌ Failed: ${err?.message ?? err}` });

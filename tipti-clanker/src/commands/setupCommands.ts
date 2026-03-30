@@ -12,24 +12,6 @@ const ADMIN_GUILD = '262398311007387653';
 @Guild(ADMIN_GUILD)
 export class SetupCommands {
   @Slash({
-    name: 'seed-gods',
-    description: 'Seed all 9 gods into the database (admin only)',
-    defaultMemberPermissions: [PermissionFlagsBits.Administrator],
-  })
-  async seedGods(interaction: CommandInteraction): Promise<void> {
-    await interaction.deferReply({ ephemeral: true });
-
-    try {
-      const result = await seedGods();
-      const count = Array.isArray(result) ? result.length : 0;
-      await interaction.editReply({ content: `✅ Seeded ${count} gods successfully.` });
-      logger.info(`Gods seeded by ${interaction.user.id}`);
-    } catch (err: any) {
-      await interaction.editReply({ content: `❌ Failed to seed gods: ${err?.message ?? err}` });
-    }
-  }
-
-  @Slash({
     name: 'wipe-data',
     description: 'Wipe all player data, matches, snapshots, and points (admin only)',
     defaultMemberPermissions: [PermissionFlagsBits.Administrator],
@@ -39,6 +21,8 @@ export class SetupCommands {
 
     try {
       const result = await wipePlayerData();
+      const seededGods = await seedGods();
+      const seededGodCount = Array.isArray(seededGods) ? seededGods.length : 0;
 
       await updateTournamentSettings({
         startDate: '2026-04-15T00:00:00Z',
@@ -46,6 +30,7 @@ export class SetupCommands {
         feedChannelId: '1487935453234466998',
         dailyChannelId: '1487935514899124294',
         godStandingsChannelId: '1487935550387261581',
+        auditChannelId: '1488146762828091502',
       });
 
       const lines = [
@@ -54,6 +39,8 @@ export class SetupCommands {
         `Matches: ${result.matches ?? 0}`,
         `Point Transactions: ${result.pointTransactions ?? 0}`,
         `Daily Scores: ${result.dailyPlayerScores ?? 0}`,
+        `Gods Seeded: ${seededGodCount}`,
+        `Audit Channel: <#1488146762828091502>`,
       ];
       await interaction.editReply({
         content: `✅ Data wiped & tournament settings reset:\n${lines.join('\n')}`,
