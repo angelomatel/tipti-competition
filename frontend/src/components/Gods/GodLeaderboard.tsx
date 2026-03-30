@@ -16,7 +16,7 @@ import { getGodColor } from '@/src/lib/godColors';
 const GOD_LORE: Record<string, string> = {
   varus: 'In the vast expanse between stars, Varus weaves the threads of devotion and longing. His love is unconditional — every follower who takes the field feels the warmth of his embrace. Yet the one who burns brightest earns the title of Beloved, lifted higher by a love that grows stronger the more it is returned.',
   ekko: 'Time bends to Ekko\'s will, folding in on itself like the rings of a dying star. His followers learn that the past is never truly lost — each battle carries the echo of what came before, and those who repeat their fate begin to shape time into something predictable… and powerful.',
-  evelynn: 'Evelynn\'s whisper echoes through the void, reaching every soul who dares to compete. All who fight hear her call, but the one consumed by ambition — the one who pushes beyond all limits — earns her full attention. Temptation spares no one; it simply rewards those who indulge in it completely.',
+  evelynn: 'Evelynn\'s whisper echoes through the void, reaching every soul who dares to compete. All who fight hear her call, but the one consumed by ambition — the one who pushes beyond all limits earns her full attention. Temptation spares no one; it simply rewards those who indulge in it completely.',
   thresh: 'In the cold silence between galaxies, Thresh forges covenants that bind all who follow him. Every soul in his domain is tethered to another, their fates reflected in unseen chains. To walk beside greatness is to share in its reward, for in Thresh\'s realm, no outcome is ever truly yours alone.',
   yasuo: 'The Abyss speaks only in extremes. Yasuo\'s followers walk the razor\'s edge — those who rise are carried by the storm, while those who fall are swallowed whole. Yet even in descent, power is found. In the domain of the Abyss, there is no safety… only depth.',
   soraka: 'Soraka reads the constellations of victory and defeat, her power flowing through the momentum of battle. Each moment does not stand alone, but adds to a greater pattern — a growing alignment written across the stars. Those who follow her path become part of something larger than any single outcome.',
@@ -80,18 +80,20 @@ const GodLeaderboard: React.FC<GodLeaderboardProps> = ({ slug, onBack, onSelectP
       {backButton}
 
       {/* God hero section */}
-      <div className="relative overflow-hidden bg-surface-1 border border-border-default rounded-[var(--radius-lg)]">
+      <div className="relative overflow-hidden bg-surface-1 border border-border-default rounded-[var(--radius-lg)] min-h-72 sm:min-h-96">
         {fullImage && (
-          <div className="relative w-full h-72 sm:h-96">
-            <Image
-              src={fullImage}
-              alt={god.name}
-              fill
-              sizes="(max-width: 640px) 100vw, 896px"
-              className="object-contain object-bottom-right hidden sm:block"
-              style={{ filter: god.isEliminated ? 'grayscale(1) opacity(0.6)' : 'none' }}
-              priority
-            />
+          <>
+            <div className="absolute inset-0" aria-hidden>
+              <Image
+                src={fullImage}
+                alt={god.name}
+                fill
+                sizes="(max-width: 640px) 100vw, 896px"
+                className="object-cover object-top sm:object-contain sm:object-bottom-right"
+                style={{ filter: god.isEliminated ? 'grayscale(1) opacity(0.6)' : 'none' }}
+                priority
+              />
+            </div>
             {/* Left-to-right gradient overlay (desktop) */}
             <div
               className="absolute inset-0 hidden sm:block"
@@ -108,22 +110,33 @@ const GodLeaderboard: React.FC<GodLeaderboardProps> = ({ slug, onBack, onSelectP
               }}
               aria-hidden
             />
-            {/* Mobile: full overlay so text is readable */}
-            <div className="absolute inset-0 sm:hidden bg-surface-0/80" aria-hidden />
-          </div>
+            {/* Mobile overlay for readability while keeping artwork in the background */}
+            <div
+              className="absolute inset-0 sm:hidden"
+              style={{
+                background: 'linear-gradient(to top, rgba(15,10,30,0.95) 0%, rgba(15,10,30,0.65) 45%, rgba(15,10,30,0.2) 100%)',
+              }}
+              aria-hidden
+            />
+          </>
         )}
 
-        <div
-          className={
-            fullImage
-              ? 'absolute inset-x-0 top-0 z-10 px-6 sm:px-8 pt-6 sm:pt-8'
-              : 'relative px-6 pt-6 pb-6'
-          }
-        >
-          <h1 className="text-3xl sm:text-4xl lg:text-6xl font-bold tracking-tight text-text-primary" style={{ textShadow: '0 2px 24px rgba(0,0,0,0.55)' }}>
+        <div className={fullImage ? 'relative z-10 px-5 py-6 sm:px-10 sm:py-14' : 'relative px-6 pt-6 pb-6'}>
+          <h1
+            className="text-3xl sm:text-5xl lg:text-7xl font-bold tracking-tight text-text-primary"
+            style={{
+              textShadow: '0 0 1px rgba(0,0,0,0.55), 0 1px 2px rgba(0,0,0,0.5), 0 6px 24px rgba(0,0,0,0.5)',
+              WebkitTextStroke: '0.5px rgba(0,0,0,0.25)',
+            }}
+          >
             {god.name}
           </h1>
-          <h2 className="text-lg sm:text-xl lg:text-2xl font-semibold mt-2 text-text-secondary" style={{ textShadow: '0 1px 16px rgba(0,0,0,0.5)' }}>
+          <h2
+            className="text-base sm:text-xl lg:text-2xl font-semibold mt-2 text-text-secondary"
+            style={{
+              textShadow: '0 0 1px rgba(0,0,0,0.45), 0 1px 16px rgba(0,0,0,0.5)',
+            }}
+          >
             God of {god.title}
           </h2>
           {god.isEliminated && (
@@ -133,7 +146,7 @@ const GodLeaderboard: React.FC<GodLeaderboardProps> = ({ slug, onBack, onSelectP
           )}
           {lore && (
             <p
-              className="mt-4 text-sm leading-relaxed italic sm:max-w-[50%]"
+              className="mt-4 text-xs sm:text-sm lg:text-base leading-snug italic sm:max-w-[50%]"
               style={{
                 fontFamily: 'var(--font-lore)',
                 color: 'var(--text-secondary)',

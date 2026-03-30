@@ -12,7 +12,7 @@ if (!uri) {
   throw new Error('MONGODB_URI is not defined in backend/.env');
 }
 
-const SOURCE_DB = process.argv[2] ?? 'tft-tournemnt';
+const SOURCE_DB = process.argv[2] ?? 'tft-tournament';
 const TARGET_DB = process.argv[3] ?? 'tft-tournament-testing';
 const FORCE_DESTRUCTIVE = process.argv.includes('--force') || process.env.ALLOW_DESTRUCTIVE_MAINTENANCE === 'true';
 
