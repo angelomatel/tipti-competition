@@ -81,9 +81,9 @@ export const GOD_SCORE_TOP_N = { MIN: 2, MAX: 5 } as const;
 // ── Per-Match Buff Constants ─────────────────────────────────────────
 
 /** Varus: flat bonus per match for all players. */
-export const VARUS_FLAT_PER_MATCH = 3;
+export const VARUS_FLAT_PER_MATCH = 7;
 /** Varus: additional bonus per match for top N players in god leaderboard. */
-export const VARUS_TOP10_BONUS = 7;
+export const VARUS_TOP10_BONUS = 8;
 /** Varus: number of top players who receive the extra bonus. */
 export const VARUS_TOP_N = 10;
 

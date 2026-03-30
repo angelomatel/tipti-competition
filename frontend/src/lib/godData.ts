@@ -23,7 +23,7 @@ export const GOD_IMAGE_MAP: Record<string, string> = {
 };
 
 export const BUFF_DATA = [
-  { slug: 'varus', name: 'Varus', title: 'Love', mechanic: '+3/match. Top 10 in god leaderboard: +10/match' },
+  { slug: 'varus', name: 'Varus', title: 'Love', mechanic: '+7/match. Top 10 in god leaderboard: +8/match' },
   { slug: 'ekko', name: 'Ekko', title: 'Time', mechanic: '+2/match. +10 if same placement as previous match' },
   { slug: 'evelynn', name: 'Evelynn', title: 'Temptation', mechanic: '+1/match, or +15/match if LP gain exceeds rank threshold (300/200/150/100)' },
   { slug: 'thresh', name: 'Thresh', title: 'Pacts', mechanic: '+2/match. +13 if matching Top 1\'s latest placement. Top 1: +8/match' },
