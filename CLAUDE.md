@@ -64,7 +64,7 @@ Frontend ──/api proxy──► Backend API
 ### God System
 - **9 Gods**: Varus (Love), Ekko (Time), Evelynn (Temptation), Thresh (Pacts), Yasuo (Abyss), Soraka (Stars), Kayle (Order), Ahri (Opulence), Aurelion Sol (Wonders)
 - Players choose a god at registration (two-step flow: enter Riot ID, then select god from dropdown)
-- Each god has unique buff mechanics (applied end of day, +50/day cap per god)
+- Each god has unique per-match buff mechanics (computed in real-time during 15-min cron, per-player daily cap)
 - **Elimination phases**: Phase 1 (Day 1-5, bottom 3 eliminated), Phase 2 (Day 6-10, bottom 3), Phase 3 (Day 11-14, finals)
 - Buffs activate Day 6+ (after Phase 1 elimination)
 - God score = average of top N players' scores, where N = clamp(floor(playerCount/3), 2, 5)
@@ -75,7 +75,8 @@ Frontend ──/api proxy──► Backend API
 - LP → Points (1:1 mapping for daily LP gain as "match" points)
 - `scorePoints = matchPoints + buffs - penalties + godPlacementBonus`
 - All point changes stored as `PointTransaction` records (event sourcing)
-- `DailyPlayerScore` caches each player's daily LP gain, match count, and placements for buff calculations
+- `DailyPlayerScore` caches each player's daily LP gain, match count, and placements for stats
+- `MatchRecord` has `buffProcessed` flag to track which matches have had buffs computed
 
 ### Discord Bot (tipti-clanker)
 - Uses **discordx** (decorator-based command registration on top of discord.js 14)
@@ -99,13 +100,13 @@ Frontend ──/api proxy──► Backend API
 - Express.js 5 on port 5000
 - CORS enabled, JSON middleware
 - Mongoose models: `Player` (with `godSlug`, `isEliminatedFromGod`), `LpSnapshot`, `MatchRecord`, `TournamentSettings` (with `phases`, `currentPhase`, `buffsEnabled`), `God`, `PointTransaction`, `DailyPlayerScore`
-- **15-min cron** (`*/15 * * * *`): captures LP snapshots + match records for active players
-- **Daily cron** (`0 16 * * *` = midnight UTC+8): computes daily LP gains → creates match PointTransactions → runs buff engine → checks phase/tournament end
-- Services: `playerService`, `snapshotService`, `matchService`, `leaderboardService`, `tournamentService`, `notificationService`, `godService`, `scoringEngine`, `buffEngine`, `phaseService`
+- **15-min cron** (`*/15 * * * *`): captures LP snapshots + match records for active players, then runs real-time per-match buff processing
+- **Daily cron** (`0 16 * * *` = midnight UTC+8): computes daily LP gains → creates match PointTransactions → checks phase/tournament end
+- Services: `playerService`, `snapshotService`, `matchService`, `leaderboardService`, `tournamentService`, `notificationService`, `godService`, `scoringEngine`, `matchBuffProcessor`, `phaseService`
 - `godService`: seed gods, assign players, eliminate gods, get standings
 - `scoringEngine`: compute player/god scores, breakdowns, daily point gains
-- `buffEngine`: 9 god-specific buff calculations with +50/day cap (scale factor enforcement)
-- `phaseService`: end-of-phase (elimination + Ekko buff), end-of-tournament (Kayle buff, Ahri cap, god placement bonuses)
+- `matchBuffProcessor`: real-time per-match buff processing for all 9 gods, per-player daily cap enforcement
+- `phaseService`: end-of-phase (elimination), end-of-tournament (god placement bonuses)
 - Match capture uses Riot API `startTime` param to prevent gaps during outages
 - Snapshot deduplication: skips unchanged snapshots
 - Leaderboard sorted by **scorePoints** (sum of PointTransactions), with normalizedLP as tiebreaker
@@ -152,19 +153,19 @@ Frontend ──/api proxy──► Backend API
 
 ## Buff System Summary
 
-| God | Buff Mechanic | Details |
-|-----|---------------|---------|
-| Varus (Love) | Top + All | Top 1 → +6 (Beloved), all players → +2 (Embrace) |
-| Ekko (Time) | Phase Bonus | Flat +50 at end of each phase |
-| Evelynn (Temptation) | Top + All | Top player: +5, or +9 if ≥300 LP gain (Seduction). All others → +2 (Whisper) |
-| Thresh (Pacts) | Top + All | Top 2 → +5 each (Soul Bond), all players → +2 (Covenant) |
-| Yasuo (Abyss) | Volatile | ≥150 gain → +10, ≤100 gain → -8 |
-| Soraka (Stars) | Streak | +1/-1 per latest streak only, cap ±4/player |
-| Kayle (Order) | Daily + Delayed | Daily: +2 for ≥5 matches (Discipline). End of tournament: Top 1-2 → +20, Top 3 → +30, Top 4-5 → +40 (Judgment) |
-| Ahri (Opulence) | Top 1s | +3 per 1st place match, daily cap 21, overall cap 80 |
-| Aurelion Sol (Wonders) | Top + All | Top 1 → +5-8 (Supernova), all players → +1-3 random (Stardust) |
+Buffs are calculated **per match in real-time** during the 15-min cron cycle. Each match generates buff points immediately based on placement and god mechanics. Daily cap is **per player** (default 75, with god-specific overrides). Penalties are uncapped.
 
-All daily buffs capped at +50/day per god (scale factor: `min(1, 50/totalBuffs)`).
+| God | Buff Mechanic | Daily Cap |
+|-----|---------------|-----------|
+| Varus (Love) | +3/match. Top 10 in god leaderboard: +10/match | 75 |
+| Ekko (Time) | +2/match. +10 if same placement as previous match | 75 |
+| Evelynn (Temptation) | +1/match, or +15/match if LP gain exceeds rank threshold (Unranked-Plat: 300, Emerald: 200, Diamond: 150, Master+: 100) | 75 |
+| Thresh (Pacts) | +2/match. +13 if matching Top 1's latest placement. Top 1: +8/match | 75 |
+| Yasuo (Abyss) | Top 5-7 → +10/match. Top 8 → +35/match | 200 |
+| Soraka (Stars) | +3/-1 per streak match (cap 15 streak length) | 125 |
+| Kayle (Order) | +3/match. +3 bonus if ≥3 matches played that day | 75 |
+| Ahri (Opulence) | +13 per 1st place match | 75 |
+| Aurelion Sol (Wonders) | Random per match based on placement (1st: 0-12, 8th: -6 to 6) | 90 |
 
 ## Environment Variables
 

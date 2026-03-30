@@ -36,15 +36,16 @@ Every 15 minutes: Backend pulls rank data from Riot API
          ▼
 Database updated with latest LP, rank, and match history
          │
+         ├──► Per-match buff points computed in real-time (if buffs enabled, Day 6+)
+         │
          ├──► Website + Discord /leaderboard show updated standings (by score points)
          │
          ├──► Every 5 min: Bot checks for new 1st/8th placements → posts to Feed Channel
          │
          ├──► Midnight (PHT): Daily processing runs:
          │      1. Compute daily LP gains → create match point transactions
-         │      2. Apply god buffs (if enabled, Day 6+)
-         │      3. Check for phase end → eliminate bottom 3 gods
-         │      4. Check for tournament end → apply final bonuses
+         │      2. Check for phase end → eliminate bottom 3 gods
+         │      3. Check for tournament end → apply god placement bonuses
          │
          ├──► 5 min after midnight: Bot posts daily recap + god standings
          │
@@ -57,26 +58,26 @@ Database updated with latest LP, rank, and match history
 
 ### The 9 Gods
 
-| God | Title | Buff Mechanic |
-|-----|-------|---------------|
-| Varus | Love | Top 1 → +8, Bottom 1 (played) → +6 |
-| Ekko | Time | Flat +50 at end of each phase |
-| Evelynn | Temptation | Top player: +3 base, +7 if daily gain ≥50 |
-| Thresh | Pacts | Top 2 players → +7 each |
-| Yasuo | Abyss | ≥150 gain → +10, ≤100 gain → -8 |
-| Soraka | Stars | +1/-1 per latest streak only, cap ±4 per player |
-| Kayle | Order | End of tournament: Top 1-2 → +30, Top 3 → +40, Top 4-5 → +50 |
-| Ahri | Opulence | +3 per 1st place match, daily cap 21, overall cap 80 |
-| Aurelion Sol | Wonders | Top 1 → +5-10, random 1-3 from top 2-10 → +5-10 |
+| God | Title | Buff Mechanic | Daily Cap |
+|-----|-------|---------------|-----------|
+| Varus | Love | +3/match. Top 10 in god leaderboard: +10/match | 75 |
+| Ekko | Time | +2/match. +10 if same placement as previous match | 75 |
+| Evelynn | Temptation | +1/match, or +15/match if LP gain exceeds rank threshold (300/200/150/100) | 75 |
+| Thresh | Pacts | +2/match. +13 if matching Top 1's latest placement. Top 1: +8/match | 75 |
+| Yasuo | Abyss | Top 5-7 → +10/match. Top 8 → +35/match | 200 |
+| Soraka | Stars | +3/-1 per streak match (cap 15 streak) | 125 |
+| Kayle | Order | +3/match. +3 bonus if ≥3 matches played that day | 75 |
+| Ahri | Opulence | +13 per 1st place match | 75 |
+| Aurelion Sol | Wonders | Random per match based on placement (1st: 0-12, 8th: -6 to 6) | 90 |
 
-All daily buffs are capped at **+50 per god per day** (excess scaled down proportionally).
+Buffs are calculated **per match in real-time** during each 15-minute cron cycle. Daily cap is **per player** (penalties are uncapped).
 
 ### Elimination Phases (2-week tournament)
 
 | Phase | Days | Gods | Eliminations |
 |-------|------|------|-------------|
 | Phase 1 | 1-5 | 9 gods | Bottom 3 eliminated |
-| Phase 2 | 6-10 | 6 gods | Bottom 3 eliminated, **buffs activate** |
+| Phase 2 | 6-10 | 6 gods | Bottom 3 eliminated. **Buffs activate after Phase 1 ends.** |
 | Phase 3 | 11-14 | 3 gods (finals) | No elimination |
 
 Eliminated players stay in the individual leaderboard but are removed from god scoring and don't receive buffs.
@@ -102,8 +103,9 @@ The backend polls Riot's API for every registered player. It records LP snapshot
 At the end of each day:
 1. Each player's daily LP gain is calculated from snapshots
 2. Match point transactions are created
-3. God buffs are applied (if enabled, Day 6+)
-4. Phase/tournament end checks run automatically
+3. Phase/tournament end checks run automatically
+
+God buffs are applied in real-time during each 15-minute cron cycle (if enabled, Day 6+).
 
 ### 4. Discord Notifications
 - **Feed Channel (every 5 min):** Posts 1st and 8th place finishes
@@ -118,7 +120,7 @@ At the end of each day:
 The website has "Players" and "Gods" tabs. The player modal shows score breakdown, point history, and match links to tactics.tools and metatft.
 
 ### 6. End of Tournament
-Final processing runs automatically: Kayle's delayed buff, Ahri's cap enforcement, and god placement bonuses are applied. Final standings are frozen.
+Final processing runs automatically: god placement bonuses are applied (1st: +100, 2nd: +75, 3rd: +50). Final standings are frozen.
 
 ---
 

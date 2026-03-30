@@ -62,8 +62,15 @@ export const PHASE_COUNT = 3;
 /** Number of gods eliminated per phase. */
 export const ELIMINATION_COUNTS = [3, 3, 0] as const;
 
-/** Maximum total buff points a god can receive per day. */
-export const BUFF_DAILY_CAP = 50;
+/** Default maximum buff points per player per day. */
+export const BUFF_DAILY_CAP = 75;
+
+/** Per-god daily cap overrides. */
+export const GOD_DAILY_CAP_OVERRIDES: Partial<Record<string, number>> = {
+  yasuo: 200,
+  soraka: 125,
+  aurelion_sol: 90,
+};
 
 /** God placement bonuses awarded at end of tournament. */
 export const GOD_PLACEMENT_BONUSES = [100, 75, 50] as const;
@@ -71,63 +78,63 @@ export const GOD_PLACEMENT_BONUSES = [100, 75, 50] as const;
 /** Minimum and maximum players counted for god score average. */
 export const GOD_SCORE_TOP_N = { MIN: 2, MAX: 5 } as const;
 
-// ── Individual Buff Thresholds ────────────────────────────────────────
+// ── Per-Match Buff Constants ─────────────────────────────────────────
 
-/** Varus: points awarded to top player. */
-export const VARUS_TOP_BONUS = 6;
-/** Varus: points awarded to all players who played. */
-export const VARUS_EMBRACE_BONUS = 2;
+/** Varus: flat bonus per match for all players. */
+export const VARUS_FLAT_PER_MATCH = 3;
+/** Varus: additional bonus per match for top N players in god leaderboard. */
+export const VARUS_TOP10_BONUS = 7;
+/** Varus: number of top players who receive the extra bonus. */
+export const VARUS_TOP_N = 10;
 
-/** Ekko: flat bonus awarded at end of each phase. */
-export const EKKO_PHASE_FLAT_BONUS = 50;
+/** Ekko: flat bonus per match. */
+export const EKKO_FLAT_PER_MATCH = 2;
+/** Ekko: bonus when placement matches previous match. */
+export const EKKO_REPEAT_BONUS = 8;
 
-/** Evelynn: base bonus for top player. */
-export const EVELYNN_BASE_BONUS = 5;
-/** Evelynn: bonus when top player's daily gain >= threshold. */
-export const EVELYNN_HIGH_BONUS = 4;
-/** Evelynn: daily gain threshold for high bonus. */
-export const EVELYNN_GAIN_THRESHOLD = 300;
-/** Evelynn: bonus for all other players who played. */
-export const EVELYNN_WHISPER_BONUS = 2;
+/** Evelynn: flat bonus per match (below LP threshold). */
+export const EVELYNN_FLAT_PER_MATCH = 1;
+/** Evelynn: bonus per match when daily LP gain exceeds tier threshold. */
+export const EVELYNN_HIGH_LP_PER_MATCH = 15;
+/** Evelynn: LP gain thresholds by tier order (from normalizeLP TIER_ORDER). */
+export const EVELYNN_LP_TIER_THRESHOLDS = [
+  { maxTierOrder: 5, lp: 300 },  // Unranked through Platinum
+  { maxTierOrder: 6, lp: 200 },  // Emerald
+  { maxTierOrder: 7, lp: 150 },  // Diamond
+] as const;
+/** Evelynn: default LP threshold for Master and above. */
+export const EVELYNN_LP_DEFAULT_THRESHOLD = 100;
 
-/** Thresh: bonus per player in top pair. */
-export const THRESH_PAIR_BONUS = 5;
-/** Thresh: bonus for all players who played. */
-export const THRESH_COVENANT_BONUS = 2;
+/** Thresh: flat bonus per match for non-top-1 players. */
+export const THRESH_FLAT_PER_MATCH = 2;
+/** Thresh: bonus when placement matches top 1's latest placement. */
+export const THRESH_MATCH_BONUS = 13;
+/** Thresh: flat bonus per match for the top 1 player. */
+export const THRESH_TOP1_FLAT = 8;
 
-/** Yasuo: bonus when daily gain >= high threshold. */
-export const YASUO_HIGH_BONUS = 10;
-/** Yasuo: daily gain threshold for bonus. */
-export const YASUO_HIGH_THRESHOLD = 150;
-/** Yasuo: penalty when daily gain <= low threshold. */
-export const YASUO_LOW_PENALTY = -8;
-/** Yasuo: daily gain threshold for penalty. */
-export const YASUO_LOW_THRESHOLD = 100;
+/** Yasuo: bonus for placement 5-7. */
+export const YASUO_TOP5_7_BONUS = 10;
+/** Yasuo: bonus for placement 8. */
+export const YASUO_TOP8_BONUS = 35;
 
-/** Soraka: max streak bonus per player per day. */
-export const SORAKA_PLAYER_CAP = 4;
+/** Soraka: points per win streak match. */
+export const SORAKA_WIN_STREAK_PER = 3;
+/** Soraka: points per loss streak match. */
+export const SORAKA_LOSS_STREAK_PER = -1;
+/** Soraka: maximum streak length counted. */
+export const SORAKA_STREAK_CAP = 15;
 
-/** Kayle: end-of-tournament bonuses by placement range. */
-export const KAYLE_BONUSES = {
-  TOP_2: 20,
-  TOP_3: 30,
-  TOP_5: 40,
-} as const;
-/** Kayle: daily discipline bonus for meeting match threshold. */
-export const KAYLE_DISCIPLINE_BONUS = 2;
-/** Kayle: minimum matches required for daily discipline bonus. */
-export const KAYLE_DISCIPLINE_MIN_MATCHES = 5;
+/** Kayle: flat bonus per match. */
+export const KAYLE_FLAT_PER_MATCH = 3;
+/** Kayle: one-time daily bonus when match threshold is met. */
+export const KAYLE_ACTIVITY_BONUS = 3;
+/** Kayle: minimum matches for activity bonus. */
+export const KAYLE_ACTIVITY_MIN_MATCHES = 3;
 
 /** Ahri: points per 1st-place match. */
-export const AHRI_PER_FIRST = 3;
-/** Ahri: max total points across tournament. */
-export const AHRI_CAP = 80;
-/** Ahri: max buff points per day. */
-export const AHRI_DAILY_CAP = 21;
+export const AHRI_PER_FIRST = 13;
 
-/** Aurelion Sol: point range for top player bonus. */
-export const ASOL_BONUS_MIN = 5;
-export const ASOL_BONUS_MAX = 8;
-/** Aurelion Sol: stardust bonus range for all players. */
-export const ASOL_STARDUST_MIN = 1;
-export const ASOL_STARDUST_MAX = 3;
+/** Aurelion Sol: base upper bound for random roll. */
+export const ASOL_BASE_UPPER = 12;
+/** Aurelion Sol: max placement shift for bounds. */
+export const ASOL_SHIFT_CAP = 6;

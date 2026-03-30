@@ -4,7 +4,6 @@ import { MatchRecord } from '@/db/models/MatchRecord';
 import { DailyPlayerScore } from '@/db/models/DailyPlayerScore';
 import { getTournamentSettings } from '@/services/tournamentService';
 import { listActivePlayers } from '@/services/playerService';
-import { processEndOfDayBuffs } from '@/services/buffEngine';
 import { processEndOfPhase, processEndOfTournament } from '@/services/phaseService';
 import { normalizeLP } from '@/lib/normalizeLP';
 import { getDayBoundsUTC8, getTodayUTC8 } from '@/lib/dateUtils';
@@ -81,14 +80,7 @@ export async function runDailyProcessing(day?: string): Promise<void> {
     }
   }
 
-  // Step 2: Process buffs (if enabled)
-  try {
-    await processEndOfDayBuffs(targetDay);
-  } catch (err) {
-    logger.error({ err }, '[daily-cron] Failed to process buffs');
-  }
-
-  // Step 3: Check for end-of-phase
+  // Step 2: Check for end-of-phase
   if (phase && targetDay === phase.endDay) {
     try {
       logger.info(`[daily-cron] End of phase ${phase.phase} detected`);

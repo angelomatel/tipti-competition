@@ -42,7 +42,7 @@ const BuffReferenceTable = () => (
       </tbody>
     </table>
     <p className="px-4 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-      All daily buffs capped at +50/day per god (scale factor applied).
+      All match buffs capped at +75/day per god. Exceptions apply.
     </p>
   </div>
 );

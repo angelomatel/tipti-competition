@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { captureSnapshotForPlayer } from '@/services/snapshotService';
 import { captureMatchesForPlayer } from '@/services/matchService';
 import { createLpDeltaTransaction } from '@/services/scoringEngine';
+import { processNewMatchBuffs } from '@/services/matchBuffProcessor';
 import { getTournamentSettings } from '@/services/tournamentService';
 import { listActivePlayers } from '@/services/playerService';
 import { Player } from '@/db/models/Player';
@@ -40,6 +41,13 @@ export async function runCronCycle(): Promise<void> {
     } catch (err) {
       logger.error({ err, discordId: player.discordId }, `[cron] Failed for player ${player.discordId}`);
     }
+  }
+
+  // Process buff points for any new matches
+  try {
+    await processNewMatchBuffs();
+  } catch (err) {
+    logger.error({ err }, '[cron] Failed to process match buffs');
   }
 
   logger.debug('[cron] Cycle complete.');

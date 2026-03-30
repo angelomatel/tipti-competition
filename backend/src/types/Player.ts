@@ -37,6 +37,7 @@ export interface IMatchRecord {
   playedAt: Date;
   capturedAt: Date;
   notifiedAt: Date | null;
+  buffProcessed: boolean;
 }
 
 export type PlayerDocument = IPlayer & Document;
