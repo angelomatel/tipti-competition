@@ -10,7 +10,7 @@ import { isEventStarted } from '@/src/lib/tournament';
 import { formatTier } from '@/src/types/Rank';
 import RankImage from '@/src/components/Images/RankImage/RankImage';
 import Avatar from '@/src/components/Shared/Avatar';
-import { PODIUM_COLORS, DEFAULT_RANK_COLOR } from '@/src/lib/theme';
+import { PODIUM_COLORS, DEFAULT_RANK_COLOR, TIER_COLORS } from '@/src/lib/theme';
 import { getGodColor } from '@/src/lib/godColors';
 
 const GOD_LORE: Record<string, string> = {
@@ -28,9 +28,10 @@ const GOD_LORE: Record<string, string> = {
 interface GodLeaderboardProps {
   slug: string;
   onBack: () => void;
+  onSelectPlayer?: (discordId: string) => void;
 }
 
-const GodLeaderboard: React.FC<GodLeaderboardProps> = ({ slug, onBack }) => {
+const GodLeaderboard: React.FC<GodLeaderboardProps> = ({ slug, onBack, onSelectPlayer }) => {
   const { data, error, isLoading } = useGod(slug);
   const { data: tournamentData } = useTournament();
   const started = isEventStarted(tournamentData?.settings);
@@ -178,7 +179,8 @@ const GodLeaderboard: React.FC<GodLeaderboardProps> = ({ slug, onBack }) => {
                   key={player.discordId}
                   className={`flex items-center gap-4 px-5 py-4 rounded-[var(--radius-md)] transition-colors bg-surface-1 border border-border-default ${
                     player.isEliminatedFromGod ? 'opacity-55' : ''
-                  }`}
+                  } ${onSelectPlayer ? 'cursor-pointer hover:bg-surface-hover hover:border-border-bright' : ''}`}
+                  onClick={onSelectPlayer ? () => onSelectPlayer(player.discordId) : undefined}
                 >
                   <span className={`w-8 text-center font-bold text-lg ${rankColor}`}>
                     {rank}
@@ -198,7 +200,8 @@ const GodLeaderboard: React.FC<GodLeaderboardProps> = ({ slug, onBack }) => {
                     </p>
                     <p className="text-xs flex items-center gap-1 text-text-secondary">
                       <RankImage tier={player.currentTier} size={16} />
-                      {tierDisplay} &bull; {player.currentLP} LP
+                      <span style={{ color: TIER_COLORS[player.currentTier] || TIER_COLORS.UNRANKED }}>{tierDisplay}</span>
+                      <span className="text-[11px] text-text-muted">{player.currentLP} LP</span>
                     </p>
                   </div>
 

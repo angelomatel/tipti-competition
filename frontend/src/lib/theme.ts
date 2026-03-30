@@ -22,7 +22,7 @@ export const DEFAULT_RANK_COLOR = 'text-[var(--text-secondary)]';
 export const TIER_COLORS: Record<string, string> = {
   CHALLENGER: '#fde68a',
   GRANDMASTER: '#fca5a5',
-  MASTER: '#c4b5fd',
+  MASTER: '#d281eb',
   DIAMOND: '#93c5fd',
   EMERALD: '#6ee7b7',
   PLATINUM: '#a5f3fc',

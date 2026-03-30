@@ -62,13 +62,16 @@ const Podium: React.FC<PodiumProps> = ({ entries, onSelectPlayer, hideGod }) => 
               <span className="text-xs font-semibold" style={{ color: TIER_COLORS[entry.currentTier] || TIER_COLORS.UNRANKED }}>
                 {tierDisplay}
               </span>
+              <span className="text-xs text-text-muted">{entry.currentLP} LP</span>
             </div>
-            <p className="text-2xl font-bold mt-1 text-accent-cyan">
-              {entry.scorePoints}
-            </p>
-            <span className={`text-xs mt-1 ${entry.dailyPointGain >= 0 ? 'text-phase-active' : 'text-[#f87171]'}`}>
-              {pointGainStr} today
-            </span>
+            <div className="flex items-center justify-center gap-2 mt-1">
+              <p className="text-2xl font-bold text-accent-cyan leading-none">
+                {entry.scorePoints}
+              </p>
+              <span className={`text-xs ${entry.dailyPointGain >= 0 ? 'text-phase-active' : 'text-[#f87171]'}`}>
+                {pointGainStr}
+              </span>
+            </div>
           </div>
         );
       })}

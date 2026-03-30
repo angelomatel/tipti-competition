@@ -50,16 +50,15 @@ const UserBanner: React.FC<UserBannerProps> = ({ entry, onClick, style, hideGod 
             <RankImage tier={entry.currentTier} size={14} />
             <span style={{ color: TIER_COLORS[entry.currentTier] || TIER_COLORS.UNRANKED }}>{tierDisplay}</span>
           </span>
-          <span>&bull;</span>
           <span>{entry.currentLP} LP</span>
-          <span>&bull;</span>
-          <span>{entry.scorePoints} pts</span>
         </p>
       </div>
 
-      <span className="text-xs font-medium hidden sm:flex items-center gap-1" style={{ color: TIER_COLORS[entry.currentTier] || TIER_COLORS.UNRANKED }}>
-        <RankImage tier={entry.currentTier} size={16} />
-        {tierDisplay}
+      <span className="text-lg font-bold text-accent-cyan flex items-center gap-1">
+        {entry.scorePoints}
+        <span className="hidden sm:inline text-xs font-semibold text-text-muted tracking-wide">
+          pts
+        </span>
       </span>
 
       <span

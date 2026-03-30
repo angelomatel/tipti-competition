@@ -41,7 +41,11 @@ const Leaderboard = ({ tab = 'players' }: LeaderboardProps) => {
     <>
       {tab === 'gods' ? (
         selectedGodSlug ? (
-          <GodLeaderboard slug={selectedGodSlug} onBack={() => setSelectedGodSlug(null)} />
+          <GodLeaderboard
+            slug={selectedGodSlug}
+            onBack={() => setSelectedGodSlug(null)}
+            onSelectPlayer={setSelectedDiscordId}
+          />
         ) : (
           <GodStandings onSelectGod={setSelectedGodSlug} />
         )
