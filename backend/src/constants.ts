@@ -127,12 +127,12 @@ export const SORAKA_STREAK_CAP = 15;
 /** Kayle: flat bonus per match. */
 export const KAYLE_FLAT_PER_MATCH = 2;
 /** Kayle: one-time daily bonus when match threshold is met. */
-export const KAYLE_ACTIVITY_BONUS = 10;
+export const KAYLE_ACTIVITY_BONUS = 15;
 /** Kayle: minimum matches for activity bonus. */
-export const KAYLE_ACTIVITY_MIN_MATCHES = 5;
+export const KAYLE_ACTIVITY_MIN_MATCHES = 4;
 
 /** Ahri: points per 1st-place match. */
-export const AHRI_PER_FIRST = 13;
+export const AHRI_PER_FIRST = 17;
 
 /** Aurelion Sol: base upper bound for random roll. */
 export const ASOL_BASE_UPPER = 10;

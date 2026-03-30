@@ -44,7 +44,7 @@ export const GOD_BUFF_SUMMARIES = [
   '**Yasuo** — *Abyss*: Top 5-7 → +10/match. Top 8 → +35/match. Daily cap: 140',
   '**Soraka** — *Stars*: +5/-2 per streak match (cap 15 streak). Daily cap: 100',
   '**Kayle** — *Order*: +2/match. +15 bonus if ≥4 matches played that day',
-  '**Ahri** — *Opulence*: +13 per 1st place match',
+  '**Ahri** — *Opulence*: +17 per 1st place match',
   '**Aurelion Sol** — *Wonders*: Random per match based on placement (1st: 0-10, 8th: -6 to 4). Daily cap: 90',
 ] as const;
 

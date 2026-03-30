@@ -29,8 +29,8 @@ export const BUFF_DATA = [
   { slug: 'thresh', name: 'Thresh', title: 'Pacts', mechanic: '+2/match. +13 if matching Top 1\'s latest placement. Top 1: +13/match' },
   { slug: 'yasuo', name: 'Yasuo', title: 'Abyss', mechanic: 'Top 5-7 → +10/match. Top 8 → +35/match. Daily cap: 140' },
   { slug: 'soraka', name: 'Soraka', title: 'Stars', mechanic: '+5/−2 per streak match (cap 15). Daily cap: 100' },
-  { slug: 'kayle', name: 'Kayle', title: 'Order', mechanic: '+2/match. +10 bonus if ≥5 matches played' },
-  { slug: 'ahri', name: 'Ahri', title: 'Opulence', mechanic: '+13 per 1st place match' },
+  { slug: 'kayle', name: 'Kayle', title: 'Order', mechanic: '+2/match. +15 bonus if ≥4 matches played' },
+  { slug: 'ahri', name: 'Ahri', title: 'Opulence', mechanic: '+17 per 1st place match' },
   { slug: 'aurelion_sol', name: 'Aurelion Sol', title: 'Wonders', mechanic: 'Random per match based on placement (1st: 0-10, 8th: −6 to 4). Daily cap: 90' },
 ];
 

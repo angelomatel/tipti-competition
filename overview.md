@@ -66,8 +66,8 @@ Database updated with latest LP, rank, and match history
 | Thresh | Pacts | +2/match. +13 if matching Top 1's latest placement. Top 1: +13/match | 75 |
 | Yasuo | Abyss | Top 5-7 → +10/match. Top 8 → +35/match | 140 |
 | Soraka | Stars | +5/-2 per streak match (cap 15 streak) | 100 |
-| Kayle | Order | +2/match. +10 bonus if ≥5 matches played that day | 75 |
-| Ahri | Opulence | +13 per 1st place match | 75 |
+| Kayle | Order | +2/match. +15 bonus if ≥4 matches played that day | 75 |
+| Ahri | Opulence | +17 per 1st place match | 75 |
 | Aurelion Sol | Wonders | Random per match based on placement (1st: 0-10, 8th: -6 to 4) | 90 |
 
 Buffs are calculated **per match in real-time** during each 15-minute cron cycle. Daily cap is **per player** (penalties are uncapped).
