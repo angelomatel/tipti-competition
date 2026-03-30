@@ -135,6 +135,6 @@ export const KAYLE_ACTIVITY_MIN_MATCHES = 5;
 export const AHRI_PER_FIRST = 13;
 
 /** Aurelion Sol: base upper bound for random roll. */
-export const ASOL_BASE_UPPER = 12;
+export const ASOL_BASE_UPPER = 10;
 /** Aurelion Sol: max placement shift for bounds. */
 export const ASOL_SHIFT_CAP = 6;

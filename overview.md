@@ -68,7 +68,7 @@ Database updated with latest LP, rank, and match history
 | Soraka | Stars | +5/-2 per streak match (cap 15 streak) | 100 |
 | Kayle | Order | +2/match. +10 bonus if ≥5 matches played that day | 75 |
 | Ahri | Opulence | +13 per 1st place match | 75 |
-| Aurelion Sol | Wonders | Random per match based on placement (1st: 0-12, 8th: -6 to 6) | 90 |
+| Aurelion Sol | Wonders | Random per match based on placement (1st: 0-10, 8th: -6 to 4) | 90 |
 
 Buffs are calculated **per match in real-time** during each 15-minute cron cycle. Daily cap is **per player** (penalties are uncapped).
 
