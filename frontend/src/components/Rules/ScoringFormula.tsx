@@ -10,8 +10,8 @@ const ScoringFormula = () => (
       </p>
       <p className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
         Score = <span style={{ color: 'var(--accent-cyan)' }}>Match</span> +{' '}
-        <span style={{ color: 'var(--phase-active)' }}>Buff</span> −{' '}
-        <span style={{ color: '#f87171' }}>Penalty</span> +{' '}
+        (<span style={{ color: 'var(--phase-active)' }}>Buff</span> −{' '}
+        <span style={{ color: '#f87171' }}>Penalty</span>) +{' '}
         <span style={{ color: 'var(--gold)' }}>God Bonus</span>
       </p>
     </div>
@@ -27,7 +27,7 @@ const ScoringFormula = () => (
         {
           title: 'Buff Points',
           color: 'var(--phase-active)',
-          description: 'Each god grants unique daily buffs starting Day 6 (after Phase 1). All god buffs are capped at +50 points per day.',
+          description: 'Each god has unique per-match points buff starting Day 6 (after Phase 1). Most god buffs are capped at +75 points per day.',
         },
         {
           title: 'God Placement Bonus',
