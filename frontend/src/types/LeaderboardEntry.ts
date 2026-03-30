@@ -22,6 +22,11 @@ export interface LeaderboardEntry {
 }
 
 export interface LeaderboardResponse {
+  page: number;
+  pageSize: number;
+  totalEntries: number;
+  totalPages: number;
+  podiumEntries: LeaderboardEntry[];
   entries: LeaderboardEntry[];
   updatedAt: string;
 }

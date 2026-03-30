@@ -7,7 +7,18 @@ import { getDayBoundsUTC8, getTodayUTC8 } from '@/lib/dateUtils';
 import { listActivePlayers } from '@/services/playerService';
 import type { LeaderboardEntry, LeaderboardResponse } from '@/types/Leaderboard';
 
-export async function computeLeaderboard(): Promise<LeaderboardResponse> {
+const DEFAULT_PAGE = 1;
+const DEFAULT_PAGE_SIZE = 10;
+
+interface ComputeLeaderboardOptions {
+  page?: number;
+  pageSize?: number;
+}
+
+export async function computeLeaderboard(options: ComputeLeaderboardOptions = {}): Promise<LeaderboardResponse> {
+  const requestedPage = options.page ?? DEFAULT_PAGE;
+  const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE;
+
   const settings = await getTournamentSettings();
   const players = await listActivePlayers();
   const today = getTodayUTC8();
@@ -88,5 +99,24 @@ export async function computeLeaderboard(): Promise<LeaderboardResponse> {
   // Strip internal field before returning
   const cleaned: LeaderboardEntry[] = entries.map(({ _tournamentLpGain, ...entry }) => entry);
 
-  return { entries: cleaned, updatedAt: new Date().toISOString() };
+  const hasStarted = new Date() >= settings.startDate;
+  const podiumEligible = hasStarted && cleaned.length >= 3;
+  const podiumEntries = podiumEligible && requestedPage === 1 ? cleaned.slice(0, 3) : [];
+  const listEntries = podiumEligible ? cleaned.slice(3) : cleaned;
+
+  const totalEntries = cleaned.length;
+  const totalPages = Math.max(1, Math.ceil(listEntries.length / pageSize));
+  const page = Math.min(Math.max(requestedPage, 1), totalPages);
+  const startIdx = (page - 1) * pageSize;
+  const pageEntries = listEntries.slice(startIdx, startIdx + pageSize);
+
+  return {
+    page,
+    pageSize,
+    totalEntries,
+    totalPages,
+    podiumEntries,
+    entries: pageEntries,
+    updatedAt: new Date().toISOString(),
+  };
 }

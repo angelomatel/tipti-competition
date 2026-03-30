@@ -6,13 +6,13 @@ import { useTournament } from '@/src/hooks/useTournament';
 import { isEventStarted, getDayNumber, getDaysUntilStart } from '@/src/lib/tournament';
 
 const StatsBar = () => {
-  const { data: leaderboardData } = useLeaderboard();
+  const { data: leaderboardData } = useLeaderboard({ page: 1, pageSize: 1 });
   const { data: godsData } = useGods();
   const { data: tournamentData } = useTournament();
 
   const settings = tournamentData?.settings;
   const started = isEventStarted(settings);
-  const playerCount = leaderboardData?.entries?.length ?? null;
+  const playerCount = leaderboardData?.totalEntries ?? null;
 
   type Stat = { label: string; value: string; highlight: boolean };
   let stats: Stat[];

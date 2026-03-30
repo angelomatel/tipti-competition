@@ -6,8 +6,18 @@ import { LEADERBOARD_REFRESH_INTERVAL } from '@/src/lib/constants';
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-export function useLeaderboard() {
-  return useSWR<LeaderboardResponse>('/api/leaderboard', fetcher, {
+interface UseLeaderboardOptions {
+  page?: number;
+  pageSize?: number;
+}
+
+export function useLeaderboard({ page = 1, pageSize = 10 }: UseLeaderboardOptions = {}) {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+
+  return useSWR<LeaderboardResponse>(`/api/leaderboard?${params.toString()}`, fetcher, {
     refreshInterval: LEADERBOARD_REFRESH_INTERVAL,
     revalidateOnFocus: false,
   });

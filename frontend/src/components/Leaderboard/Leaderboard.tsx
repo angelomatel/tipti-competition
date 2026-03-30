@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useLeaderboard } from '@/src/hooks/useLeaderboard';
 import { useTournament } from '@/src/hooks/useTournament';
 import { isEventStarted } from '@/src/lib/tournament';
@@ -20,26 +20,22 @@ interface LeaderboardProps {
 }
 
 const Leaderboard = ({ tab = 'players' }: LeaderboardProps) => {
-  const { data, error, isLoading } = useLeaderboard();
   const { data: tournamentData } = useTournament();
   const started = isEventStarted(tournamentData?.settings);
 
   const [selectedDiscordId, setSelectedDiscordId] = useState<string | null>(null);
   const [selectedGodSlug, setSelectedGodSlug] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-
-  useEffect(() => {
-    setSelectedGodSlug(null);
-    setCurrentPage(1);
-  }, [tab]);
+  const { data, error, isLoading } = useLeaderboard({ page: currentPage, pageSize: PLAYERS_PER_PAGE });
 
   const entries = data?.entries ?? [];
+  const podiumEntries = data?.podiumEntries ?? [];
+  const totalEntries = data?.totalEntries ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+  const effectivePage = data?.page ?? currentPage;
 
-  // When event hasn't started: no podium, flat list of all entries
-  const showPodium = started && currentPage === 1 && entries.length >= 3;
-  const listEntries = showPodium ? entries.slice(3) : entries;
-  const totalPages = Math.max(1, Math.ceil(listEntries.length / PLAYERS_PER_PAGE));
-  const pageEntries = listEntries.slice((currentPage - 1) * PLAYERS_PER_PAGE, currentPage * PLAYERS_PER_PAGE);
+  // Backend only returns podium entries on page 1 when event has started.
+  const showPodium = started && podiumEntries.length >= 3;
 
   return (
     <>
@@ -59,23 +55,23 @@ const Leaderboard = ({ tab = 'players' }: LeaderboardProps) => {
             </p>
           )}
 
-          {!isLoading && data && entries.length === 0 && (
+          {!isLoading && data && totalEntries === 0 && (
             <p className="text-center py-12 text-text-muted">
               No players registered yet. Use <code className="text-accent-cyan">/register</code> in Discord to join.
             </p>
           )}
 
-          {!isLoading && entries.length > 0 && (
+          {!isLoading && totalEntries > 0 && (
             <div className="flex flex-col gap-3">
               {/* Podium: only when event started, page 1, desktop */}
               {showPodium && (
                 <div className="hidden sm:block">
-                  <Podium entries={entries.slice(0, 3)} onSelectPlayer={setSelectedDiscordId} hideGod={!started} />
+                  <Podium entries={podiumEntries} onSelectPlayer={setSelectedDiscordId} hideGod={!started} />
                 </div>
               )}
 
               {/* On mobile when podium would show, render top 3 as regular rows */}
-              {showPodium && entries.slice(0, 3).map((entry, i) => (
+              {showPodium && podiumEntries.map((entry, i) => (
                 <div key={entry.discordId} className="sm:hidden">
                   <UserBanner
                     entry={entry}
@@ -86,7 +82,7 @@ const Leaderboard = ({ tab = 'players' }: LeaderboardProps) => {
                 </div>
               ))}
 
-              {pageEntries.map((entry, i) => (
+              {entries.map((entry, i) => (
                 <UserBanner
                   key={entry.discordId}
                   entry={entry}
@@ -99,18 +95,18 @@ const Leaderboard = ({ tab = 'players' }: LeaderboardProps) => {
               {totalPages > 1 && (
                 <div className="flex items-center justify-center gap-4 pt-4">
                   <button
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(Math.max(1, effectivePage - 1))}
+                    disabled={effectivePage === 1}
                     className="px-4 py-2 rounded-full text-sm font-medium transition-all disabled:opacity-30 bg-surface-1 border border-border-default text-text-secondary"
                   >
                     &larr; Prev
                   </button>
                   <span className="text-sm text-text-muted">
-                    Page {currentPage} of {totalPages}
+                    Page {effectivePage} of {totalPages}
                   </span>
                   <button
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage(Math.min(totalPages, effectivePage + 1))}
+                    disabled={effectivePage === totalPages}
                     className="px-4 py-2 rounded-full text-sm font-medium transition-all disabled:opacity-30 bg-surface-1 border border-border-default text-text-secondary"
                   >
                     Next &rarr;
