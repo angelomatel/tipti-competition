@@ -110,7 +110,7 @@ export const THRESH_FLAT_PER_MATCH = 2;
 /** Thresh: bonus when placement matches top 1's latest placement. */
 export const THRESH_MATCH_BONUS = 13;
 /** Thresh: flat bonus per match for the top 1 player. */
-export const THRESH_TOP1_FLAT = 8;
+export const THRESH_TOP1_FLAT = 13;
 
 /** Yasuo: bonus for placement 5-7. */
 export const YASUO_TOP5_7_BONUS = 10;
