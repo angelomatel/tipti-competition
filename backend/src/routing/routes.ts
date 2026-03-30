@@ -42,9 +42,7 @@ export function configureRoutes(app: Express): void {
   app.get('/api/riot/account/:gameName/:tagLine', lookupAccount);
 
   app.post('/api/cron/run', triggerCron);
-  app.get('/api/cron/run', triggerCron);
   app.post('/api/cron/run-daily', triggerDailyCron);
-  app.get('/api/cron/run-daily', triggerDailyCron);
 
   // God system
   app.get('/api/gods', listGods);

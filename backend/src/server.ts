@@ -1,11 +1,21 @@
 import 'tsconfig-paths/register';
 import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
 import { connectDB } from '@/db/connection';
+import { configureRoutes } from '@/routing/routes';
+import { errorHandler } from '@/middleware/errorHandler';
 import { startCronJob } from '@/jobs/cronJob';
 import { startDailyCronJob } from '@/jobs/dailyCronJob';
 import { BACKEND_PORT } from '@/constants';
 import { logger } from '@/lib/logger';
-import { app } from '@/app';
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+configureRoutes(app);
+app.use(errorHandler);
 
 async function start(): Promise<void> {
   await connectDB();
@@ -16,6 +26,4 @@ async function start(): Promise<void> {
   });
 }
 
-if (process.env.VERCEL !== '1') {
-  void start();
-}
+void start();
