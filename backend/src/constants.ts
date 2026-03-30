@@ -67,7 +67,7 @@ export const BUFF_DAILY_CAP = 75;
 
 /** Per-god daily cap overrides. */
 export const GOD_DAILY_CAP_OVERRIDES: Partial<Record<string, number>> = {
-  yasuo: 200,
+  yasuo: 140,
   soraka: 125,
   aurelion_sol: 90,
 };

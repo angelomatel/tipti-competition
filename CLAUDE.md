@@ -161,7 +161,7 @@ Buffs are calculated **per match in real-time** during the 15-min cron cycle. Ea
 | Ekko (Time) | +2/match. +10 if same placement as previous match | 75 |
 | Evelynn (Temptation) | +1/match, or +15/match if LP gain exceeds rank threshold (Unranked-Plat: 300, Emerald: 200, Diamond: 150, Master+: 100) | 75 |
 | Thresh (Pacts) | +2/match. +13 if matching Top 1's latest placement. Top 1: +8/match | 75 |
-| Yasuo (Abyss) | Top 5-7 → +10/match. Top 8 → +35/match | 200 |
+| Yasuo (Abyss) | Top 5-7 → +10/match. Top 8 → +35/match | 140 |
 | Soraka (Stars) | +3/-1 per streak match (cap 15 streak length) | 125 |
 | Kayle (Order) | +3/match. +3 bonus if ≥3 matches played that day | 75 |
 | Ahri (Opulence) | +13 per 1st place match | 75 |
