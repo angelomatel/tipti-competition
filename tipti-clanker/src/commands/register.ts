@@ -75,15 +75,15 @@ export class Register {
     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
 
     const buffSummaries = [
-      '**Varus** — *Love*: Top 1 gets +6, all players get +2',
-      '**Ekko** — *Time*: Flat +50 bonus at the end of each phase',
-      '**Evelynn** — *Temptation*: Top player gets +5, or +9 if daily gain is 300+. All others get +2',
-      '**Thresh** — *Pacts*: Top 2 get +5 each, all players get +2',
-      '**Yasuo** — *Abyss*: 150+ LP gain gives +10, but 100 or less gives -8',
-      '**Soraka** — *Stars*: +1/-1 per latest win/loss streak (cap ±4)',
-      '**Kayle** — *Order*: Daily +2 for 5+ matches. End-of-tournament: Top 1-2 → +20, Top 3 → +30, Top 4-5 → +40',
-      '**Ahri** — *Opulence*: +3 per 1st place finish (daily cap 21, overall cap 80)',
-      '**Aurelion Sol** — *Wonders*: Top 1 gets +5-8, all players get +1-3 (random)',
+      '**Varus** — *Love*: +7/match. Top 10 in god leaderboard: +8/match',
+      '**Ekko** — *Time*: +2/match. +20 if same placement as previous match',
+      '**Evelynn** — *Temptation*: +1/match, or +25/match if LP gain exceeds rank threshold (350/250/200/150)',
+      "**Thresh** — *Pacts*: +2/match. +13 if matching Top 1's latest placement. Top 1: +13/match",
+      '**Yasuo** — *Abyss*: Top 5-7 → +10/match. Top 8 → +35/match',
+      '**Soraka** — *Stars*: +5/-2 per streak match (cap 15 streak)',
+      '**Kayle** — *Order*: +2/match. +10 bonus if ≥5 matches played that day',
+      '**Ahri** — *Opulence*: +13 per 1st place match',
+      '**Aurelion Sol** — *Wonders*: Random per match based on placement (1st: 0-10, 8th: -6 to 4)',
     ];
 
     const embed = new EmbedBuilder()
