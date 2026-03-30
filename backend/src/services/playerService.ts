@@ -5,6 +5,12 @@ import { findRankedEntry } from '@/lib/riotUtils';
 import type { PlayerDocument } from '@/types/Player';
 import type { RegisterPlayerRequest } from '@/types/User';
 
+function isMongoDuplicateKeyError(err: unknown): err is { code: number; message?: string } {
+  if (!err || typeof err !== 'object') return false;
+  const maybeErr = err as { code?: number; message?: string };
+  return maybeErr.code === 11000 || maybeErr.message?.includes('E11000') === true;
+}
+
 export async function registerPlayer(data: RegisterPlayerRequest): Promise<PlayerDocument> {
   const { discordId, gameName, tagLine, addedBy, discordAvatarUrl, discordUsername, godSlug } = data;
 
@@ -44,26 +50,40 @@ export async function registerPlayer(data: RegisterPlayerRequest): Promise<Playe
 
   const riot = getRiotClient();
   const puuid = await riot.getPuuidByRiotId(gameName, tagLine);
+
+  const existingByPuuid = await Player.findOne({ puuid });
+  if (existingByPuuid) {
+    throw new Error(`Player with Riot account ${gameName}#${tagLine} is already registered.`);
+  }
+
   const leagueEntries = await riot.getTftLeagueByPuuid(puuid);
   const ranked = findRankedEntry(leagueEntries);
 
-  const player = await Player.create({
-    discordId,
-    puuid,
-    gameName,
-    tagLine,
-    riotId: `${gameName}#${tagLine}`,
-    addedBy,
-    isActive: true,
-    currentTier:   ranked?.tier        ?? 'UNRANKED',
-    currentRank:   ranked?.rank        ?? '',
-    currentLP:     ranked?.leaguePoints ?? 0,
-    currentWins:      ranked?.wins        ?? 0,
-    currentLosses:    ranked?.losses      ?? 0,
-    discordAvatarUrl: discordAvatarUrl ?? '',
-    discordUsername:   discordUsername ?? '',
-    godSlug,
-  });
+  let player: PlayerDocument;
+  try {
+    player = await Player.create({
+      discordId,
+      puuid,
+      gameName,
+      tagLine,
+      riotId: `${gameName}#${tagLine}`,
+      addedBy,
+      isActive: true,
+      currentTier:   ranked?.tier        ?? 'UNRANKED',
+      currentRank:   ranked?.rank        ?? '',
+      currentLP:     ranked?.leaguePoints ?? 0,
+      currentWins:      ranked?.wins        ?? 0,
+      currentLosses:    ranked?.losses      ?? 0,
+      discordAvatarUrl: discordAvatarUrl ?? '',
+      discordUsername:   discordUsername ?? '',
+      godSlug,
+    });
+  } catch (err) {
+    if (isMongoDuplicateKeyError(err)) {
+      throw new Error(`Player with Riot account ${gameName}#${tagLine} is already registered.`);
+    }
+    throw err;
+  }
 
   // Save initial snapshot as the tournament baseline
   if (ranked) {
