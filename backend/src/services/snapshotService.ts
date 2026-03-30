@@ -7,11 +7,11 @@ import { withRetry } from '@/lib/withRetry';
 import { listActivePlayers } from '@/services/playerService';
 import type { PlayerDocument } from '@/types/Player';
 
-export async function captureSnapshotForPlayer(player: PlayerDocument): Promise<void> {
+export async function captureSnapshotForPlayer(player: PlayerDocument): Promise<PlayerDocument> {
   const riot = getRiotClient();
   const entries = await riot.getTftLeagueByPuuid(player.puuid);
   const ranked = findRankedEntry(entries);
-  if (!ranked) return;
+  if (!ranked) return player;
 
   // Only create a new snapshot if rank data has changed since the last one
   const lastSnapshot = await LpSnapshot.findOne({ puuid: player.puuid }).sort({ capturedAt: -1 });
@@ -33,13 +33,19 @@ export async function captureSnapshotForPlayer(player: PlayerDocument): Promise<
     }));
   }
 
-  await withRetry('Player.updateOne', () => Player.updateOne({ _id: player._id }, {
-    currentTier:   ranked.tier,
-    currentRank:   ranked.rank,
-    currentLP:     ranked.leaguePoints,
-    currentWins:   ranked.wins,
-    currentLosses: ranked.losses,
-  }));
+  const updatedPlayer = await withRetry('Player.findOneAndUpdate', () => Player.findOneAndUpdate(
+    { _id: player._id },
+    {
+      currentTier:   ranked.tier,
+      currentRank:   ranked.rank,
+      currentLP:     ranked.leaguePoints,
+      currentWins:   ranked.wins,
+      currentLosses: ranked.losses,
+    },
+    { new: true },
+  ));
+
+  return (updatedPlayer ?? player) as PlayerDocument;
 }
 
 export async function captureAllSnapshots(): Promise<void> {

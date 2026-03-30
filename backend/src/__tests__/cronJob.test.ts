@@ -1,8 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock dependencies before importing the module under test
-vi.mock('@/db/models/Player', () => ({
-  Player: { find: vi.fn() },
+vi.mock('@/services/playerService', () => ({
+  listActivePlayers: vi.fn(),
 }));
 
 vi.mock('@/services/snapshotService', () => ({
@@ -11,6 +10,14 @@ vi.mock('@/services/snapshotService', () => ({
 
 vi.mock('@/services/matchService', () => ({
   captureMatchesForPlayer: vi.fn(),
+}));
+
+vi.mock('@/services/scoringEngine', () => ({
+  createLpDeltaTransaction: vi.fn(),
+}));
+
+vi.mock('@/services/matchBuffProcessor', () => ({
+  processNewMatchBuffs: vi.fn(),
 }));
 
 vi.mock('@/services/tournamentService', () => ({
@@ -27,15 +34,21 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import { runCronCycle } from '@/jobs/cronJob';
-import { Player } from '@/db/models/Player';
+import { listActivePlayers } from '@/services/playerService';
 import { captureSnapshotForPlayer } from '@/services/snapshotService';
 import { captureMatchesForPlayer } from '@/services/matchService';
+import { createLpDeltaTransaction } from '@/services/scoringEngine';
+import { processNewMatchBuffs } from '@/services/matchBuffProcessor';
 import { getTournamentSettings } from '@/services/tournamentService';
+import { logger } from '@/lib/logger';
 
-const mockGetTournamentSettings = getTournamentSettings as ReturnType<typeof vi.fn>;
-const mockPlayerFind = Player.find as ReturnType<typeof vi.fn>;
-const mockCaptureSnapshot = captureSnapshotForPlayer as ReturnType<typeof vi.fn>;
-const mockCaptureMatches = captureMatchesForPlayer as ReturnType<typeof vi.fn>;
+const mockGetTournamentSettings = vi.mocked(getTournamentSettings);
+const mockListActivePlayers = vi.mocked(listActivePlayers);
+const mockCaptureSnapshot = vi.mocked(captureSnapshotForPlayer);
+const mockCaptureMatches = vi.mocked(captureMatchesForPlayer);
+const mockCreateLpDelta = vi.mocked(createLpDeltaTransaction);
+const mockProcessBuffs = vi.mocked(processNewMatchBuffs);
+const mockWarn = vi.mocked(logger.warn);
 
 function makeSettings(startOffset: number, endOffset: number) {
   const now = Date.now();
@@ -48,24 +61,48 @@ function makeSettings(startOffset: number, endOffset: number) {
 describe('runCronCycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.CRON_PLAYER_CONCURRENCY;
   });
 
   it('processes all active players successfully', async () => {
-    // Tournament is active (started 1h ago, ends in 1h)
     mockGetTournamentSettings.mockResolvedValue(makeSettings(-3600_000, 3600_000));
 
     const players = [
-      { discordId: 'user1', puuid: 'puuid1' },
-      { discordId: 'user2', puuid: 'puuid2' },
+      {
+        discordId: 'user1',
+        puuid: 'puuid1',
+        gameName: 'One',
+        tagLine: 'NA1',
+        currentTier: 'GOLD',
+        currentRank: 'II',
+        currentLP: 50,
+        currentWins: 10,
+        currentLosses: 5,
+      },
+      {
+        discordId: 'user2',
+        puuid: 'puuid2',
+        gameName: 'Two',
+        tagLine: 'NA1',
+        currentTier: 'PLATINUM',
+        currentRank: 'IV',
+        currentLP: 20,
+        currentWins: 20,
+        currentLosses: 20,
+      },
     ];
-    mockPlayerFind.mockResolvedValue(players);
-    mockCaptureSnapshot.mockResolvedValue(undefined);
+    mockListActivePlayers.mockResolvedValue(players as any);
+    mockCaptureSnapshot.mockImplementation(async (player) => ({ ...player, currentLP: player.currentLP + 10 } as any));
     mockCaptureMatches.mockResolvedValue(undefined);
+    mockCreateLpDelta.mockResolvedValue(undefined);
+    mockProcessBuffs.mockResolvedValue(undefined);
 
     await runCronCycle();
 
     expect(mockCaptureSnapshot).toHaveBeenCalledTimes(2);
     expect(mockCaptureMatches).toHaveBeenCalledTimes(2);
+    expect(mockCreateLpDelta).toHaveBeenCalledTimes(2);
+    expect(mockProcessBuffs).toHaveBeenCalledTimes(1);
     expect(mockCaptureSnapshot).toHaveBeenCalledWith(players[0]);
     expect(mockCaptureSnapshot).toHaveBeenCalledWith(players[1]);
   });
@@ -74,49 +111,106 @@ describe('runCronCycle', () => {
     mockGetTournamentSettings.mockResolvedValue(makeSettings(-3600_000, 3600_000));
 
     const players = [
-      { discordId: 'user1', puuid: 'puuid1' },
-      { discordId: 'user2', puuid: 'puuid2' },
+      {
+        discordId: 'user1', puuid: 'puuid1', gameName: 'One', tagLine: 'NA1',
+        currentTier: 'GOLD', currentRank: 'II', currentLP: 50, currentWins: 10, currentLosses: 5,
+      },
+      {
+        discordId: 'user2', puuid: 'puuid2', gameName: 'Two', tagLine: 'NA1',
+        currentTier: 'PLATINUM', currentRank: 'IV', currentLP: 20, currentWins: 20, currentLosses: 20,
+      },
     ];
-    mockPlayerFind.mockResolvedValue(players);
+    mockListActivePlayers.mockResolvedValue(players as any);
     mockCaptureSnapshot
       .mockRejectedValueOnce(new Error('Riot API timeout'))
-      .mockResolvedValueOnce(undefined);
+      .mockResolvedValueOnce({ ...players[1], currentLP: 30 } as any);
     mockCaptureMatches.mockResolvedValue(undefined);
+    mockCreateLpDelta.mockResolvedValue(undefined);
+    mockProcessBuffs.mockResolvedValue(undefined);
 
     await runCronCycle();
 
-    // Second player should still be processed
     expect(mockCaptureSnapshot).toHaveBeenCalledTimes(2);
-    expect(mockCaptureMatches).toHaveBeenCalledTimes(1); // only for second player
+    expect(mockCaptureMatches).toHaveBeenCalledTimes(1);
+    expect(mockCreateLpDelta).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips scoring when competitive state does not change', async () => {
+    mockGetTournamentSettings.mockResolvedValue(makeSettings(-3600_000, 3600_000));
+    const players = [{
+      discordId: 'user1', puuid: 'puuid1', gameName: 'One', tagLine: 'NA1',
+      currentTier: 'GOLD', currentRank: 'II', currentLP: 50, currentWins: 10, currentLosses: 5,
+    }];
+    mockListActivePlayers.mockResolvedValue(players as any);
+    mockCaptureSnapshot.mockResolvedValue(players[0] as any);
+    mockCaptureMatches.mockResolvedValue(undefined);
+    mockProcessBuffs.mockResolvedValue(undefined);
+
+    await runCronCycle();
+
+    expect(mockCreateLpDelta).not.toHaveBeenCalled();
   });
 
   it('handles empty player list gracefully', async () => {
     mockGetTournamentSettings.mockResolvedValue(makeSettings(-3600_000, 3600_000));
-    mockPlayerFind.mockResolvedValue([]);
+    mockListActivePlayers.mockResolvedValue([] as any);
+    mockProcessBuffs.mockResolvedValue(undefined);
 
     await runCronCycle();
 
     expect(mockCaptureSnapshot).not.toHaveBeenCalled();
     expect(mockCaptureMatches).not.toHaveBeenCalled();
+    expect(mockProcessBuffs).toHaveBeenCalledTimes(1);
   });
 
   it('skips cycle when tournament has not started yet', async () => {
-    // Tournament starts in 1 hour
     mockGetTournamentSettings.mockResolvedValue(makeSettings(3600_000, 7200_000));
 
     await runCronCycle();
 
-    expect(mockPlayerFind).not.toHaveBeenCalled();
+    expect(mockListActivePlayers).not.toHaveBeenCalled();
     expect(mockCaptureSnapshot).not.toHaveBeenCalled();
   });
 
   it('skips cycle when tournament has ended', async () => {
-    // Tournament ended 1 hour ago
     mockGetTournamentSettings.mockResolvedValue(makeSettings(-7200_000, -3600_000));
 
     await runCronCycle();
 
-    expect(mockPlayerFind).not.toHaveBeenCalled();
+    expect(mockListActivePlayers).not.toHaveBeenCalled();
     expect(mockCaptureSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('skips overlapping runs with isRunning guard', async () => {
+    mockGetTournamentSettings.mockResolvedValue(makeSettings(-3600_000, 3600_000));
+    mockListActivePlayers.mockResolvedValue([
+      {
+        discordId: 'user1', puuid: 'puuid1', gameName: 'One', tagLine: 'NA1',
+        currentTier: 'GOLD', currentRank: 'II', currentLP: 50, currentWins: 10, currentLosses: 5,
+      },
+    ] as any);
+
+    let release: (() => void) | undefined;
+    const blocker = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    mockCaptureSnapshot.mockImplementation(async (player) => {
+      await blocker;
+      return { ...player, currentLP: player.currentLP + 5 } as any;
+    });
+    mockCaptureMatches.mockResolvedValue(undefined);
+    mockCreateLpDelta.mockResolvedValue(undefined);
+    mockProcessBuffs.mockResolvedValue(undefined);
+
+    const firstRun = runCronCycle();
+    await Promise.resolve();
+    const secondRun = runCronCycle();
+    release?.();
+
+    await Promise.all([firstRun, secondRun]);
+
+    expect(mockWarn).toHaveBeenCalledWith('[cron] Previous cycle is still running. Skipping overlapping cycle.');
+    expect(mockListActivePlayers).toHaveBeenCalledTimes(1);
   });
 });

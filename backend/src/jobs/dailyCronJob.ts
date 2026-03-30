@@ -19,22 +19,27 @@ function getYesterdayUTC8(): string {
 export async function runDailyProcessing(day?: string): Promise<void> {
   const targetDay = day ?? getYesterdayUTC8();
   logger.info(`[daily-cron] Starting daily processing for ${targetDay}`);
+  logger.debug({ targetDay }, '[daily-cron] Resolving settings and active players for daily processing');
 
   const settings = await getTournamentSettings();
   const players = await listActivePlayers();
   const { dayStart, dayEnd } = getDayBoundsUTC8(targetDay);
+  logger.debug({ playerCount: players.length, dayStart: dayStart.toISOString(), dayEnd: dayEnd.toISOString() }, '[daily-cron] Loaded active players and computed day bounds');
 
   // Determine current phase for this day
   const phase = settings.phases.find(
     (p) => targetDay >= p.startDay && targetDay <= p.endDay,
   );
   const phaseNum = phase?.phase ?? settings.currentPhase;
+  logger.debug({ phaseNum, currentPhase: settings.currentPhase }, '[daily-cron] Phase resolved for target day');
 
   // Step 1: Compute daily LP gain and create DailyPlayerScore + match PointTransaction
   for (const player of players) {
     if (!player.godSlug) continue;
 
     try {
+      logger.debug({ discordId: player.discordId, puuid: player.puuid }, '[daily-cron] Computing daily score inputs for player');
+
       // Get first and last snapshot of the day
       const firstSnapshot = await LpSnapshot.findOne({
         puuid: player.puuid,
@@ -50,12 +55,15 @@ export async function runDailyProcessing(day?: string): Promise<void> {
         ? normalizeLP(lastSnapshot.tier, lastSnapshot.rank, lastSnapshot.leaguePoints) -
           normalizeLP(firstSnapshot.tier, firstSnapshot.rank, firstSnapshot.leaguePoints)
         : 0;
+      logger.debug({ discordId: player.discordId, hasFirstSnapshot: Boolean(firstSnapshot), hasLastSnapshot: Boolean(lastSnapshot), rawLpGain }, '[daily-cron] Snapshot delta computed');
 
       // Get matches played that day
+      logger.debug({ discordId: player.discordId }, '[daily-cron] Fetching daily match history for player');
       const matches = await MatchRecord.find({
         puuid: player.puuid,
         playedAt: { $gte: dayStart, $lte: dayEnd },
       }).sort({ playedAt: 1 });
+      logger.debug({ discordId: player.discordId, matchCount: matches.length }, '[daily-cron] Daily match history fetched');
 
       const placements = matches.map((m) => m.placement);
 
@@ -73,6 +81,7 @@ export async function runDailyProcessing(day?: string): Promise<void> {
         },
         { upsert: true, new: true },
       );
+      logger.debug({ discordId: player.discordId, targetDay, rawLpGain, matchCount: matches.length }, '[daily-cron] Daily player score upserted');
 
       // Match PointTransactions are now created in real-time by the 15-min cron (lp_delta).
     } catch (err) {

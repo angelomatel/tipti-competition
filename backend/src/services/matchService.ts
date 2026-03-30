@@ -9,14 +9,26 @@ import type { PlayerDocument } from '@/types/Player';
 export async function captureMatchesForPlayer(player: PlayerDocument): Promise<void> {
   const riot = getRiotClient();
   const settings = await getTournamentSettings();
+  logger.debug({ discordId: player.discordId, puuid: player.puuid }, '[match] Starting match capture for player');
 
   // Use the player's most recent captured match as startTime to avoid gaps
   const lastMatch = await MatchRecord.findOne({ puuid: player.puuid }).sort({ playedAt: -1 });
   const startTime = lastMatch
     ? Math.floor(lastMatch.playedAt.getTime() / 1000)
     : Math.floor(settings.startDate.getTime() / 1000);
+  logger.debug(
+    {
+      discordId: player.discordId,
+      lastMatchId: lastMatch?.matchId ?? null,
+      lastMatchPlayedAt: lastMatch?.playedAt?.toISOString() ?? null,
+      startTime,
+    },
+    '[match] Computed startTime for match history fetch',
+  );
 
+  logger.debug({ discordId: player.discordId, startTime }, '[match] Fetching match IDs from Riot API');
   const matchIds = await riot.getMatchIdsByPuuid(player.puuid, 50, 'SEA_REGIONAL', startTime);
+  logger.debug({ discordId: player.discordId, fetchedMatchIdCount: matchIds.length }, '[match] Received match IDs from Riot API');
 
   for (const matchId of matchIds) {
     const exists = await MatchRecord.exists({ puuid: player.puuid, matchId });
@@ -46,4 +58,6 @@ export async function captureMatchesForPlayer(player: PlayerDocument): Promise<v
       logger.error({ err, matchId }, `Match fetch failed for ${matchId}`);
     }
   }
+
+  logger.debug({ discordId: player.discordId }, '[match] Match capture complete for player');
 }
