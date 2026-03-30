@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import { Geist, Cormorant_Garamond } from 'next/font/google';
 import './globals.css';
-import Background from '@/src/components/background/Background';
-import Navbar from '@/src/components/navbar/Navbar';
+import Background from '@/src/components/Background/Background';
+import Navbar from '@/src/components/Navbar/Navbar';
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
 const cormorant = Cormorant_Garamond({

@@ -6,10 +6,10 @@ import { formatTier } from '@/src/types/Rank';
 import { TIER_COLORS } from '@/src/lib/theme';
 import { MATCH_LINK_TACTICS_TOOLS, MATCH_LINK_METATFT } from '@/src/lib/constants';
 import { getGodColor } from '@/src/lib/godColors';
-import RankImage from '@/src/components/images/RankImage/RankImage';
-import LPGraph from '@/src/components/leaderboard/LPGraph';
-import Avatar from '@/src/components/shared/Avatar';
-import PointBreakdown from '@/src/components/leaderboard/PointBreakdown';
+import RankImage from '@/src/components/Images/RankImage/RankImage';
+import LPGraph from '@/src/components/Leaderboard/LPGraph';
+import Avatar from '@/src/components/Shared/Avatar';
+import PointBreakdown from '@/src/components/Leaderboard/PointBreakdown';
 import { GOD_IMAGE_MAP } from '@/src/lib/godData';
 
 interface ProfileModalProps {

@@ -7,8 +7,8 @@ import { GOD_IMAGE_MAP } from '@/src/lib/godData';
 import { getBuffMechanic } from '@/src/lib/godData';
 import { isEventStarted } from '@/src/lib/tournament';
 import { formatTier } from '@/src/types/Rank';
-import RankImage from '@/src/components/images/RankImage/RankImage';
-import Avatar from '@/src/components/shared/Avatar';
+import RankImage from '@/src/components/Images/RankImage/RankImage';
+import Avatar from '@/src/components/Shared/Avatar';
 import { PODIUM_COLORS, DEFAULT_RANK_COLOR } from '@/src/lib/theme';
 import { getGodColor } from '@/src/lib/godColors';
 

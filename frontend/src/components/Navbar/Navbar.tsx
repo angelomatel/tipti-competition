@@ -4,8 +4,8 @@ import { Suspense } from 'react';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTournament } from '@/src/hooks/useTournament';
-import PillToggle from '@/src/components/shared/PillToggle';
-import PhaseCountdown from '@/src/components/shared/PhaseCountdown';
+import PillToggle from '@/src/components/Shared/PillToggle';
+import PhaseCountdown from '@/src/components/Shared/PhaseCountdown';
 import { isEventStarted, getDaysUntilStart } from '@/src/lib/tournament';
 
 const TAB_OPTIONS = [

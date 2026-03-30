@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Leaderboard from '@/src/components/leaderboard/Leaderboard';
+import Leaderboard from '@/src/components/Leaderboard/Leaderboard';
 
 function LeaderboardPageInner() {
   const searchParams = useSearchParams();

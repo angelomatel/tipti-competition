@@ -1,7 +1,7 @@
 'use client';
 
 import type { TournamentSettings } from '@/src/types/Tournament';
-import LiveDot from '@/src/components/shared/LiveDot';
+import LiveDot from '@/src/components/Shared/LiveDot';
 
 interface PhaseCountdownProps {
   settings: TournamentSettings;

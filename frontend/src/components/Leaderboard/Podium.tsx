@@ -2,10 +2,10 @@
 
 import type { LeaderboardEntry } from '@/src/types/LeaderboardEntry';
 import { formatTier } from '@/src/types/Rank';
-import Avatar from '@/src/components/shared/Avatar';
-import GodBadge from '@/src/components/shared/GodBadge';
+import Avatar from '@/src/components/Shared/Avatar';
+import GodBadge from '@/src/components/Shared/GodBadge';
 import { TIER_COLORS } from '@/src/lib/theme';
-import RankImage from '@/src/components/images/RankImage/RankImage';
+import RankImage from '@/src/components/Images/RankImage/RankImage';
 
 interface PodiumProps {
   entries: LeaderboardEntry[];

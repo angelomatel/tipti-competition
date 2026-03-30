@@ -1,5 +1,5 @@
-import HeroSection from '@/src/components/home/HeroSection';
-import StatsBar from '@/src/components/home/StatsBar';
+import HeroSection from '@/src/components/Home/HeroSection';
+import StatsBar from '@/src/components/Home/StatsBar';
 import Link from 'next/link';
 
 export default function Home() {

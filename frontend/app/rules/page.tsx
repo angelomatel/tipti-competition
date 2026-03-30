@@ -1,4 +1,4 @@
-import RulesPage from '@/src/components/rules/RulesPage';
+import RulesPage from '@/src/components/Rules/RulesPage';
 
 export default function Rules() {
   return (

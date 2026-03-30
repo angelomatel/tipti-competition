@@ -4,12 +4,12 @@ import { useState, useEffect } from 'react';
 import { useLeaderboard } from '@/src/hooks/useLeaderboard';
 import { useTournament } from '@/src/hooks/useTournament';
 import { isEventStarted } from '@/src/lib/tournament';
-import UserBanner from '@/src/components/leaderboard/UserBanner';
-import ProfileModal from '@/src/components/leaderboard/ProfileModal';
-import GodStandings from '@/src/components/gods/GodStandings';
-import GodLeaderboard from '@/src/components/gods/GodLeaderboard';
-import LeaderboardSkeleton from '@/src/components/leaderboard/LeaderboardSkeleton';
-import Podium from '@/src/components/leaderboard/Podium';
+import UserBanner from '@/src/components/Leaderboard/UserBanner';
+import ProfileModal from '@/src/components/Leaderboard/ProfileModal';
+import GodStandings from '@/src/components/Gods/GodStandings';
+import GodLeaderboard from '@/src/components/Gods/GodLeaderboard';
+import LeaderboardSkeleton from '@/src/components/Leaderboard/LeaderboardSkeleton';
+import Podium from '@/src/components/Leaderboard/Podium';
 
 type Tab = 'players' | 'gods';
 

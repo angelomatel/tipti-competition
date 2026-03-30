@@ -1,9 +1,9 @@
 import type { LeaderboardEntry } from '@/src/types/LeaderboardEntry';
 import { formatTier } from '@/src/types/Rank';
 import { PODIUM_COLORS, DEFAULT_RANK_COLOR, TIER_COLORS } from '@/src/lib/theme';
-import Avatar from '@/src/components/shared/Avatar';
-import GodBadge from '@/src/components/shared/GodBadge';
-import RankImage from '@/src/components/images/RankImage/RankImage';
+import Avatar from '@/src/components/Shared/Avatar';
+import GodBadge from '@/src/components/Shared/GodBadge';
+import RankImage from '@/src/components/Images/RankImage/RankImage';
 
 interface UserBannerProps {
   entry: LeaderboardEntry;
