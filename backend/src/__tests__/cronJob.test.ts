@@ -55,7 +55,7 @@ function makeSettings(startOffset: number, endOffset: number) {
   return {
     startDate: new Date(now + startOffset),
     endDate: new Date(now + endOffset),
-  };
+  } as any;
 }
 
 describe('runCronCycle', () => {
