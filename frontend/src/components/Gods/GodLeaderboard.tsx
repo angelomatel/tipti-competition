@@ -5,6 +5,7 @@ import { useGod } from '@/src/hooks/useGod';
 import { useTournament } from '@/src/hooks/useTournament';
 import { GOD_IMAGE_MAP } from '@/src/lib/godData';
 import { getBuffMechanic } from '@/src/lib/godData';
+import { BUFF_DATA } from '@/src/lib/godData';
 import { isEventStarted } from '@/src/lib/tournament';
 import { formatTier } from '@/src/types/Rank';
 import RankImage from '@/src/components/Images/RankImage/RankImage';
@@ -36,6 +37,15 @@ const GodLeaderboard: React.FC<GodLeaderboardProps> = ({ slug, onBack }) => {
   const fullImage = GOD_IMAGE_MAP[slug];
   const godColors = getGodColor(slug);
   const buffMechanic = getBuffMechanic(slug);
+  const staticGod = BUFF_DATA.find((g) => g.slug === slug);
+  const fallbackGod = {
+    slug,
+    name: staticGod?.name ?? slug,
+    title: staticGod?.title ?? 'Unknown',
+    isEliminated: false,
+    eliminatedInPhase: null,
+  };
+  const hasLiveData = Boolean(data?.god && !error);
 
   const backButton = (
     <button
@@ -60,18 +70,8 @@ const GodLeaderboard: React.FC<GodLeaderboardProps> = ({ slug, onBack }) => {
     );
   }
 
-  if (error || !data?.god) {
-    return (
-      <div className="flex flex-col gap-4">
-        {backButton}
-        <p className="text-center py-12 text-text-muted">
-          Could not load god data.
-        </p>
-      </div>
-    );
-  }
-
-  const { god, players } = data;
+  const god = data?.god ?? fallbackGod;
+  const players = hasLiveData ? (data?.players ?? []) : [];
   const lore = GOD_LORE[slug] ?? '';
 
   return (
@@ -151,7 +151,12 @@ const GodLeaderboard: React.FC<GodLeaderboardProps> = ({ slug, onBack }) => {
       </div>
 
       {/* Player list */}
-      {started ? (
+      {!hasLiveData && (
+        <p className="text-center text-xs text-text-muted">
+          Live player list is currently unavailable.
+        </p>
+      )}
+      {hasLiveData && started ? (
         <div className="flex flex-col gap-3">
           <h3 className="text-lg font-bold text-text-primary">
             Players ({players.length})
@@ -205,11 +210,11 @@ const GodLeaderboard: React.FC<GodLeaderboardProps> = ({ slug, onBack }) => {
             })
           )}
         </div>
-      ) : (
+      ) : hasLiveData ? (
         <p className="text-center py-8 text-text-muted">
           Players will be revealed when the event starts.
         </p>
-      )}
+      ) : null}
     </div>
   );
 };

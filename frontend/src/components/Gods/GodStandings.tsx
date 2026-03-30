@@ -3,9 +3,10 @@
 import Image from 'next/image';
 import { useGods } from '@/src/hooks/useGods';
 import { useTournament } from '@/src/hooks/useTournament';
-import { GOD_IMAGE_MAP } from '@/src/lib/godData';
+import { BUFF_DATA, GOD_IMAGE_MAP } from '@/src/lib/godData';
 import { getGodColor } from '@/src/lib/godColors';
 import { isEventStarted } from '@/src/lib/tournament';
+import type { GodInfo } from '@/src/types/God';
 
 interface GodStandingsProps {
   onSelectGod?: (slug: string) => void;
@@ -15,6 +16,13 @@ const GodStandings: React.FC<GodStandingsProps> = ({ onSelectGod }) => {
   const { data, error, isLoading } = useGods();
   const { data: tournamentData } = useTournament();
   const started = isEventStarted(tournamentData?.settings);
+  const fallbackStandings: GodInfo[] = BUFF_DATA.map((god) => ({
+    ...god,
+    score: 0,
+    playerCount: 0,
+    isEliminated: false,
+  }));
+  const standings = data?.standings ?? fallbackStandings;
 
   if (isLoading) {
     return (
@@ -26,18 +34,10 @@ const GodStandings: React.FC<GodStandingsProps> = ({ onSelectGod }) => {
     );
   }
 
-  if (error || !data) {
-    return (
-      <p className="text-center py-12 text-text-muted">
-        Could not load god standings.
-      </p>
-    );
-  }
+  const active = standings.filter((g) => !g.isEliminated);
+  const eliminated = standings.filter((g) => g.isEliminated);
 
-  const active = data.standings.filter((g) => !g.isEliminated);
-  const eliminated = data.standings.filter((g) => g.isEliminated);
-
-  const renderCard = (god: (typeof data.standings)[0], rankIndex: number, isEliminated: boolean) => {
+  const renderCard = (god: GodInfo, rankIndex: number, isEliminated: boolean) => {
     const imageSrc = GOD_IMAGE_MAP[god.slug];
     const godColors = getGodColor(god.slug);
 
@@ -123,6 +123,12 @@ const GodStandings: React.FC<GodStandingsProps> = ({ onSelectGod }) => {
 
   return (
     <div className="flex flex-col gap-6">
+      {error && (
+        <p className="text-center text-xs text-text-muted">
+          Live standings are currently unavailable. Showing default gods.
+        </p>
+      )}
+
       {/* Active gods grid */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {active.map((god, index) => renderCard(god, index, false))}
@@ -140,9 +146,9 @@ const GodStandings: React.FC<GodStandingsProps> = ({ onSelectGod }) => {
         </div>
       )}
 
-      {data.updatedAt && (
+      {data?.updatedAt && (
         <p className="text-center text-xs pt-1 text-text-muted">
-          Last updated: {new Date(data.updatedAt).toLocaleTimeString()}
+          Last updated: {new Date(data?.updatedAt).toLocaleTimeString()}
         </p>
       )}
     </div>
