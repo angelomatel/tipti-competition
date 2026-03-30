@@ -95,15 +95,15 @@ export const EKKO_REPEAT_BONUS = 20;
 /** Evelynn: flat bonus per match (below LP threshold). */
 export const EVELYNN_FLAT_PER_MATCH = 1;
 /** Evelynn: bonus per match when daily LP gain exceeds tier threshold. */
-export const EVELYNN_HIGH_LP_PER_MATCH = 15;
+export const EVELYNN_HIGH_LP_PER_MATCH = 25;
 /** Evelynn: LP gain thresholds by tier order (from normalizeLP TIER_ORDER). */
 export const EVELYNN_LP_TIER_THRESHOLDS = [
-  { maxTierOrder: 5, lp: 300 },  // Unranked through Platinum
-  { maxTierOrder: 6, lp: 200 },  // Emerald
-  { maxTierOrder: 7, lp: 150 },  // Diamond
+  { maxTierOrder: 5, lp: 350 },  // Unranked through Platinum
+  { maxTierOrder: 6, lp: 250 },  // Emerald
+  { maxTierOrder: 7, lp: 200 },  // Diamond
 ] as const;
 /** Evelynn: default LP threshold for Master and above. */
-export const EVELYNN_LP_DEFAULT_THRESHOLD = 100;
+export const EVELYNN_LP_DEFAULT_THRESHOLD = 150;
 
 /** Thresh: flat bonus per match for non-top-1 players. */
 export const THRESH_FLAT_PER_MATCH = 2;

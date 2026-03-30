@@ -62,7 +62,7 @@ Database updated with latest LP, rank, and match history
 |-----|-------|---------------|-----------|
 | Varus | Love | +7/match. Top 10 in god leaderboard: +8/match | 75 |
 | Ekko | Time | +2/match. +20 if same placement as previous match | 75 |
-| Evelynn | Temptation | +1/match, or +15/match if LP gain exceeds rank threshold (300/200/150/100) | 75 |
+| Evelynn | Temptation | +1/match, or +25/match if LP gain exceeds rank threshold (350/250/200/150) | 75 |
 | Thresh | Pacts | +2/match. +13 if matching Top 1's latest placement. Top 1: +8/match | 75 |
 | Yasuo | Abyss | Top 5-7 → +10/match. Top 8 → +35/match | 140 |
 | Soraka | Stars | +5/-2 per streak match (cap 15 streak) | 100 |
