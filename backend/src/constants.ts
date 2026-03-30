@@ -125,11 +125,11 @@ export const SORAKA_LOSS_STREAK_PER = -2;
 export const SORAKA_STREAK_CAP = 15;
 
 /** Kayle: flat bonus per match. */
-export const KAYLE_FLAT_PER_MATCH = 3;
+export const KAYLE_FLAT_PER_MATCH = 2;
 /** Kayle: one-time daily bonus when match threshold is met. */
-export const KAYLE_ACTIVITY_BONUS = 3;
+export const KAYLE_ACTIVITY_BONUS = 10;
 /** Kayle: minimum matches for activity bonus. */
-export const KAYLE_ACTIVITY_MIN_MATCHES = 3;
+export const KAYLE_ACTIVITY_MIN_MATCHES = 5;
 
 /** Ahri: points per 1st-place match. */
 export const AHRI_PER_FIRST = 13;
