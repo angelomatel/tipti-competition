@@ -17,7 +17,6 @@ import {
   getGod,
   seedGods,
   assignGod,
-  eliminateGodHandler,
   getGodStandings,
 } from '@/controllers/godController';
 import { getPlayerPoints, getPlayerDailyPoints } from '@/controllers/pointsController';
@@ -50,7 +49,6 @@ export function configureRoutes(app: Express): void {
   app.post('/api/gods/seed', seedGods);
   app.get('/api/gods/:slug', getGod);
   app.post('/api/gods/:slug/assign', assignGod);
-  app.post('/api/gods/:slug/eliminate', eliminateGodHandler);
 
   // Points
   app.get('/api/points/:discordId', getPlayerPoints);

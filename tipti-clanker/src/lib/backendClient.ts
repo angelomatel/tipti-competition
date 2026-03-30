@@ -121,10 +121,6 @@ export function assignPlayerToGod(slug: string, discordId: string): Promise<any>
   return request('POST', `/api/gods/${encodeURIComponent(slug)}/assign`, { discordId });
 }
 
-export function eliminateGod(slug: string, phase: number): Promise<any> {
-  return request('POST', `/api/gods/${encodeURIComponent(slug)}/eliminate`, { phase });
-}
-
 export function getPlayerPoints(discordId: string): Promise<any> {
   return request('GET', `/api/points/${encodeURIComponent(discordId)}`);
 }

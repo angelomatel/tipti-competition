@@ -71,22 +71,6 @@ export async function assignGod(req: Request, res: Response): Promise<void> {
   }
 }
 
-export async function eliminateGodHandler(req: Request, res: Response): Promise<void> {
-  const slug = req.params['slug'] as string;
-  const { phase } = req.body;
-  if (typeof phase !== 'number') {
-    res.status(400).json({ error: 'phase (number) is required.' });
-    return;
-  }
-
-  try {
-    await godService.eliminateGod(slug, phase);
-    res.json({ slug, eliminated: true, phase });
-  } catch (err: any) {
-    res.status(400).json({ error: err.message });
-  }
-}
-
 export async function getGodStandings(req: Request, res: Response): Promise<void> {
   const standings = await godService.getGodStandings();
   res.json({ standings, updatedAt: new Date().toISOString() });

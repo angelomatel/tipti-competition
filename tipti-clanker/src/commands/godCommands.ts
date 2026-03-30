@@ -11,7 +11,6 @@ import {
   getGod,
   getTournamentSettings,
   assignPlayerToGod,
-  eliminateGod,
 } from '@/lib/backendClient';
 import { EMBED_COLORS, GOD_CHOICES } from '@/lib/constants';
 
@@ -155,44 +154,6 @@ export class GodCommands {
       await assignPlayerToGod(targetSlug, member.id);
       await interaction.editReply({
         content: `✅ <@${member.id}> has been assigned to **${godChoice?.name ?? godName}**.`,
-      });
-    } catch (err: any) {
-      await interaction.editReply({ content: `❌ Failed: ${err?.message ?? err}` });
-    }
-  }
-
-  @Slash({
-    name: 'eliminate-god',
-    description: 'Eliminate a god from the tournament (admin only)',
-    defaultMemberPermissions: [PermissionFlagsBits.Administrator],
-  })
-  async eliminateGodCmd(
-    @SlashOption({
-      name: 'god',
-      description: 'The god to eliminate',
-      required: true,
-      type: ApplicationCommandOptionType.String,
-    })
-    godName: string,
-    @SlashOption({
-      name: 'phase',
-      description: 'The phase number (1 or 2)',
-      required: true,
-      type: ApplicationCommandOptionType.Integer,
-    })
-    phase: number,
-    interaction: CommandInteraction,
-  ): Promise<void> {
-    await interaction.deferReply({ ephemeral: true });
-
-    const slug = godName.toLowerCase().replace(/\s+/g, '_');
-    const godChoice = GOD_CHOICES.find((g) => g.slug === slug || g.name.toLowerCase() === godName.toLowerCase());
-    const targetSlug = godChoice?.slug ?? slug;
-
-    try {
-      await eliminateGod(targetSlug, phase);
-      await interaction.editReply({
-        content: `💀 **${godChoice?.name ?? godName}** has been eliminated in Phase ${phase}.`,
       });
     } catch (err: any) {
       await interaction.editReply({ content: `❌ Failed: ${err?.message ?? err}` });
