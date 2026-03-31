@@ -1,6 +1,7 @@
 import { MatchRecord } from '@/db/models/MatchRecord';
 import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { Player } from '@/db/models/Player';
+import { PointTransaction } from '@/db/models/PointTransaction';
 import { normalizeLP } from '@/lib/normalizeLP';
 import { listActivePlayers } from '@/services/playerService';
 import { getTournamentSettings } from '@/services/tournamentService';
@@ -12,8 +13,11 @@ export interface FeedNotification {
   puuid: string;
   discordId: string;
   gameName: string;
+  tagLine: string;
   placement: number;
   lpDelta: number | null;
+  godSlug: string | null;
+  godBuffPoints: number | null;
   playedAt: Date;
 }
 
@@ -54,13 +58,25 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
       lpDelta = normCurrent - normAfter;
     }
 
+    // Sum up god buff points for this match
+    const godBuffTxns = await PointTransaction.find({
+      matchId: match.matchId,
+      type: 'buff',
+    });
+    const godBuffPoints = godBuffTxns.length > 0
+      ? godBuffTxns.reduce((sum, t) => sum + t.value, 0)
+      : null;
+
     results.push({
       matchId: match.matchId,
       puuid: match.puuid,
       discordId: player.discordId,
       gameName: player.gameName,
+      tagLine: player.tagLine,
       placement: match.placement,
       lpDelta,
+      godSlug: player.godSlug ?? null,
+      godBuffPoints,
       playedAt: match.playedAt,
     });
   }

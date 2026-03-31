@@ -12,7 +12,7 @@ import {
 import { renderLpGraph } from '@/lib/chartRenderer';
 import { logger } from '@/lib/logger';
 import { formatLpDelta } from '@/lib/format';
-import { EMBED_COLORS, CRON_SCHEDULES } from '@/lib/constants';
+import { EMBED_COLORS, GOD_COLORS, CRON_SCHEDULES } from '@/lib/constants';
 
 async function getTextChannel(client: Client, channelId: string): Promise<TextChannel | null> {
   try {
@@ -62,16 +62,29 @@ async function runFeedJob(client: Client): Promise<void> {
       const lpStr = formatLpDelta(notif.lpDelta);
       const lpPart = lpStr ? ` (${lpStr})` : '';
 
+      // Build buff line (only if god awarded buff points)
+      const buffLine = (notif.godBuffPoints != null && notif.godBuffPoints !== 0)
+        ? `\n> 🌟 God buff: **${notif.godBuffPoints > 0 ? '+' : ''}${notif.godBuffPoints}** pts`
+        : '';
+
+      // Build external match links (tactics.tools + metatft)
+      const ttUrl = `https://tactics.tools/player/sg/${encodeURIComponent(notif.gameName)}/${encodeURIComponent(notif.tagLine)}/${notif.matchId}`;
+      const metatftUrl = `https://www.metatft.com/player/SG2/${encodeURIComponent(notif.gameName)}-${encodeURIComponent(notif.tagLine)}?match=${notif.matchId}`;
+      const linksLine = `\n-# [tactics.tools](${ttUrl}) | [metatft](${metatftUrl})`;
+
+      // Pick embed color: god color if assigned, else placement-based fallback
+      const godColor: number | undefined = notif.godSlug ? GOD_COLORS[notif.godSlug] : undefined;
+
       const embed = new EmbedBuilder().setTimestamp(new Date(notif.playedAt));
 
       if (notif.placement === 1) {
         embed
-          .setColor(EMBED_COLORS.GOLD)
-          .setDescription(`👑 <@${notif.discordId}> just secured a **1st Place**${lpPart}!`);
+          .setColor(godColor ?? EMBED_COLORS.GOLD)
+          .setDescription(`👑 <@${notif.discordId}> just secured a **1st Place**${lpPart}!${buffLine}${linksLine}`);
       } else {
         embed
-          .setColor(EMBED_COLORS.DANGER)
-          .setDescription(`🚨 <@${notif.discordId}> just went **8th**${lpPart}! The tilt is real!`);
+          .setColor(godColor ?? EMBED_COLORS.DANGER)
+          .setDescription(`🚨 <@${notif.discordId}> just went **8th**${lpPart}! The tilt is real!${buffLine}${linksLine}`);
       }
 
       await channel.send({ embeds: [embed] });
