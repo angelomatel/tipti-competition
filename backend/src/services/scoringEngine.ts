@@ -167,11 +167,9 @@ export async function createLpDeltaTransaction(
     puuid: player.puuid,
     matchId: { $nin: linkedMatchIds },
     playedAt: { $lte: new Date() },
-  }).sort({ playedAt: 1 });
+  }).sort({ playedAt: -1 });
 
-  const matchId = nextUnlinkedMatch
-    ? (dateToUTC8Str(nextUnlinkedMatch.playedAt) === today ? nextUnlinkedMatch.matchId : null)
-    : null;
+  const matchId = nextUnlinkedMatch ? nextUnlinkedMatch.matchId : null;
 
   await PointTransaction.create({
     playerId: player.discordId,
