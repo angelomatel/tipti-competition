@@ -12,8 +12,8 @@ interface PointBreakdownProps {
 
 const SOURCE_LABELS: Record<string, string> = {
   daily_lp_gain: 'Matches',
-  lp_data: 'LP Gain',
-  lp_delta: 'LP Gain',
+  lp_data: 'LP Delta',
+  lp_delta: 'LP Delta',
   varus_flat: 'Varus (Flat)',
   varus_top10: 'Varus (Top 10)',
   ekko_flat: 'Ekko (Flat)',
@@ -78,7 +78,7 @@ const PointBreakdown: React.FC<PointBreakdownProps> = ({ dailyPoints, gameName, 
               <div className="pl-4 py-1 space-y-0.5">
                 {day.transactions.map((tx, i) => (
                   <div key={`${tx.source}-${tx.matchId ?? 'none'}-${i}`} className="flex justify-between gap-2 text-xs">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex items-center gap-2 flex-wrap">
                       <span style={{ color: 'var(--text-muted)' }}>
                         {(tx.source === 'lp_data' || tx.source === 'lp_delta')
                           ? 'LP Gain'
@@ -86,12 +86,12 @@ const PointBreakdown: React.FC<PointBreakdownProps> = ({ dailyPoints, gameName, 
                         {typeof tx.placement === 'number' ? ` (Place #${tx.placement})` : ''}
                       </span>
                       {tx.matchId && (
-                        <div className="mt-0.5 flex items-center gap-2">
+                        <>
                           <a
                             href={MATCH_LINK_TACTICS_TOOLS(gameName, tagLine, tx.matchId)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-[10px] transition-colors text-text-muted hover:text-accent-cyan"
+                            className="text-[10px] transition-colors text-indigo-300 hover:text-indigo-200"
                           >
                             tactics.tools
                           </a>
@@ -99,11 +99,11 @@ const PointBreakdown: React.FC<PointBreakdownProps> = ({ dailyPoints, gameName, 
                             href={MATCH_LINK_METATFT(gameName, tagLine, tx.matchId)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-[10px] transition-colors text-text-muted hover:text-accent-cyan"
+                            className="text-[10px] transition-colors text-indigo-300 hover:text-indigo-200"
                           >
                             metatft
                           </a>
-                        </div>
+                        </>
                       )}
                     </div>
                     <span className="shrink-0" style={{ color: tx.value >= 0 ? 'var(--accent-cyan)' : '#f87171' }}>
