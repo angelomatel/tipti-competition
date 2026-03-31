@@ -27,7 +27,7 @@ export const BUFF_DATA = [
   { slug: 'ekko', name: 'Ekko', title: 'Time', mechanic: '+2/match. +20 if same placement as previous match' },
   { slug: 'evelynn', name: 'Evelynn', title: 'Temptation', mechanic: '+1/match, or +25/match if LP gain exceeds rank threshold (300/200/150/100)' },
   { slug: 'thresh', name: 'Thresh', title: 'Pacts', mechanic: '+2/match. +13 if matching Top 1\'s latest placement. Top 1: +13/match' },
-  { slug: 'yasuo', name: 'Yasuo', title: 'Abyss', mechanic: 'Top 5-7 → +10/match. Top 8 → +35/match. Daily cap: 140' },
+  { slug: 'yasuo', name: 'Yasuo', title: 'Abyss', mechanic: '5th → +7, 6th → +15, 7th → +25, 8th → +33. Daily cap: 120' },
   { slug: 'soraka', name: 'Soraka', title: 'Stars', mechanic: '+5/−2 per streak match (cap 15). Daily cap: 100' },
   { slug: 'kayle', name: 'Kayle', title: 'Order', mechanic: '+2/match. +15 bonus if ≥4 matches played' },
   { slug: 'ahri', name: 'Ahri', title: 'Opulence', mechanic: '+17 per 1st place match' },

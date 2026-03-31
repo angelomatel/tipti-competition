@@ -21,8 +21,7 @@ import {
   THRESH_FLAT_PER_MATCH,
   THRESH_MATCH_BONUS,
   THRESH_TOP1_FLAT,
-  YASUO_TOP5_7_BONUS,
-  YASUO_TOP8_BONUS,
+  YASUO_PLACEMENT_BONUSES,
   SORAKA_WIN_STREAK_PER,
   SORAKA_LOSS_STREAK_PER,
   SORAKA_STREAK_CAP,
@@ -210,13 +209,9 @@ function computeThreshMatchBuff(
 }
 
 function computeYasuoMatchBuff(placement: number): BuffEntry[] {
-  if (placement >= 5 && placement <= 7) {
-    return [{ value: YASUO_TOP5_7_BONUS, source: 'yasuo_mid', type: 'buff' }];
-  }
-  if (placement === 8) {
-    return [{ value: YASUO_TOP8_BONUS, source: 'yasuo_bottom', type: 'buff' }];
-  }
-  return [];
+  if (placement < 5 || placement > 8) return [];
+  const value = YASUO_PLACEMENT_BONUSES[placement - 5];
+  return [{ value, source: `yasuo_${placement}th`, type: 'buff' }];
 }
 
 function computeSorakaMatchBuff(streakCount: number, isWinStreak: boolean): BuffEntry[] {

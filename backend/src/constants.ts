@@ -67,7 +67,7 @@ export const BUFF_DAILY_CAP = 75;
 
 /** Per-god daily cap overrides. */
 export const GOD_DAILY_CAP_OVERRIDES: Partial<Record<string, number>> = {
-  yasuo: 140,
+  yasuo: 120,
   soraka: 100,
   aurelion_sol: 90,
 };
@@ -112,10 +112,8 @@ export const THRESH_MATCH_BONUS = 13;
 /** Thresh: flat bonus per match for the top 1 player. */
 export const THRESH_TOP1_FLAT = 13;
 
-/** Yasuo: bonus for placement 5-7. */
-export const YASUO_TOP5_7_BONUS = 10;
-/** Yasuo: bonus for placement 8. */
-export const YASUO_TOP8_BONUS = 35;
+/** Yasuo: bonuses indexed by placement offset (index 0 = 5th, 1 = 6th, 2 = 7th, 3 = 8th). */
+export const YASUO_PLACEMENT_BONUSES = [7, 15, 25, 33] as const;
 
 /** Soraka: points per win streak match. */
 export const SORAKA_WIN_STREAK_PER = 5;

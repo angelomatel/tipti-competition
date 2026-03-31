@@ -41,7 +41,7 @@ export const GOD_BUFF_SUMMARIES = [
   '**Ekko** — *Time*: +2/match. +20 if same placement as previous match',
   '**Evelynn** — *Temptation*: +1/match, or +25/match if LP gain exceeds rank threshold (300/200/150/100)',
   "**Thresh** — *Pacts*: +2/match. +13 if matching Top 1's latest placement. Top 1: +13/match",
-  '**Yasuo** — *Abyss*: Top 5-7 → +10/match. Top 8 → +35/match. Daily cap: 140',
+  '**Yasuo** — *Abyss*: 5th → +7, 6th → +15, 7th → +25, 8th → +33. Daily cap: 120',
   '**Soraka** — *Stars*: +5/-2 per streak match (cap 15 streak). Daily cap: 100',
   '**Kayle** — *Order*: +2/match. +15 bonus if ≥4 matches played that day',
   '**Ahri** — *Opulence*: +17 per 1st place match',
