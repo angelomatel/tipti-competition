@@ -137,4 +137,4 @@ export const AHRI_PER_FIRST = 17;
 /** Aurelion Sol: base upper bound for random roll. */
 export const ASOL_BASE_UPPER = 10;
 /** Aurelion Sol: max placement shift for bounds. */
-export const ASOL_SHIFT_CAP = 6;
+export const ASOL_SHIFT_CAP = 7;
