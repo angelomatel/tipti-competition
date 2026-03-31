@@ -3,6 +3,7 @@ import { Geist, Cormorant_Garamond } from 'next/font/google';
 import './globals.css';
 import Background from '@/src/components/Background/Background';
 import Navbar from '@/src/components/Navbar/Navbar';
+import Footer from '@/src/components/Footer/Footer';
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
 const cormorant = Cormorant_Garamond({
@@ -19,10 +20,13 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${cormorant.variable} antialiased`}>
+      <body className={`${geistSans.variable} ${cormorant.variable} antialiased flex flex-col min-h-screen`}>
         <Background />
         <Navbar />
-        {children}
+        <main className="flex-grow">
+          {children}
+        </main>
+        <Footer />
       </body>
     </html>
   );
