@@ -1,9 +1,17 @@
+import Image from 'next/image';
+
 interface AvatarProps {
   src?: string;
   alt: string;
   initials: string;
   size?: 'sm' | 'md' | 'lg';
 }
+
+const SIZE_MAP = {
+  sm: 32,
+  md: 40,
+  lg: 56,
+} as const;
 
 const SIZE_CLASSES = {
   sm: 'w-8 h-8 text-xs',
@@ -13,14 +21,19 @@ const SIZE_CLASSES = {
 
 const Avatar: React.FC<AvatarProps> = ({ src, alt, initials, size = 'md' }) => {
   const sizeClass = SIZE_CLASSES[size];
+  const pixelSize = SIZE_MAP[size];
 
   if (src) {
     return (
-      <img
-        src={src}
-        alt={alt}
-        className={`${sizeClass} rounded-full object-cover`}
-      />
+      <div className={`${sizeClass} rounded-full overflow-hidden relative`}>
+        <Image
+          src={src}
+          alt={alt}
+          fill
+          sizes={`${pixelSize}px`}
+          className="object-cover"
+        />
+      </div>
     );
   }
 

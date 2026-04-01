@@ -6,6 +6,7 @@ import { usePlayer } from '@/src/hooks/usePlayer';
 import { formatTier } from '@/src/types/Rank';
 import { TIER_COLORS } from '@/src/lib/theme';
 import { getGodColor } from '@/src/lib/godColors';
+import Image from 'next/image';
 import RankImage from '@/src/components/Images/RankImage/RankImage';
 import LPGraph from '@/src/components/Leaderboard/LPGraph';
 import Avatar from '@/src/components/Shared/Avatar';
@@ -55,7 +56,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose, hideGod
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 text-xl leading-none transition-colors text-text-muted hover:text-text-primary"
+          className="absolute top-4 right-4 z-[20] text-xl leading-none transition-colors text-text-muted hover:text-text-primary bg-black/40 w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-sm"
         >
           &times;
         </button>
@@ -82,18 +83,25 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose, hideGod
           <>
             {/* God-colored art strip (hidden when pre-event) */}
             {!hideGod && (
-              <div
-                className="h-[120px]"
-                style={{
-                  backgroundImage: `
-                    linear-gradient(135deg, ${godColors.primary}40, ${godColors.primary}10, var(--surface-1)),
-                    url(${getGodSplash(data.godSlug, 'happy')})
-                  `,
-                  backgroundSize: 'cover, cover',
-                  backgroundPosition: `center, right ${getGodBannerOffset(data.godSlug)}`,
-                  backgroundRepeat: 'no-repeat, no-repeat',
-                }}
-              />
+              <div className="relative h-[120px] overflow-hidden">
+                <Image
+                  src={getGodSplash(data.godSlug, 'happy')}
+                  alt={data.godSlug || 'god'}
+                  fill
+                  priority
+                  sizes="580px"
+                  className="object-cover opacity-90"
+                  style={{
+                    objectPosition: `center ${getGodBannerOffset(data.godSlug)}`,
+                  }}
+                />
+                <div
+                  className="absolute inset-0 z-10"
+                  style={{
+                    backgroundImage: `linear-gradient(135deg, ${godColors.primary}60, ${godColors.primary}20, var(--surface-1))`,
+                  }}
+                />
+              </div>
             )}
 
             {/* Avatar + name section */}
