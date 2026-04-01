@@ -3,25 +3,13 @@
 import Image from 'next/image';
 import { useGod } from '@/src/hooks/useGod';
 import { useTournament } from '@/src/hooks/useTournament';
-import { getBuffMechanic, getGodSplash, BUFF_DATA } from '@/src/lib/godData';
+import { getBuffMechanic, getGodSplash, BUFF_DATA, GOD_LORE } from '@/src/lib/godData';
 import { isEventStarted } from '@/src/lib/tournament';
 import { formatTier } from '@/src/types/Rank';
 import RankImage from '@/src/components/Images/RankImage/RankImage';
 import Avatar from '@/src/components/Shared/Avatar';
 import { PODIUM_COLORS, DEFAULT_RANK_COLOR, TIER_COLORS } from '@/src/lib/theme';
 import { getGodColor } from '@/src/lib/godColors';
-
-const GOD_LORE: Record<string, string> = {
-  varus: 'In the vast expanse between stars, Varus weaves the threads of devotion and longing. His love is unconditional — every follower who takes the field feels the warmth of his embrace. Yet the one who burns brightest earns the title of Beloved, lifted higher by a love that grows stronger the more it is returned.',
-  ekko: 'Time bends to Ekko\'s will, folding in on itself like the rings of a dying star. His followers learn that the past is never truly lost — each battle carries the echo of what came before, and those who repeat their fate begin to shape time into something predictable… and powerful.',
-  evelynn: 'Evelynn\'s whisper echoes through the void, reaching every soul who dares to compete. All who fight hear her call, but the one consumed by ambition — the one who pushes beyond all limits earns her full attention. Temptation spares no one; it simply rewards those who indulge in it completely.',
-  thresh: 'In the cold silence between galaxies, Thresh forges covenants that bind all who follow him. Every soul in his domain is tethered to another, their fates reflected in unseen chains. To walk beside greatness is to share in its reward, for in Thresh\'s realm, no outcome is ever truly yours alone.',
-  yasuo: 'The Abyss speaks only in extremes. Yasuo\'s followers walk the razor\'s edge — those who rise are carried by the storm, while those who fall are swallowed whole. Yet even in descent, power is found. In the domain of the Abyss, there is no safety… only depth.',
-  soraka: 'Soraka reads the constellations of victory and defeat, her power flowing through the momentum of battle. Each moment does not stand alone, but adds to a greater pattern — a growing alignment written across the stars. Those who follow her path become part of something larger than any single outcome.',
-  kayle: 'Order demands discipline, not merely victory. Kayle watches each day from her throne of light, blessing those who uphold her structure without fail. Power is not granted in moments, but in consistency — and only those who prove their devotion to order will be worthy of her final judgment.',
-  ahri: 'Opulence drips from every victory claimed in Ahri\'s name. She collects first-place finishes like gemstones, each one adding to a growing treasury of power. In her domain, only perfection holds value — and those who claim it will find themselves adorned in her favor.',
-  aurelion_sol: 'The Star Forger scatters stardust across all who walk beneath his cosmos — every follower feels the touch of wonder. Yet no two gifts are ever the same. Fortune and misfortune alike are but fragments of his creation, for in the realm of Wonders, unpredictability is the only constant.',
-};
 
 interface GodLeaderboardProps {
   slug: string;
