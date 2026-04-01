@@ -20,7 +20,7 @@ const UserBanner: React.FC<UserBannerProps> = ({ entry, onClick, style, hideGod 
 
   return (
     <div
-      className={`group relative grid items-center gap-3 px-4 py-3 rounded-[var(--radius-md)] cursor-pointer transition-all duration-200 hover:translate-x-[3px] bg-surface-1 border border-border-default hover:bg-surface-hover hover:border-border-bright ${
+      className={`group relative grid items-center gap-3 px-3 py-2 sm:px-4 sm:py-3 rounded-[var(--radius-md)] cursor-pointer transition-all duration-200 hover:translate-x-[3px] bg-surface-1 border border-border-default hover:bg-surface-hover hover:border-border-bright ${
         entry.isEliminatedFromGod ? 'opacity-60' : ''
       }`}
       style={{
@@ -31,30 +31,40 @@ const UserBanner: React.FC<UserBannerProps> = ({ entry, onClick, style, hideGod 
     >
       <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-3/5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-b from-nebula-purple to-nebula-pink" />
 
-      <span className={`text-center font-bold text-lg ${rankColor}`}>
+      <span className={`text-center font-bold text-base sm:text-lg ${rankColor}`}>
         {entry.rank}
       </span>
 
       <Avatar src={entry.discordAvatarUrl} alt={entry.discordUsername || entry.gameName} initials={initials} size="md" />
 
-      <div className="min-w-0">
+      <div className="min-w-0 flex flex-col justify-center gap-0.5">
         <div className="flex items-center gap-2">
-          <p className="font-semibold text-text-primary truncate">
+          <p className="text-sm sm:text-base font-semibold text-text-primary truncate">
             {entry.gameName}
             <span className="text-text-muted font-normal">#{entry.tagLine}</span>
           </p>
-          {!hideGod && entry.godSlug && <GodBadge slug={entry.godSlug} name={entry.godName} />}
+          {!hideGod && entry.godSlug && (
+            <div className="hidden sm:block">
+              <GodBadge slug={entry.godSlug} name={entry.godName} />
+            </div>
+          )}
         </div>
-        <p className="text-xs flex items-center gap-1 text-text-muted">
+        <p className="text-xs flex items-center gap-1 text-text-muted flex-wrap">
           <span className="flex items-center gap-1">
             <RankImage tier={entry.currentTier} size={14} />
             <span style={{ color: TIER_COLORS[entry.currentTier] || TIER_COLORS.UNRANKED }}>{tierDisplay}</span>
           </span>
+          <span className="opacity-50 inline-block px-0.5">•</span>
           <span>{entry.currentLP} LP</span>
         </p>
+        {!hideGod && entry.godSlug && (
+          <div className="sm:hidden mt-0.5">
+            <GodBadge slug={entry.godSlug} name={entry.godName} />
+          </div>
+        )}
       </div>
 
-      <span className="text-lg font-bold text-accent-cyan flex items-center gap-1">
+      <span className="text-base sm:text-lg font-bold text-accent-cyan flex items-center gap-1">
         {entry.scorePoints}
         <span className="hidden sm:inline text-xs font-semibold text-text-muted tracking-wide">
           pts

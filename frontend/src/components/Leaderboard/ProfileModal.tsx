@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { usePlayer } from '@/src/hooks/usePlayer';
 import { formatTier } from '@/src/types/Rank';
 import { TIER_COLORS } from '@/src/lib/theme';
@@ -19,6 +20,11 @@ interface ProfileModalProps {
 
 const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose, hideGod }) => {
   const { data, error, isLoading } = usePlayer(discordId);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -36,14 +42,14 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose, hideGod
 
   const godColors = !hideGod && data ? getGodColor(data.godSlug) : getGodColor(null);
 
-  return (
+  const modalContent = (
     <div
-      className="fixed inset-0 z-[200]! flex items-end justify-center pb-0 sm:pb-4"
-      style={{ backgroundColor: 'rgba(5,3,15,0.8)', backdropFilter: 'blur(12px)' }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(5,3,15,0.8)', backdropFilter: 'blur(12px)', animation: 'fade-in 0.3s ease' }}
       onClick={handleBackdropClick}
     >
       <div
-        className="relative w-full sm:max-w-[580px] overflow-hidden max-h-[90vh] overflow-y-auto rounded-t-[var(--radius-xl)] sm:rounded-[var(--radius-xl)] bg-surface-1 border border-border-bright"
+        className="relative w-full sm:max-w-[580px] overflow-hidden max-h-[90vh] overflow-y-auto rounded-[var(--radius-xl)] bg-surface-1 border border-border-bright"
         style={{ animation: 'modal-enter 0.3s ease' }}
       >
         {/* Close button */}
@@ -207,6 +213,10 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose, hideGod
       </div>
     </div>
   );
+
+  return mounted && typeof document !== 'undefined'
+    ? createPortal(modalContent, document.body)
+    : null;
 };
 
 export default ProfileModal;

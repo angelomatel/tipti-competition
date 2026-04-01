@@ -12,7 +12,7 @@ function LeaderboardPageInner() {
 
 export default function LeaderboardPage() {
   return (
-    <main className="relative z-10 max-w-5xl mx-auto px-4 pt-24 pb-16">
+    <main className="relative z-10 max-w-5xl mx-auto px-4 pt-12 pb-8">
       <Suspense>
         <LeaderboardPageInner />
       </Suspense>

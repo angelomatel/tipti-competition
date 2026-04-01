@@ -66,7 +66,7 @@ const Leaderboard = ({ tab = 'players' }: LeaderboardProps) => {
           )}
 
           {!isLoading && totalEntries > 0 && (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5 sm:gap-3">
               {/* Podium: only when event started, page 1, desktop */}
               {showPodium && (
                 <div className="hidden sm:block">
