@@ -12,8 +12,6 @@ export const QUERY_LIMITS = {
   MATCHES: 50,
 } as const;
 
-/** Match placements that trigger feed notifications. */
-export const NOTIFICATION_PLACEMENTS = [1, 8] as const;
 
 /** Number of top players included in the daily LP graph. */
 export const DAILY_GRAPH_TOP_N = 5;

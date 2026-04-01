@@ -11,8 +11,8 @@ import {
 } from '@/lib/backendClient';
 import { renderLpGraph } from '@/lib/chartRenderer';
 import { logger } from '@/lib/logger';
-import { formatLpDelta } from '@/lib/format';
-import { EMBED_COLORS, GOD_COLORS, CRON_SCHEDULES } from '@/lib/constants';
+import { formatLpDelta, formatOrdinal } from '@/lib/format';
+import { EMBED_COLORS, GOD_COLORS, SOURCE_LABELS, CRON_SCHEDULES } from '@/lib/constants';
 
 async function getTextChannel(client: Client, channelId: string): Promise<TextChannel | null> {
   try {
@@ -31,6 +31,7 @@ function getYesterdayUTC8(): string {
   utc8.setUTCDate(utc8.getUTCDate() - 1);
   return utc8.toISOString().slice(0, 10);
 }
+
 
 async function runFeedJob(client: Client): Promise<void> {
   try {
@@ -54,7 +55,7 @@ async function runFeedJob(client: Client): Promise<void> {
       if (channel.guild && notif.discordId) {
         try {
           const member = await channel.guild.members.fetch(notif.discordId);
-          const currentAvatar = member.user.displayAvatarURL({ size: 128 });
+          const currentAvatar = member.user.displayAvatarURL({ extension: 'png', size: 128 });
           updatePlayerProfile(notif.discordId, { discordAvatarUrl: currentAvatar }).catch(() => {});
         } catch { /* member not in guild */ }
       }
@@ -62,10 +63,15 @@ async function runFeedJob(client: Client): Promise<void> {
       const lpStr = formatLpDelta(notif.lpDelta);
       const lpPart = lpStr ? ` (${lpStr})` : '';
 
-      // Build buff line (only if god awarded buff points)
-      const buffLine = (notif.godBuffPoints != null && notif.godBuffPoints !== 0)
-        ? `\n> 🌟 God buff: **${notif.godBuffPoints > 0 ? '+' : ''}${notif.godBuffPoints}** pts`
-        : '';
+      // Build buff lines
+      let buffLine = '';
+      if (notif.godBuffs && notif.godBuffs.length > 0) {
+        const buffStrings = notif.godBuffs.map((b: any) => {
+          const name = SOURCE_LABELS[b.source] || b.source;
+          return `🌟 **${name}**: ${b.value > 0 ? '+' : ''}${b.value} pts`;
+        });
+        buffLine = '\n> ' + buffStrings.join('\n> ');
+      }
 
       // Build external match links (tactics.tools + metatft)
       const ttUrl = `https://tactics.tools/player/sg/${encodeURIComponent(notif.gameName)}/${encodeURIComponent(notif.tagLine)}/${notif.matchId}`;
@@ -75,16 +81,32 @@ async function runFeedJob(client: Client): Promise<void> {
       // Pick embed color: god color if assigned, else placement-based fallback
       const godColor: number | undefined = notif.godSlug ? GOD_COLORS[notif.godSlug] : undefined;
 
-      const embed = new EmbedBuilder().setTimestamp(new Date(notif.playedAt));
+      const username = notif.discordUsername || notif.gameName;
+      const inGameName = `${notif.gameName}#${notif.tagLine}`;
+      const footerOpts: { text: string; iconURL?: string } = { text: inGameName };
+      if (notif.discordAvatarUrl) footerOpts.iconURL = notif.discordAvatarUrl;
+
+      const embed = new EmbedBuilder()
+        .setTimestamp(new Date(notif.playedAt))
+        .setFooter(footerOpts);
 
       if (notif.placement === 1) {
         embed
           .setColor(godColor ?? EMBED_COLORS.GOLD)
-          .setDescription(`👑 <@${notif.discordId}> just secured a **1st Place**${lpPart}!${buffLine}${linksLine}`);
-      } else {
+          .setDescription(`👑 **${username}** just secured a **1st Place**${lpPart}!${buffLine}${linksLine}`);
+      } else if (notif.placement === 8) {
         embed
           .setColor(godColor ?? EMBED_COLORS.DANGER)
-          .setDescription(`🚨 <@${notif.discordId}> just went **8th**${lpPart}! The tilt is real!${buffLine}${linksLine}`);
+          .setDescription(`🚨 **${username}** just went **8th**${lpPart}! The tilt is real!${buffLine}${linksLine}`);
+      } else {
+        // Placements 2–7
+        const ordinal = formatOrdinal(notif.placement);
+        const topHalf = notif.placement <= 4;
+        const emoji = topHalf ? '🏅' : '📉';
+        const fallbackColor = topHalf ? EMBED_COLORS.REGULAR_TOP : EMBED_COLORS.REGULAR_BOT;
+        embed
+          .setColor(godColor ?? fallbackColor)
+          .setDescription(`${emoji} **${username}** placed **${ordinal}**${lpPart}${buffLine}${linksLine}`);
       }
 
       await channel.send({ embeds: [embed] });
@@ -96,7 +118,7 @@ async function runFeedJob(client: Client): Promise<void> {
   }
 }
 
-async function runDailyJob(client: Client): Promise<void> {
+export async function runDailyJob(client: Client): Promise<void> {
   try {
     const settingsRes = await getTournamentSettings();
     const settings = settingsRes.settings;
@@ -142,7 +164,19 @@ async function runDailyJob(client: Client): Promise<void> {
     // Generate and attach LP graph if we have data
     const players: any[] = graphData.players ?? [];
     if (players.length > 0) {
-      const chartBuffer = await renderLpGraph(players);
+      if (channel.guild) {
+        for (const p of players) {
+          if (!p.discordAvatarUrl && p.discordId) {
+            try {
+              const member = await channel.guild.members.fetch(p.discordId);
+              p.discordAvatarUrl = member.user.displayAvatarURL({ extension: 'png', size: 128 });
+              updatePlayerProfile(p.discordId, { discordAvatarUrl: p.discordAvatarUrl }).catch(() => {});
+            } catch { /* member not in guild */ }
+          }
+        }
+      }
+
+      const chartBuffer = await renderLpGraph(players, date);
       const attachment = new AttachmentBuilder(chartBuffer, { name: 'lp-graph.png' });
       embed.setImage('attachment://lp-graph.png');
       await channel.send({ embeds: [embed], files: [attachment] });
@@ -156,7 +190,7 @@ async function runDailyJob(client: Client): Promise<void> {
   }
 }
 
-async function runGodStandingsJob(client: Client): Promise<void> {
+export async function runGodStandingsJob(client: Client): Promise<void> {
   try {
     const settingsRes = await getTournamentSettings();
     const settings = settingsRes.settings;
@@ -199,11 +233,11 @@ export function startNotificationJobs(client: Client): void {
 
   cron.schedule(CRON_SCHEDULES.DAILY_JOB, () => {
     void runDailyJob(client);
-  });
+  }, { timezone: 'UTC' });
 
   cron.schedule(CRON_SCHEDULES.GOD_STANDINGS_JOB, () => {
     void runGodStandingsJob(client);
-  });
+  }, { timezone: 'UTC' });
 
   logger.debug('[notifications] Feed (*/5 min), daily (16:00 UTC), and god standings (16:05 UTC) jobs scheduled');
 }
