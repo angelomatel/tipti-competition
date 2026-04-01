@@ -15,14 +15,18 @@ const TAB_OPTIONS = [
 
 function NavbarInner() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const isGodsTab = pathname.startsWith('/leaderboard/gods');
+  const activeTab = isGodsTab ? 'gods' : 'players';
+
   const router = useRouter();
   const { data } = useTournament();
 
-  const activeTab = searchParams.get('tab') || 'players';
-
   const handleTabChange = (value: string) => {
-    router.replace('/leaderboard?tab=' + value, { scroll: false });
+    if (value === 'gods') {
+      router.push('/leaderboard/gods', { scroll: false });
+    } else {
+      router.push('/leaderboard', { scroll: false });
+    }
   };
 
   const settings = data?.settings;
@@ -52,7 +56,7 @@ function NavbarInner() {
         </div>
 
         {/* Center: tab toggle (leaderboard only) */}
-        {pathname === '/leaderboard' && (
+        {(pathname === '/leaderboard' || pathname.startsWith('/leaderboard/gods')) && (
           <div className="flex-1 flex justify-center">
             <PillToggle
               options={TAB_OPTIONS}
