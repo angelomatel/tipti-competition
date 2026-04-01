@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import { useGods } from '@/src/hooks/useGods';
 import { useTournament } from '@/src/hooks/useTournament';
-import { BUFF_DATA, GOD_IMAGE_MAP } from '@/src/lib/godData';
+import { BUFF_DATA, getGodSplash, getGodBannerOffset } from '@/src/lib/godData';
 import { getGodColor } from '@/src/lib/godColors';
 import { isEventStarted } from '@/src/lib/tournament';
 import type { GodInfo } from '@/src/types/God';
@@ -38,14 +38,14 @@ const GodStandings: React.FC<GodStandingsProps> = ({ onSelectGod }) => {
   const eliminated = standings.filter((g) => g.isEliminated);
 
   const renderCard = (god: GodInfo, rankIndex: number, isEliminated: boolean) => {
-    const imageSrc = GOD_IMAGE_MAP[god.slug];
+    const imageSrc = getGodSplash(god.slug, 'neutral', isEliminated);
     const godColors = getGodColor(god.slug);
 
     return (
       <div
         key={god.slug}
-        className={`group relative rounded-[var(--radius-md)] overflow-hidden cursor-pointer transition-all duration-200 h-48 ${
-          isEliminated ? 'opacity-55 grayscale-[0.6]' : 'hover:-translate-y-0.5'
+        className={`group relative rounded-[var(--radius-md)] overflow-hidden cursor-pointer transition-all duration-300 h-48 ${
+          isEliminated ? 'opacity-55 grayscale-[0.6] hover:grayscale-0 hover:opacity-100' : 'hover:-translate-y-0.5'
         }`}
         style={{ border: '1px solid var(--border)' }}
         onClick={() => onSelectGod?.(god.slug)}
@@ -62,14 +62,30 @@ const GodStandings: React.FC<GodStandingsProps> = ({ onSelectGod }) => {
       >
         {/* Full art background */}
         {imageSrc && (
-          <Image
-            src={imageSrc}
-            alt={god.name}
-            fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-            className="object-cover"
-            style={{ filter: isEliminated ? 'grayscale(1)' : 'none' }}
-          />
+          <>
+            <Image
+              src={imageSrc}
+              alt={god.name}
+              fill
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              className="object-cover transition-all duration-300 group-hover:opacity-0"
+              style={{ 
+                filter: isEliminated ? 'grayscale(1)' : 'none',
+                objectPosition: `center ${getGodBannerOffset(god.slug)}`
+              }}
+            />
+            <Image
+              src={getGodSplash(god.slug, 'happy')}
+              alt={`${god.name} happy`}
+              fill
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              className="object-cover opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+              style={{ 
+                filter: 'none',
+                objectPosition: `center ${getGodBannerOffset(god.slug)}`
+              }}
+            />
+          </>
         )}
 
         {/* Gradient overlay */}

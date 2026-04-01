@@ -3,9 +3,7 @@
 import Image from 'next/image';
 import { useGod } from '@/src/hooks/useGod';
 import { useTournament } from '@/src/hooks/useTournament';
-import { GOD_IMAGE_MAP } from '@/src/lib/godData';
-import { getBuffMechanic } from '@/src/lib/godData';
-import { BUFF_DATA } from '@/src/lib/godData';
+import { getBuffMechanic, getGodSplash, BUFF_DATA } from '@/src/lib/godData';
 import { isEventStarted } from '@/src/lib/tournament';
 import { formatTier } from '@/src/types/Rank';
 import RankImage from '@/src/components/Images/RankImage/RankImage';
@@ -35,9 +33,7 @@ const GodLeaderboard: React.FC<GodLeaderboardProps> = ({ slug, onBack, onSelectP
   const { data, error, isLoading } = useGod(slug);
   const { data: tournamentData } = useTournament();
   const started = isEventStarted(tournamentData?.settings);
-  const fullImage = GOD_IMAGE_MAP[slug];
-  const godColors = getGodColor(slug);
-  const buffMechanic = getBuffMechanic(slug);
+
   const staticGod = BUFF_DATA.find((g) => g.slug === slug);
   const fallbackGod = {
     slug,
@@ -46,6 +42,11 @@ const GodLeaderboard: React.FC<GodLeaderboardProps> = ({ slug, onBack, onSelectP
     isEliminated: false,
     eliminatedInPhase: null,
   };
+  const god = data?.god ?? fallbackGod;
+
+  const fullImage = getGodSplash(slug, 'neutral', god.isEliminated);
+  const godColors = getGodColor(slug);
+  const buffMechanic = getBuffMechanic(slug);
   const hasLiveData = Boolean(data?.god && !error);
 
   const backButton = (
@@ -71,7 +72,6 @@ const GodLeaderboard: React.FC<GodLeaderboardProps> = ({ slug, onBack, onSelectP
     );
   }
 
-  const god = data?.god ?? fallbackGod;
   const players = hasLiveData ? (data?.players ?? []) : [];
   const lore = GOD_LORE[slug] ?? '';
 

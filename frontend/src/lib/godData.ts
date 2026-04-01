@@ -1,26 +1,95 @@
 export const GOD_AVATAR_MAP: Record<string, string> = {
-  varus: '/space_gods/avatars/0_Varus.png',
-  ekko: '/space_gods/avatars/1_Ekko.png',
-  evelynn: '/space_gods/avatars/2_Evelynn.png',
-  thresh: '/space_gods/avatars/3_Thresh.png',
-  yasuo: '/space_gods/avatars/4_Yasuo.png',
-  soraka: '/space_gods/avatars/5_Soraka.png',
-  kayle: '/space_gods/avatars/6_Kayle.png',
-  ahri: '/space_gods/avatars/7_Ahri.png',
-  aurelion_sol: '/space_gods/avatars/8_AurelionSol.png',
+  varus: '/space_gods/avatars/god-varusicon.tft_set17.png',
+  ekko: '/space_gods/avatars/god-ekkoicon.tft_set17.png',
+  evelynn: '/space_gods/avatars/god_evelynicon.tft_set17.png',
+  thresh: '/space_gods/avatars/god_threshicon.tft_set17.png',
+  yasuo: '/space_gods/avatars/god_yasuoicon.tft_set17.png',
+  soraka: '/space_gods/avatars/god_sorakaicon.tft_set17.png',
+  kayle: '/space_gods/avatars/god_kayleicon.tft_set17.png',
+  ahri: '/space_gods/avatars/god_ahriicon.tft_set17.png',
+  aurelion_sol: '/space_gods/avatars/god_asolicon.tft_set17.png',
 };
 
-export const GOD_IMAGE_MAP: Record<string, string> = {
-  varus: '/space_gods/0_Varus.png',
-  ekko: '/space_gods/1_Ekko.png',
-  evelynn: '/space_gods/2_Evelynn.png',
-  thresh: '/space_gods/3_Thresh.png',
-  yasuo: '/space_gods/4_Yasuo.png',
-  soraka: '/space_gods/5_Soraka.png',
-  kayle: '/space_gods/6_Kayle.png',
-  ahri: '/space_gods/7_Ahri.png',
-  aurelion_sol: '/space_gods/8_AurelionSol.png',
+export const GOD_IMAGE_PATHS: Record<string, { neutral: string; happy: string; sad: string }> = {
+  varus: {
+    neutral: '/space_gods/tft17_god_varus_neutral_splash.png',
+    happy: '/space_gods/tft17_god_varus_happy_splash.png',
+    sad: '/space_gods/tft17_god_varus_sad_splash.png',
+  },
+  ekko: {
+    neutral: '/space_gods/tft17_god_ekko_neutral_splash.png',
+    happy: '/space_gods/tft17_god_ekko_happy_splash.png',
+    sad: '/space_gods/tft17_god_ekko_sad_splash.png',
+  },
+  evelynn: {
+    neutral: '/space_gods/tft17_god_evelynn_neutral_splash.png',
+    happy: '/space_gods/tft17_god_evelynn_happy_splash.png',
+    sad: '/space_gods/tft17_god_evelynn_sad_splash.png',
+  },
+  thresh: {
+    neutral: '/space_gods/tft17_god_thresh_neutral_splash.png',
+    happy: '/space_gods/tft17_god_thresh_happy_splash.png',
+    sad: '/space_gods/tft17_god_thresh_sad_splash.png',
+  },
+  yasuo: {
+    neutral: '/space_gods/tft17_god_yasuo_neutral_splash.png',
+    happy: '/space_gods/tft17_god_yasuo_happy_splash.png',
+    sad: '/space_gods/tft17_god_yasuo_sad_splash.png',
+  },
+  soraka: {
+    neutral: '/space_gods/tft17_god_soraka_neutral_splash.png',
+    happy: '/space_gods/tft17_god_soraka_happy_splash.png',
+    sad: '/space_gods/tft17_god_soraka_sad_splash.png',
+  },
+  kayle: {
+    neutral: '/space_gods/tft17_god_kayle_neutral_splash.png',
+    happy: '/space_gods/tft17_god_kayle_happy_splash.png',
+    sad: '/space_gods/tft17_god_kayle_sad_splash.png',
+  },
+  ahri: {
+    neutral: '/space_gods/tft17_god_ahri_neutral_splash.png',
+    happy: '/space_gods/tft17_god_ahri_happy_splash.png',
+    sad: '/space_gods/tft17_god_ahri_sad_splash.png',
+  },
+  aurelion_sol: {
+    neutral: '/space_gods/tft17_god_aurelionsol_neutral_splash.png',
+    happy: '/space_gods/tft17_god_aurelionsol_happy_splash.png',
+    sad: '/space_gods/tft17_god_aurelionsol_sad_splash.png',
+  },
 };
+
+/** Compatibility map for existing implementations */
+export const GOD_IMAGE_MAP: Record<string, string> = Object.fromEntries(
+  Object.entries(GOD_IMAGE_PATHS).map(([slug, paths]) => [slug, paths.neutral])
+);
+
+export function getGodSplash(
+  slug: string | null | undefined,
+  emotion: 'neutral' | 'happy' | 'sad' = 'neutral',
+  isDead: boolean = false
+): string {
+  const s = slug || 'varus';
+  const paths = GOD_IMAGE_PATHS[s] || GOD_IMAGE_PATHS['varus'];
+  if (isDead) return paths.sad;
+  return paths[emotion];
+}
+
+export const GOD_BANNER_OFFSETS: Record<string, string> = {
+  varus: '40%',
+  ekko: '42%',
+  evelynn: '45%',
+  thresh: '45%',
+  yasuo: '39%',
+  soraka: '45%',
+  kayle: '38%',
+  ahri: '40%',
+  aurelion_sol: '28%',
+};
+
+/** Gets the vertical offset for the god image in banners */
+export function getGodBannerOffset(slug: string | null | undefined): string {
+  return GOD_BANNER_OFFSETS[slug || 'varus'] ?? '50%';
+}
 
 export const BUFF_DATA = [
   { slug: 'varus', name: 'Varus', title: 'Love', mechanic: '+7/match. Top 10 in god leaderboard: +8/match' },

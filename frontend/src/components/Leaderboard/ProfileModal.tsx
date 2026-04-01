@@ -9,7 +9,7 @@ import RankImage from '@/src/components/Images/RankImage/RankImage';
 import LPGraph from '@/src/components/Leaderboard/LPGraph';
 import Avatar from '@/src/components/Shared/Avatar';
 import PointBreakdown from '@/src/components/Leaderboard/PointBreakdown';
-import { GOD_IMAGE_MAP } from '@/src/lib/godData';
+import { getGodSplash, getGodBannerOffset } from '@/src/lib/godData';
 
 interface ProfileModalProps {
   discordId: string | null;
@@ -81,10 +81,10 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose, hideGod
                 style={{
                   backgroundImage: `
                     linear-gradient(135deg, ${godColors.primary}40, ${godColors.primary}10, var(--surface-1)),
-                    url(${GOD_IMAGE_MAP[data.godSlug ?? 'varus']})
+                    url(${getGodSplash(data.godSlug, 'happy')})
                   `,
                   backgroundSize: 'cover, cover',
-                  backgroundPosition: 'center, right',
+                  backgroundPosition: `center, right ${getGodBannerOffset(data.godSlug)}`,
                   backgroundRepeat: 'no-repeat, no-repeat',
                 }}
               />
