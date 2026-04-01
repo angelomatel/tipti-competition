@@ -22,7 +22,7 @@ const GodBadge: React.FC<GodBadgeProps> = ({ slug, name, size = 20, showName = t
         className="rounded-full"
       />
       {showName && name && (
-        <span className="text-xs text-text-secondary">{name}</span>
+        <span className="text-xs text-text-secondary/80">{name}</span>
       )}
     </span>
   );

@@ -64,11 +64,15 @@ const Podium: React.FC<PodiumProps> = ({ entries, onSelectPlayer, hideGod }) => 
               </span>
               <span className="text-xs text-text-muted">{entry.currentLP} LP</span>
             </div>
-            <div className="flex items-center justify-center gap-2 mt-1">
-              <p className="text-2xl font-bold text-accent-cyan leading-none">
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <span className="text-2xl font-bold text-accent-cyan tabular-nums leading-none">
                 {entry.scorePoints}
-              </p>
-              <span className={`text-xs ${entry.dailyPointGain >= 0 ? 'text-phase-active' : 'text-[#f87171]'}`}>
+              </span>
+              <span
+                className={`px-2 py-1 rounded-full text-sm font-bold leading-none ${
+                  entry.dailyPointGain >= 0 ? 'text-phase-active bg-phase-active/10' : 'text-[#f87171] bg-[#f87171]/10'
+                }`}
+              >
                 {pointGainStr}
               </span>
             </div>

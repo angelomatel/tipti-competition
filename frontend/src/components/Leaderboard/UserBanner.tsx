@@ -44,14 +44,14 @@ const UserBanner: React.FC<UserBannerProps> = ({ entry, onClick, style, hideGod 
             <span className="text-text-muted font-normal">#{entry.tagLine}</span>
           </p>
           {!hideGod && entry.godSlug && (
-            <div className="hidden sm:block">
+            <div className="hidden sm:flex items-center">
               <GodBadge slug={entry.godSlug} name={entry.godName} />
             </div>
           )}
         </div>
         <p className="text-xs flex items-center gap-1 text-text-muted flex-wrap">
           <span className="flex items-center gap-1">
-            <RankImage tier={entry.currentTier} size={14} />
+            <RankImage tier={entry.currentTier} size={20} />
             <span style={{ color: TIER_COLORS[entry.currentTier] || TIER_COLORS.UNRANKED }}>{tierDisplay}</span>
           </span>
           <span className="opacity-50 inline-block px-0.5">•</span>
