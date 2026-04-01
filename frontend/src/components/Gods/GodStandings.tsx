@@ -138,7 +138,7 @@ const GodStandings: React.FC<GodStandingsProps> = ({ onSelectGod }) => {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 lg:[zoom:1.2]">
       {error && (
         <p className="text-center text-xs text-text-muted">
           Live standings are currently unavailable. Showing default gods.
