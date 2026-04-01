@@ -7,6 +7,8 @@ export const EMBED_COLORS = {
   DANGER: 0xff4444,    // Red — 8th place / error notifications
   ELIMINATION: 0x8b0000,  // Dark red — god elimination
   GOD_STANDINGS: 0x4b0082, // Indigo — god standings
+  REGULAR_TOP: 0x2dd4bf,  // Teal — top-half placements (2nd–4th)
+  REGULAR_BOT: 0xfb923c,  // Orange — bottom-half placements (5th–7th)
 } as const;
 
 /** Cron schedule expressions for notification jobs. */
@@ -73,4 +75,33 @@ export const GOD_COLORS: Record<string, number> = {
   kayle:        0xf97316,
   ahri:         0xe879f9,
   aurelion_sol: 0x60a5fa,
+};
+
+/** Labels for point transaction sources (buffs). */
+export const SOURCE_LABELS: Record<string, string> = {
+  daily_lp_gain: 'Matches',
+  lp_data: 'LP Delta',
+  lp_delta: 'LP Delta',
+  varus_flat: 'Varus (Flat)',
+  varus_top10: 'Varus (Top 10)',
+  ekko_flat: 'Ekko (Flat)',
+  ekko_repeat: 'Ekko (Repeat)',
+  evelynn_flat: 'Evelynn (Flat)',
+  evelynn_high: 'Evelynn (High LP)',
+  thresh_flat: 'Thresh (Flat)',
+  thresh_match: 'Thresh (Match)',
+  thresh_top1: 'Thresh (Top 1)',
+  yasuo_5th: 'Yasuo (5th)',
+  yasuo_6th: 'Yasuo (6th)',
+  yasuo_7th: 'Yasuo (7th)',
+  yasuo_8th: 'Yasuo (8th)',
+  soraka_streak: 'Soraka Win Streak',
+  soraka_loss_streak: 'Soraka Loss Streak',
+  kayle_flat: 'Kayle (Flat)',
+  kayle_activity: 'Kayle (Activity)',
+  ahri_first_place: 'Ahri (1st Place)',
+  asol_cosmic: 'Aurelion Sol (Random)',
+  god_1st_place: 'God 1st Place Bonus',
+  god_2nd_place: 'God 2nd Place Bonus',
+  god_3rd_place: 'God 3rd Place Bonus',
 };

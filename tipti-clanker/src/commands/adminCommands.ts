@@ -224,4 +224,30 @@ export class AdminCommands {
       await interaction.editReply({ content: `❌ Failed to trigger refresh: ${err?.message ?? err}` });
     }
   }
+
+  @Slash({
+    name: 'trigger-daily-jobs',
+    description: 'Manually trigger the daily recap and god standings notifications (admin only)',
+    defaultMemberPermissions: [PermissionFlagsBits.Administrator],
+  })
+  async triggerDailyJobs(interaction: CommandInteraction): Promise<void> {
+    await interaction.deferReply({ ephemeral: true });
+
+    try {
+      const { runDailyJob, runGodStandingsJob } = await import('@/jobs/notificationJobs');
+      
+      await runDailyJob(interaction.client);
+      await runGodStandingsJob(interaction.client);
+      
+      await interaction.editReply({ content: '✅ Daily jobs triggered successfully.' });
+      
+      await sendAuditLog(interaction.client, {
+        action: '/trigger-daily-jobs',
+        actorId: interaction.user.id,
+        details: ['Manually triggered daily recap and god standings notifications.'],
+      });
+    } catch (err: any) {
+      await interaction.editReply({ content: `❌ Failed to trigger daily jobs: ${err?.message ?? err}` });
+    }
+  }
 }
