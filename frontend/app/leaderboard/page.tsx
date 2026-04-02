@@ -1,7 +1,10 @@
-'use client';
-
+import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import Leaderboard from '@/src/components/Leaderboard/Leaderboard';
+
+export const metadata: Metadata = {
+  title: 'Leaderboard',
+};
 
 export default function LeaderboardPage() {
   return (

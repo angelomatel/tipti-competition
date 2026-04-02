@@ -1,35 +1,23 @@
-'use client';
+import type { Metadata } from 'next';
+import { BUFF_DATA } from '@/src/lib/godData';
+import GodSlugPageClient from './GodSlugPageClient';
 
-import { useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import GodLeaderboard from '@/src/components/Gods/GodLeaderboard';
-import ProfileModal from '@/src/components/Leaderboard/ProfileModal';
-import { useTournament } from '@/src/hooks/useTournament';
-import { isEventStarted } from '@/src/lib/tournament';
+type Props = {
+  params: Promise<{ slug: string }>;
+};
 
-export default function GodSlugPage() {
-  const router = useRouter();
-  const params = useParams();
-  const { data: tournamentData } = useTournament();
-  const started = isEventStarted(tournamentData?.settings);
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
+  const god = BUFF_DATA.find((g) => g.slug === slug);
+  const godName = god ? god.name : slug.charAt(0).toUpperCase() + slug.slice(1);
 
-  const [selectedDiscordId, setSelectedDiscordId] = useState<string | null>(null);
+  return {
+    title: godName,
+  };
+}
 
-  const slug = params.slug as string;
+export default async function GodSlugPage({ params }: Props) {
+  const { slug } = await params;
 
-  return (
-    <main className="relative z-10 max-w-5xl mx-auto px-4 pt-12 pb-8">
-      <GodLeaderboard
-        slug={slug}
-        onBack={() => router.push('/leaderboard/gods')}
-        onSelectPlayer={setSelectedDiscordId}
-      />
-
-      <ProfileModal
-        discordId={selectedDiscordId}
-        onClose={() => setSelectedDiscordId(null)}
-        hideGod={!started}
-      />
-    </main>
-  );
+  return <GodSlugPageClient slug={slug} />;
 }

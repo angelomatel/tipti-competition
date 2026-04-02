@@ -13,8 +13,11 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: 'Space Gods | TFT Tournament',
-  description: 'TFT competition leaderboard — Space Gods set',
+  title: {
+    template: 'Tipti Bootcamp | %s',
+    default: 'Tipti Bootcamp | Space Gods',
+  },
+  description: 'Tipti Bootcamp for Set 17: Space Gods by eulb',
   icons: {
     icon: '/icon.png',
   },
