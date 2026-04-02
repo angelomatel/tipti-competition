@@ -15,6 +15,9 @@ const cormorant = Cormorant_Garamond({
 export const metadata: Metadata = {
   title: 'Space Gods | TFT Tournament',
   description: 'TFT competition leaderboard — Space Gods set',
+  icons: {
+    icon: '/icon.png',
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
