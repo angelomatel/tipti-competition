@@ -17,16 +17,6 @@ export class Leaderboard {
     await interaction.deferReply();
 
     try {
-      const settings = await getTournamentSettings();
-      if (new Date() < new Date(settings.startDate)) {
-        const embed = new EmbedBuilder()
-          .setTitle('Event Not Started')
-          .setDescription('The tournament has not started yet.')
-          .setColor(EMBED_COLORS.DANGER);
-        await interaction.editReply({ embeds: [embed] });
-        return;
-      }
-
       const data = await getLeaderboard();
       const entries: any[] = data.entries ?? [];
 

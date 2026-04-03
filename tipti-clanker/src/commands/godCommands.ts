@@ -21,7 +21,7 @@ export class GodCommands {
     await interaction.deferReply();
 
     try {
-      const settings = await getTournamentSettings();
+      const { settings } = await getTournamentSettings();
       if (new Date() < new Date(settings.startDate)) {
         const embed = new EmbedBuilder()
           .setTitle('Event Not Started')
@@ -75,7 +75,7 @@ export class GodCommands {
     await interaction.deferReply();
 
     try {
-      const settings = await getTournamentSettings();
+      const { settings } = await getTournamentSettings();
       if (new Date() < new Date(settings.startDate)) {
         const embed = new EmbedBuilder()
           .setTitle('Event Not Started')
