@@ -8,11 +8,42 @@ import {
   ComponentType,
 } from 'discord.js';
 import { Discord, Slash, SlashOption } from 'discordx';
-import { registerPlayer, listGods, lookupRiotAccount } from '@/lib/backendClient';
+import { registerPlayer, listGods, lookupRiotAccount, getTournamentSettings, getPlayer } from '@/lib/backendClient';
 import { parseRiotId } from '@/lib/riotId';
 import { formatTierDisplay } from '@/lib/format';
-import { EMBED_COLORS, GOD_BUFF_SUMMARIES, GOD_CHOICES } from '@/lib/constants';
+import { EMBED_COLORS, GOD_CHOICES } from '@/lib/constants';
 import { sendAuditLog } from '@/lib/auditLog';
+
+const GOD_SELECTION_TIMEOUT_MS = 180_000;
+
+function extractBackendErrorMessage(error: unknown): string {
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  const jsonStart = rawMessage.indexOf('{');
+
+  if (jsonStart === -1) {
+    return rawMessage;
+  }
+
+  try {
+    const parsed = JSON.parse(rawMessage.slice(jsonStart)) as { error?: string };
+    return parsed.error ?? rawMessage;
+  } catch {
+    return rawMessage;
+  }
+}
+
+function isAlreadyRegisteredError(error: unknown): boolean {
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  const normalizedMessage = extractBackendErrorMessage(error).toLowerCase();
+
+  return rawMessage.includes('HTTP 409') && normalizedMessage.includes('already registered');
+}
+
+function hasTournamentStarted(settingsResponse: any): boolean {
+  const startDate = settingsResponse?.settings?.startDate ?? settingsResponse?.startDate;
+
+  return !!startDate && new Date() >= new Date(startDate);
+}
 
 @Discord()
 export class Register {
@@ -39,7 +70,21 @@ export class Register {
       return;
     }
 
-    // Validate the Riot account exists
+    try {
+      const existingPlayer = await getPlayer(interaction.user.id);
+      if (existingPlayer?.player) {
+        await interaction.editReply({
+          content: '❌ You are already registered for the tournament. Contact an admin if you need your registration updated.',
+        });
+        return;
+      }
+    } catch (err: any) {
+      const msg = err?.message ?? String(err);
+      if (!msg.includes('HTTP 404')) {
+        throw err;
+      }
+    }
+
     try {
       await lookupRiotAccount(gameName, tagLine);
     } catch {
@@ -47,7 +92,14 @@ export class Register {
       return;
     }
 
-    // Fetch current gods to show availability
+    let eventStarted = false;
+    try {
+      const settings = await getTournamentSettings();
+      eventStarted = hasTournamentStarted(settings);
+    } catch {
+      eventStarted = false;
+    }
+
     let gods: any[] = [];
     try {
       gods = await listGods();
@@ -55,18 +107,22 @@ export class Register {
       gods = GOD_CHOICES.map((g) => ({ ...g, isEliminated: false, playerCount: 0 }));
     }
 
-    // Build god selection dropdown
-    const options = GOD_CHOICES.map((god) => {
-      const godData = gods.find((g: any) => g.slug === god.slug);
-      const eliminated = godData?.isEliminated ?? false;
-      const playerCount = godData?.playerCount ?? 0;
+    const options = GOD_CHOICES
+      .filter((god) => {
+        const godData = gods.find((g: any) => g.slug === god.slug);
+        return !(godData?.isEliminated ?? false);
+      })
+      .map((god) => {
+        const godData = gods.find((g: any) => g.slug === god.slug);
+        const playerCount = godData?.playerCount ?? 0;
+        const description = eventStarted ? `${playerCount} player${playerCount !== 1 ? 's' : ''}` : god.title;
 
-      return new StringSelectMenuOptionBuilder()
-        .setLabel(`${god.name} — ${god.title}`)
-        .setDescription(`${playerCount} player${playerCount !== 1 ? 's' : ''}${eliminated ? ' (ELIMINATED)' : ''}`)
-        .setValue(god.slug)
-        .setDefault(false);
-    });
+        return new StringSelectMenuOptionBuilder()
+          .setLabel(`${god.name} — ${god.title}`)
+          .setDescription(description)
+          .setValue(god.slug)
+          .setDefault(false);
+      });
 
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId('god_select')
@@ -80,7 +136,9 @@ export class Register {
       .setDescription(
         `Account: **${gameName}#${tagLine}**\n\n` +
         '> God buffs activate **after Phase 1** (Day 6+). During Phase 1, all gods play without buffs.\n\n' +
-        GOD_BUFF_SUMMARIES.join('\n'),
+        'You can view each god\'s lore and buffs in <#1487949751587573861> or at\n' +
+        'https://tipti-bootcamp.vercel.app/leaderboard/gods\n\n' +
+        '-# [See the points formula here](https://tipti-bootcamp.vercel.app/rules)',
       )
       .setColor(EMBED_COLORS.PRIMARY);
 
@@ -89,11 +147,10 @@ export class Register {
       components: [row],
     });
 
-    // Wait for selection (60 second timeout)
     try {
       const selection = await reply.awaitMessageComponent({
         componentType: ComponentType.StringSelect,
-        time: 60_000,
+        time: GOD_SELECTION_TIMEOUT_MS,
         filter: (i) => i.user.id === interaction.user.id,
       });
 
@@ -138,18 +195,21 @@ export class Register {
       });
     } catch (err: any) {
       const msg = err?.message ?? String(err);
+
       if (msg.includes('time') || msg.includes('Collector')) {
         await interaction.editReply({
-          content: '❌ God selection timed out. Run `/register` again.',
+          content: `❌ God selection timed out after ${Math.floor(GOD_SELECTION_TIMEOUT_MS / 60_000)} minutes. Run \`/register\` again.`,
           embeds: [],
           components: [],
         });
       } else {
-        const already = msg.includes('already registered') || msg.includes('409');
+        const alreadyRegistered = isAlreadyRegisteredError(err);
+        const backendMessage = extractBackendErrorMessage(err);
+
         await interaction.editReply({
-          content: already
-            ? '❌ Your account is already linked. Contact an admin if you need to change it.'
-            : `❌ Failed to register: ${msg}`,
+          content: alreadyRegistered
+            ? '❌ You are already registered for the tournament. Contact an admin if you need your registration updated.'
+            : `❌ Failed to register: ${backendMessage}`,
           embeds: [],
           components: [],
         });
