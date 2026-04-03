@@ -10,7 +10,7 @@ import {
   ComponentType,
 } from 'discord.js';
 import { Discord, Slash, SlashOption } from 'discordx';
-import { registerPlayer, removePlayer, triggerCron, listGods, lookupRiotAccount } from '@/lib/backendClient';
+import { registerPlayer, removePlayer, triggerCron, listGods, lookupRiotAccount, resetAllPlayerRanks } from '@/lib/backendClient';
 import { parseRiotId } from '@/lib/riotId';
 import { formatTierDisplay } from '@/lib/format';
 import { EMBED_COLORS, GOD_BUFF_SUMMARIES, GOD_CHOICES } from '@/lib/constants';
@@ -222,6 +222,48 @@ export class AdminCommands {
       await interaction.editReply({ content: '✅ Data refresh triggered. Snapshots and match records are being updated for all active players.' });
     } catch (err: any) {
       await interaction.editReply({ content: `❌ Failed to trigger refresh: ${err?.message ?? err}` });
+    }
+  }
+
+  @Slash({
+    name: 'reset-player-ranks',
+    description: 'Reset all players to Unranked 0 LP and clear points/history for a new set (admin only)',
+    defaultMemberPermissions: [PermissionFlagsBits.Administrator],
+  })
+  async resetPlayerRanks(interaction: CommandInteraction): Promise<void> {
+    await interaction.deferReply({ ephemeral: true });
+
+    try {
+      const result = await resetAllPlayerRanks();
+      const content = [
+        `✅ Reset ${result.reset}/${result.processed} players to Unranked 0 LP.`,
+        `Cleared ${result.pointTransactionsCleared} point transactions, ${result.snapshotsCleared} LP snapshots, ${result.matchesCleared} match records, and ${result.dailyScoresCleared} daily score rows.`,
+      ].filter(Boolean).join('\n');
+
+      await interaction.editReply({ content });
+
+      await sendAuditLog(interaction.client, {
+        action: '/reset-player-ranks',
+        actorId: interaction.user.id,
+        details: [
+          `Players processed: ${result.processed}`,
+          `Players reset: ${result.reset}`,
+          `Point transactions cleared: ${result.pointTransactionsCleared}`,
+          `LP snapshots cleared: ${result.snapshotsCleared}`,
+          `Match records cleared: ${result.matchesCleared}`,
+          `Daily scores cleared: ${result.dailyScoresCleared}`,
+        ],
+      });
+    } catch (err: any) {
+      await interaction.editReply({ content: `❌ Failed to reset player ranks: ${err?.message ?? err}` });
+
+      await sendAuditLog(interaction.client, {
+        action: '/reset-player-ranks (failed)',
+        actorId: interaction.user.id,
+        details: [
+          `Reason: ${(err?.message ?? String(err)).slice(0, 250)}`,
+        ],
+      });
     }
   }
 

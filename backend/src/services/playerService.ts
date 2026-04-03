@@ -1,7 +1,11 @@
 import { Player } from '@/db/models/Player';
 import { LpSnapshot } from '@/db/models/LpSnapshot';
+import { MatchRecord } from '@/db/models/MatchRecord';
+import { DailyPlayerScore } from '@/db/models/DailyPlayerScore';
 import { getRiotClient } from '@/services/riotService';
 import { findRankedEntry } from '@/lib/riotUtils';
+import { normalizeLP } from '@/lib/normalizeLP';
+import { PointTransaction } from '@/db/models/PointTransaction';
 import type { PlayerDocument } from '@/types/Player';
 import type { RegisterPlayerRequest } from '@/types/User';
 
@@ -120,4 +124,47 @@ export async function updatePlayerProfile(
   updates: Partial<Pick<PlayerDocument, 'discordAvatarUrl' | 'discordUsername'>>,
 ): Promise<void> {
   await Player.updateOne({ discordId }, { $set: updates });
+}
+
+export interface ResetAllPlayerRanksResult {
+  processed: number;
+  reset: number;
+  snapshotsCleared: number;
+  matchesCleared: number;
+  pointTransactionsCleared: number;
+  dailyScoresCleared: number;
+}
+
+export async function resetAllPlayerRankBaselines(): Promise<ResetAllPlayerRanksResult> {
+  const processed = await Player.countDocuments({});
+
+  const [playerUpdate, snapshotsDelete, matchesDelete, pointTransactionsDelete, dailyScoresDelete] = await Promise.all([
+    Player.updateMany(
+      {},
+      {
+        $set: {
+          currentTier: 'UNRANKED',
+          currentRank: '',
+          currentLP: 0,
+          currentWins: 0,
+          currentLosses: 0,
+          lpBaselineNorm: normalizeLP('UNRANKED', '', 0),
+          lpBaselineOffset: 0,
+        },
+      },
+    ),
+    LpSnapshot.deleteMany({}),
+    MatchRecord.deleteMany({}),
+    PointTransaction.deleteMany({}),
+    DailyPlayerScore.deleteMany({}),
+  ]);
+
+  return {
+    processed,
+    reset: playerUpdate.modifiedCount,
+    snapshotsCleared: snapshotsDelete.deletedCount,
+    matchesCleared: matchesDelete.deletedCount,
+    pointTransactionsCleared: pointTransactionsDelete.deletedCount,
+    dailyScoresCleared: dailyScoresDelete.deletedCount,
+  };
 }

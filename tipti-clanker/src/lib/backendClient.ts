@@ -136,3 +136,7 @@ export function seedGods(): Promise<any> {
 export function wipePlayerData(): Promise<any> {
   return request('POST', '/api/admin/wipe-data');
 }
+
+export function resetAllPlayerRanks(): Promise<any> {
+  return request('POST', '/api/admin/reset-player-ranks');
+}

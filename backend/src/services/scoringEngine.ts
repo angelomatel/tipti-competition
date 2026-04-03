@@ -131,17 +131,22 @@ export async function createLpDeltaTransaction(
   if (!player.godSlug) return;
 
   const currentNorm = normalizeLP(player.currentTier, player.currentRank, player.currentLP);
+  let expectedTotal: number;
 
-  // Tournament baseline: first snapshot on/after startDate
-  const baseline = await LpSnapshot.findOne({
-    puuid: player.puuid,
-    capturedAt: { $gte: settings.startDate },
-  }).sort({ capturedAt: 1 });
+  if (player.lpBaselineNorm !== null && player.lpBaselineNorm !== undefined) {
+    expectedTotal = player.lpBaselineOffset + (currentNorm - player.lpBaselineNorm);
+  } else {
+    // Tournament baseline: first snapshot on/after startDate
+    const baseline = await LpSnapshot.findOne({
+      puuid: player.puuid,
+      capturedAt: { $gte: settings.startDate },
+    }).sort({ capturedAt: 1 });
 
-  if (!baseline) return;
+    if (!baseline) return;
 
-  const baseNorm = normalizeLP(baseline.tier, baseline.rank, baseline.leaguePoints);
-  const expectedTotal = currentNorm - baseNorm;
+    const baseNorm = normalizeLP(baseline.tier, baseline.rank, baseline.leaguePoints);
+    expectedTotal = currentNorm - baseNorm;
+  }
 
   // Sum existing match transactions
   const result = await PointTransaction.aggregate([

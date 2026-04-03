@@ -18,6 +18,8 @@ export interface IPlayer {
   discordUsername: string;
   godSlug: string | null;
   isEliminatedFromGod: boolean;
+  lpBaselineNorm: number | null;
+  lpBaselineOffset: number;
 }
 
 export interface ILpSnapshot {

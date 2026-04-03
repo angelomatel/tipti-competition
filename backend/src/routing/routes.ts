@@ -20,7 +20,7 @@ import {
   getGodStandings,
 } from '@/controllers/godController';
 import { getPlayerPoints, getPlayerDailyPoints } from '@/controllers/pointsController';
-import { wipePlayerData } from '@/controllers/adminController';
+import { wipePlayerData, resetAllPlayerRanks } from '@/controllers/adminController';
 
 export function configureRoutes(app: Express): void {
   app.get('/api/health', getHealth);
@@ -56,6 +56,7 @@ export function configureRoutes(app: Express): void {
 
   // Admin
   app.post('/api/admin/wipe-data', wipePlayerData);
+  app.post('/api/admin/reset-player-ranks', resetAllPlayerRanks);
 
   // Notifications
   app.get('/api/notifications/feed', getNotificationFeed);

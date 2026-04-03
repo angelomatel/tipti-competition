@@ -5,6 +5,7 @@ import { MatchRecord } from '@/db/models/MatchRecord';
 import { PointTransaction } from '@/db/models/PointTransaction';
 import { DailyPlayerScore } from '@/db/models/DailyPlayerScore';
 import { logger } from '@/lib/logger';
+import { resetAllPlayerRankBaselines } from '@/services/playerService';
 
 export async function wipePlayerData(req: Request, res: Response): Promise<void> {
   const results = await Promise.all([
@@ -25,4 +26,18 @@ export async function wipePlayerData(req: Request, res: Response): Promise<void>
 
   logger.info(summary, 'Wiped all player data');
   res.json({ wiped: true, ...summary });
+}
+
+export async function resetAllPlayerRanks(_req: Request, res: Response): Promise<void> {
+  const result = await resetAllPlayerRankBaselines();
+
+  logger.info(
+    result,
+    'Reset all player ranks, LP, points, and derived history for a new set',
+  );
+
+  res.json({
+    ok: true,
+    ...result,
+  });
 }

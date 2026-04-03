@@ -19,6 +19,8 @@ const PlayerSchema = new Schema<PlayerDocument>({
   discordUsername:     { type: String, default: '' },
   godSlug:             { type: String, default: null },
   isEliminatedFromGod: { type: Boolean, default: false },
+  lpBaselineNorm:      { type: Number, default: null },
+  lpBaselineOffset:    { type: Number, default: 0 },
 });
 
 export const Player = mongoose.model<PlayerDocument>('Player', PlayerSchema, 'players');
