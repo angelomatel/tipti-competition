@@ -4,6 +4,8 @@ export const MONGODB_URI = process.env.MONGODB_URI ?? 'mongodb://localhost:27017
 export const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME ?? 'tft-tournament';
 export const TOURNAMENT_START_DATE = new Date(process.env.TOURNAMENT_START_DATE ?? '2025-01-01T00:00:00Z');
 export const TOURNAMENT_END_DATE = new Date(process.env.TOURNAMENT_END_DATE ?? '2025-01-14T23:59:59Z');
+export const ADMIN_PASSWORD_HEADER = 'x-admin-password';
+export const ADMIN_PASSWORD = process.env.ADMIN_API_PASSWORD ?? '';
 
 /** Maximum number of snapshots/matches returned in player queries. */
 export const QUERY_LIMITS = {

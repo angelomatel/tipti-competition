@@ -21,6 +21,7 @@ import {
 } from '@/controllers/godController';
 import { getPlayerPoints, getPlayerDailyPoints } from '@/controllers/pointsController';
 import { wipePlayerData, resetAllPlayerRanks } from '@/controllers/adminController';
+import { requireAdminPassword } from '@/middleware/requireAdminPassword';
 
 export function configureRoutes(app: Express): void {
   app.get('/api/health', getHealth);
@@ -28,39 +29,39 @@ export function configureRoutes(app: Express): void {
   app.get('/api/leaderboard', getLeaderboard);
 
   app.get('/api/players', listPlayers);
-  app.post('/api/players', createPlayer);
-  app.delete('/api/players/:discordId', deletePlayer);
-  app.patch('/api/players/:discordId', patchPlayer);
+  app.post('/api/players', requireAdminPassword, createPlayer);
+  app.delete('/api/players/:discordId', requireAdminPassword, deletePlayer);
+  app.patch('/api/players/:discordId', requireAdminPassword, patchPlayer);
   app.get('/api/players/:discordId', getPlayer);
 
   app.get('/api/snapshots/:puuid', getSnapshots);
 
   app.get('/api/tournament/settings', getTournament);
-  app.put('/api/tournament/settings', updateTournament);
+  app.put('/api/tournament/settings', requireAdminPassword, updateTournament);
 
   app.get('/api/riot/account/:gameName/:tagLine', lookupAccount);
 
-  app.post('/api/cron/run', triggerCron);
-  app.post('/api/cron/run-daily', triggerDailyCron);
+  app.post('/api/cron/run', requireAdminPassword, triggerCron);
+  app.post('/api/cron/run-daily', requireAdminPassword, triggerDailyCron);
 
   // God system
   app.get('/api/gods', listGods);
   app.get('/api/gods/standings', getGodStandings);
-  app.post('/api/gods/seed', seedGods);
+  app.post('/api/gods/seed', requireAdminPassword, seedGods);
   app.get('/api/gods/:slug', getGod);
-  app.post('/api/gods/:slug/assign', assignGod);
+  app.post('/api/gods/:slug/assign', requireAdminPassword, assignGod);
 
   // Points
   app.get('/api/points/:discordId', getPlayerPoints);
   app.get('/api/points/:discordId/daily', getPlayerDailyPoints);
 
   // Admin
-  app.post('/api/admin/wipe-data', wipePlayerData);
-  app.post('/api/admin/reset-player-ranks', resetAllPlayerRanks);
+  app.post('/api/admin/wipe-data', requireAdminPassword, wipePlayerData);
+  app.post('/api/admin/reset-player-ranks', requireAdminPassword, resetAllPlayerRanks);
 
   // Notifications
   app.get('/api/notifications/feed', getNotificationFeed);
-  app.post('/api/notifications/feed/ack', ackNotificationFeed);
+  app.post('/api/notifications/feed/ack', requireAdminPassword, ackNotificationFeed);
   app.get('/api/notifications/daily-summary', getNotificationDailySummary);
   app.get('/api/notifications/daily-graph', getNotificationDailyGraph);
 }

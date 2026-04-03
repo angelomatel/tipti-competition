@@ -24,6 +24,9 @@ export const LEADERBOARD_TOP_N = 10;
 /** Timeout in milliseconds for outbound HTTP requests to the backend API. */
 export const BACKEND_REQUEST_TIMEOUT_MS = 10_000;
 
+/** Shared header name used for protected backend mutations. */
+export const BACKEND_ADMIN_PASSWORD_HEADER = 'x-admin-password';
+
 /** God definitions for Discord interactions. */
 export const GOD_CHOICES = [
   { slug: 'varus',        name: 'Varus',        title: 'Love' },

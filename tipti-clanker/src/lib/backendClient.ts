@@ -1,9 +1,20 @@
 import http from 'http';
 import https from 'https';
 import { URL } from 'url';
-import { BACKEND_REQUEST_TIMEOUT_MS } from '@/lib/constants';
+import { BACKEND_ADMIN_PASSWORD_HEADER, BACKEND_REQUEST_TIMEOUT_MS } from '@/lib/constants';
 
 const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:5000';
+const BACKEND_ADMIN_PASSWORD = process.env.BACKEND_ADMIN_PASSWORD ?? '';
+
+function getAuthHeaders(method: string): Record<string, string> {
+  if (method === 'GET' || !BACKEND_ADMIN_PASSWORD) {
+    return {};
+  }
+
+  return {
+    [BACKEND_ADMIN_PASSWORD_HEADER]: BACKEND_ADMIN_PASSWORD,
+  };
+}
 
 function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -17,6 +28,7 @@ function request<T>(method: string, path: string, body?: unknown): Promise<T> {
       headers: {
         'Content-Type': 'application/json',
         ...(data ? { 'Content-Length': Buffer.byteLength(data) } : {}),
+        ...getAuthHeaders(method),
       },
       timeout: BACKEND_REQUEST_TIMEOUT_MS,
     };
