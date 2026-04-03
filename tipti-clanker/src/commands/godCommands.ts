@@ -2,18 +2,14 @@ import {
   ApplicationCommandOptionType,
   type CommandInteraction,
   EmbedBuilder,
-  PermissionFlagsBits,
-  type GuildMember,
 } from 'discord.js';
 import { Discord, Slash, SlashOption } from 'discordx';
 import {
   getGodStandings,
   getGod,
   getTournamentSettings,
-  assignPlayerToGod,
 } from '@/lib/backendClient';
 import { EMBED_COLORS, GOD_CHOICES } from '@/lib/constants';
-import { sendAuditLog } from '@/lib/auditLog';
 
 @Discord()
 export class GodCommands {
@@ -46,7 +42,7 @@ export class GodCommands {
       const lines = standings.map((god: any, i: number) => {
         const status = god.isEliminated ? '~~' : '';
         const prefix = god.isEliminated ? '💀' : `#${i + 1}`;
-        return `${prefix} ${status}**${god.name}** — ${god.title}${status}\n   Score: **${Math.round(god.score)}** | Players: ${god.playerCount}`;
+        return `${prefix} ${status}**${god.name}** - ${god.title}${status}\n   Score: **${Math.round(god.score)}** | Players: ${god.playerCount}`;
       });
 
       const embed = new EmbedBuilder()
@@ -58,7 +54,7 @@ export class GodCommands {
 
       await interaction.editReply({ embeds: [embed] });
     } catch (err: any) {
-      await interaction.editReply({ content: `❌ Failed to fetch standings: ${err?.message ?? err}` });
+      await interaction.editReply({ content: `Failed to fetch standings: ${err?.message ?? err}` });
     }
   }
 
@@ -98,17 +94,17 @@ export class GodCommands {
       const players: any[] = data.players ?? [];
 
       if (!god) {
-        await interaction.editReply({ content: `❌ God "${godName}" not found.` });
+        await interaction.editReply({ content: `God "${godName}" not found.` });
         return;
       }
 
       const lines = players.slice(0, 10).map((p: any, i: number) => {
         const eliminated = p.isEliminatedFromGod ? ' *(eliminated)*' : '';
-        return `**#${i + 1}** ${p.gameName}#${p.tagLine} — **${p.scorePoints}** pts${eliminated}`;
+        return `**#${i + 1}** ${p.gameName}#${p.tagLine} - **${p.scorePoints}** pts${eliminated}`;
       });
 
       const embed = new EmbedBuilder()
-        .setTitle(`${god.name} — ${god.title}`)
+        .setTitle(`${god.name} - ${god.title}`)
         .setDescription(lines.length > 0 ? lines.join('\n') : 'No players in this god.')
         .setColor(god.isEliminated ? EMBED_COLORS.DANGER : EMBED_COLORS.PRIMARY)
         .setTimestamp();
@@ -119,64 +115,7 @@ export class GodCommands {
 
       await interaction.editReply({ embeds: [embed] });
     } catch (err: any) {
-      await interaction.editReply({ content: `❌ Failed to fetch god: ${err?.message ?? err}` });
-    }
-  }
-
-  @Slash({
-    name: 'assign-god',
-    description: 'Assign or reassign a player to a god (admin only)',
-    defaultMemberPermissions: [PermissionFlagsBits.Administrator],
-  })
-  async assignGod(
-    @SlashOption({
-      name: 'user',
-      description: 'The Discord user to assign',
-      required: true,
-      type: ApplicationCommandOptionType.User,
-    })
-    member: GuildMember,
-    @SlashOption({
-      name: 'god',
-      description: 'The god to assign them to',
-      required: true,
-      type: ApplicationCommandOptionType.String,
-    })
-    godName: string,
-    interaction: CommandInteraction,
-  ): Promise<void> {
-    await interaction.deferReply({ ephemeral: true });
-
-    const slug = godName.toLowerCase().replace(/\s+/g, '_');
-    const godChoice = GOD_CHOICES.find((g) => g.slug === slug || g.name.toLowerCase() === godName.toLowerCase());
-    const targetSlug = godChoice?.slug ?? slug;
-
-    try {
-      await assignPlayerToGod(targetSlug, member.id);
-      await interaction.editReply({
-        content: `✅ <@${member.id}> has been assigned to **${godChoice?.name ?? godName}**.`,
-      });
-
-      await sendAuditLog(interaction.client, {
-        action: '/assign-god',
-        actorId: interaction.user.id,
-        details: [
-          `Target Discord: <@${member.id}> (${member.user.username})`,
-          `God: ${godChoice?.name ?? godName} (${targetSlug})`,
-        ],
-      });
-    } catch (err: any) {
-      await interaction.editReply({ content: `❌ Failed: ${err?.message ?? err}` });
-
-      await sendAuditLog(interaction.client, {
-        action: '/assign-god (failed)',
-        actorId: interaction.user.id,
-        details: [
-          `Target Discord: <@${member.id}>`,
-          `God: ${godChoice?.name ?? godName} (${targetSlug})`,
-          `Reason: ${(err?.message ?? String(err)).slice(0, 250)}`,
-        ],
-      });
+      await interaction.editReply({ content: `Failed to fetch god: ${err?.message ?? err}` });
     }
   }
 }
