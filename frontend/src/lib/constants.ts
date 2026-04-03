@@ -1,5 +1,7 @@
 export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000';
 
+export const TIPTI_DISCORD_URL = 'https://discord.gg/yBTrSZt8NK';
+
 /** SWR polling interval for the leaderboard (ms). */
 export const LEADERBOARD_REFRESH_INTERVAL = 30_000;
 
