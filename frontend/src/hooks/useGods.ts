@@ -6,9 +6,13 @@ import { LEADERBOARD_REFRESH_INTERVAL } from '@/src/lib/constants';
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-export function useGods() {
-  return useSWR<GodStandingsResponse>('/api/gods/standings', fetcher, {
-    refreshInterval: LEADERBOARD_REFRESH_INTERVAL,
-    revalidateOnFocus: false,
-  });
+export function useGods(shouldFetch = true) {
+  return useSWR<GodStandingsResponse>(
+    shouldFetch ? '/api/gods/standings' : null,
+    fetcher,
+    {
+      refreshInterval: LEADERBOARD_REFRESH_INTERVAL,
+      revalidateOnFocus: false,
+    },
+  );
 }

@@ -97,7 +97,7 @@ export async function registerPlayer(data: RegisterPlayerRequest): Promise<Playe
       rank:          ranked.rank,
       leaguePoints:  ranked.leaguePoints,
       wins:          ranked.wins,
-      losses:        ranked.losses,
+      losses:        ranked.losses
     });
   }
 

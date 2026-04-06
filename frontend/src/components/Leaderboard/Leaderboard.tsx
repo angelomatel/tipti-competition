@@ -12,12 +12,19 @@ import Podium from '@/src/components/Leaderboard/Podium';
 const PLAYERS_PER_PAGE = 10;
 
 const Leaderboard = () => {
-  const { data: tournamentData } = useTournament();
+  const { data: tournamentData, isLoading: isTournamentLoading } = useTournament();
   const started = isEventStarted(tournamentData?.settings);
 
   const [selectedDiscordId, setSelectedDiscordId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const { data, error, isLoading } = useLeaderboard({ page: currentPage, pageSize: PLAYERS_PER_PAGE });
+
+  const { data, error, isLoading: isLeaderboardLoading } = useLeaderboard({ 
+    page: currentPage, 
+    pageSize: PLAYERS_PER_PAGE,
+    shouldFetch: started
+  });
+
+  const isLoading = isTournamentLoading || (started && isLeaderboardLoading);
 
   const entries = data?.entries ?? [];
   const podiumEntries = data?.podiumEntries ?? [];
@@ -32,13 +39,19 @@ const Leaderboard = () => {
     <>
       {isLoading && <LeaderboardSkeleton />}
 
-      {!isLoading && (error || !data) && (
+      {!started && !isLoading && (
+        <p className="text-center py-12 text-text-muted">
+          Players will be revealed when the event starts.
+        </p>
+      )}
+
+      {started && !isLoading && (error || !data) && (
         <p className="text-center py-12 text-text-muted">
           Could not load leaderboard. Make sure the backend is running.
         </p>
       )}
 
-      {!isLoading && data && totalEntries === 0 && (
+      {started && !isLoading && data && totalEntries === 0 && (
         <p className="text-center py-12 text-text-muted">
           No players registered yet. Use <code className="text-accent-cyan">/register</code> in Discord to join.
         </p>

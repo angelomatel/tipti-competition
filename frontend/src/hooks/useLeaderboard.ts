@@ -9,16 +9,21 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 interface UseLeaderboardOptions {
   page?: number;
   pageSize?: number;
+  shouldFetch?: boolean;
 }
 
-export function useLeaderboard({ page = 1, pageSize = 10 }: UseLeaderboardOptions = {}) {
+export function useLeaderboard({ page = 1, pageSize = 10, shouldFetch = true }: UseLeaderboardOptions = {}) {
   const params = new URLSearchParams({
     page: String(page),
     pageSize: String(pageSize),
   });
 
-  return useSWR<LeaderboardResponse>(`/api/leaderboard?${params.toString()}`, fetcher, {
-    refreshInterval: LEADERBOARD_REFRESH_INTERVAL,
-    revalidateOnFocus: false,
-  });
+  return useSWR<LeaderboardResponse>(
+    shouldFetch ? `/api/leaderboard?${params.toString()}` : null,
+    fetcher,
+    {
+      refreshInterval: LEADERBOARD_REFRESH_INTERVAL,
+      revalidateOnFocus: false,
+    },
+  );
 }

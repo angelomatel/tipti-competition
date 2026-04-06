@@ -13,9 +13,11 @@ interface GodStandingsProps {
 }
 
 const GodStandings: React.FC<GodStandingsProps> = ({ onSelectGod }) => {
-  const { data, error, isLoading } = useGods();
-  const { data: tournamentData } = useTournament();
+  const { data: tournamentData, isLoading: isTournamentLoading } = useTournament();
   const started = isEventStarted(tournamentData?.settings);
+  const { data, error, isLoading: isGodsLoading } = useGods(started);
+
+  const isLoading = isTournamentLoading || (started && isGodsLoading);
   const fallbackStandings: GodInfo[] = BUFF_DATA.map((god) => ({
     ...god,
     score: 0,

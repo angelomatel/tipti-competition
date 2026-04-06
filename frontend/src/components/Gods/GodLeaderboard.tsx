@@ -18,9 +18,11 @@ interface GodLeaderboardProps {
 }
 
 const GodLeaderboard: React.FC<GodLeaderboardProps> = ({ slug, onBack, onSelectPlayer }) => {
-  const { data, error, isLoading } = useGod(slug);
-  const { data: tournamentData } = useTournament();
+  const { data: tournamentData, isLoading: isTournamentLoading } = useTournament();
   const started = isEventStarted(tournamentData?.settings);
+  const { data, error, isLoading: isGodLoading } = useGod(started ? slug : null);
+
+  const isLoading = isTournamentLoading || (started && isGodLoading);
 
   const staticGod = BUFF_DATA.find((g) => g.slug === slug);
   const fallbackGod = {
@@ -153,12 +155,18 @@ const GodLeaderboard: React.FC<GodLeaderboardProps> = ({ slug, onBack, onSelectP
       </div>
 
       {/* Player list */}
-      {!hasLiveData && (
-        <p className="text-center text-xs text-text-muted">
+      {!started && (
+        <p className="text-center py-12 text-text-muted">
+          Players will be revealed when the event starts.
+        </p>
+      )}
+
+      {started && !hasLiveData && !isLoading && (
+        <p className="text-center text-xs text-text-muted pb-8">
           Live player list is currently unavailable.
         </p>
       )}
-      {hasLiveData && started ? (
+      {hasLiveData && started && (
         <div className="flex flex-col gap-3">
           <h3 className="text-lg font-bold text-text-primary">
             Players ({players.length})
@@ -214,11 +222,7 @@ const GodLeaderboard: React.FC<GodLeaderboardProps> = ({ slug, onBack, onSelectP
             })
           )}
         </div>
-      ) : hasLiveData ? (
-        <p className="text-center py-8 text-text-muted">
-          Players will be revealed when the event starts.
-        </p>
-      ) : null}
+      )}
     </div>
   );
 };
