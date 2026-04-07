@@ -153,29 +153,41 @@ describe('computeLeaderboard pagination', () => {
     } as any));
   });
 
-  it('returns podium entries on page 1 and paginates remaining players', async () => {
-    const result = await computeLeaderboard({ page: 1, pageSize: 1 });
+  it('returns podium entries on page 1 as part of the pageSize', async () => {
+    // Total players: 5. PageSize: 5.
+    const result = await computeLeaderboard({ page: 1, pageSize: 5 });
 
     expect(result.page).toBe(1);
-    expect(result.pageSize).toBe(1);
+    expect(result.pageSize).toBe(5);
     expect(result.totalEntries).toBe(5);
-    expect(result.totalPages).toBe(2);
+    expect(result.totalPages).toBe(1);
 
     expect(result.podiumEntries.map((p) => p.discordId)).toEqual(['user1', 'user2', 'user3']);
-    expect(result.entries).toHaveLength(1);
+    expect(result.entries).toHaveLength(2); // Remaining 2 of 5
     expect(result.entries[0].discordId).toBe('user4');
-    expect(result.entries[0].rank).toBe(4);
+    expect(result.entries[1].discordId).toBe('user5');
   });
 
-  it('returns no podium entries on page > 1 and keeps paginated continuation', async () => {
-    const result = await computeLeaderboard({ page: 2, pageSize: 1 });
+  it('disables podium if pageSize < 3', async () => {
+    const result = await computeLeaderboard({ page: 1, pageSize: 2 });
+
+    expect(result.podiumEntries).toEqual([]);
+    expect(result.entries).toHaveLength(2);
+    expect(result.entries[0].discordId).toBe('user1');
+  });
+
+  it('returns continuation on page > 1 correctly', async () => {
+    // Total players: 5. PageSize: 2.
+    // Page 1: user1, user2 (podium disabled)
+    // Page 2: user3, user4
+    // Page 3: user5
+    const result = await computeLeaderboard({ page: 2, pageSize: 2 });
 
     expect(result.page).toBe(2);
-    expect(result.totalPages).toBe(2);
+    expect(result.totalPages).toBe(3);
     expect(result.podiumEntries).toEqual([]);
-
-    expect(result.entries).toHaveLength(1);
-    expect(result.entries[0].discordId).toBe('user5');
-    expect(result.entries[0].rank).toBe(5);
+    expect(result.entries).toHaveLength(2);
+    expect(result.entries[0].discordId).toBe('user3');
+    expect(result.entries[1].discordId).toBe('user4');
   });
 });

@@ -99,16 +99,17 @@ export async function computeLeaderboard(options: ComputeLeaderboardOptions = {}
   // Strip internal field before returning
   const cleaned: LeaderboardEntry[] = entries.map(({ _tournamentLpGain, ...entry }) => entry);
 
-  const hasStarted = new Date() >= settings.startDate;
-  const podiumEligible = hasStarted && cleaned.length >= 3;
-  const podiumEntries = podiumEligible && requestedPage === 1 ? cleaned.slice(0, 3) : [];
-  const listEntries = podiumEligible ? cleaned.slice(3) : cleaned;
-
   const totalEntries = cleaned.length;
-  const totalPages = Math.max(1, Math.ceil(listEntries.length / pageSize));
+  const hasStarted = new Date() >= settings.startDate;
+  const podiumEligible = hasStarted && totalEntries >= 3 && pageSize >= 3;
+
+  const totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
   const page = Math.min(Math.max(requestedPage, 1), totalPages);
   const startIdx = (page - 1) * pageSize;
-  const pageEntries = listEntries.slice(startIdx, startIdx + pageSize);
+  const pageContent = cleaned.slice(startIdx, startIdx + pageSize);
+
+  const podiumEntries = (page === 1 && podiumEligible) ? pageContent.slice(0, 3) : [];
+  const paginatedEntries = (page === 1 && podiumEligible) ? pageContent.slice(3) : pageContent;
 
   return {
     page,
@@ -116,7 +117,7 @@ export async function computeLeaderboard(options: ComputeLeaderboardOptions = {}
     totalEntries,
     totalPages,
     podiumEntries,
-    entries: pageEntries,
+    entries: paginatedEntries,
     updatedAt: new Date().toISOString(),
   };
 }
