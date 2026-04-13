@@ -21,10 +21,10 @@ const Leaderboard = () => {
   const { data, error, isLoading: isLeaderboardLoading } = useLeaderboard({ 
     page: currentPage, 
     pageSize: PLAYERS_PER_PAGE,
-    shouldFetch: started
+    shouldFetch: true
   });
 
-  const isLoading = isTournamentLoading || (started && isLeaderboardLoading);
+  const isLoading = isTournamentLoading || isLeaderboardLoading;
 
   const entries = data?.entries ?? [];
   const podiumEntries = data?.podiumEntries ?? [];
@@ -39,19 +39,13 @@ const Leaderboard = () => {
     <>
       {isLoading && <LeaderboardSkeleton />}
 
-      {!started && !isLoading && (
-        <p className="text-center py-12 text-text-muted">
-          Players will be revealed when the event starts.
-        </p>
-      )}
-
-      {started && !isLoading && (error || !data) && (
+      {!isLoading && (error || !data) && (
         <p className="text-center py-12 text-text-muted">
           Could not load leaderboard. Make sure the backend is running.
         </p>
       )}
 
-      {started && !isLoading && data && totalEntries === 0 && (
+      {!isLoading && data && totalEntries === 0 && (
         <p className="text-center py-12 text-text-muted">
           No players registered yet. Use <code className="text-accent-cyan">/register</code> in Discord to join.
         </p>
