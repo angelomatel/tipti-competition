@@ -54,7 +54,7 @@ import { getTournamentSettings } from '@/services/tournamentService';
 
 const mockMatchFind = vi.mocked(MatchRecord.find);
 const mockMatchUpdateOne = vi.mocked(MatchRecord.updateOne);
-const mockPlayerFind = vi.mocked(Player.find);
+const mockPlayerFind = vi.mocked(Player.find) as any;
 const mockPointAggregate = vi.mocked(PointTransaction.aggregate);
 const mockPointCreate = vi.mocked(PointTransaction.create);
 const mockGetTournamentSettings = vi.mocked(getTournamentSettings);
@@ -85,7 +85,7 @@ describe('processNewMatchBuffs', () => {
     vi.clearAllMocks();
     mockGetTournamentSettings.mockResolvedValue(makeSettings());
     mockPointAggregate.mockResolvedValue([{ _id: null, total: 0 }] as any);
-    mockPlayerFind.mockImplementation(async (query: any) => {
+    (mockPlayerFind as any).mockImplementation(async (query: any) => {
       if (query?.puuid) return [player] as any;
       if (query?.godSlug) return [player] as any;
       return [] as any;
