@@ -16,6 +16,7 @@ import { EMBED_COLORS, GOD_BUFF_SUMMARIES, GOD_CHOICES } from '@/lib/constants';
 import { formatTierDisplay } from '@/lib/format';
 import { parseRiotId } from '@/lib/riotId';
 import { ADMIN_GUILDS } from './shared';
+import { logger } from '@/lib/logger';
 
 @Discord()
 @Guild(...ADMIN_GUILDS)
@@ -55,6 +56,14 @@ export class AdminAddPlayerCommand {
 
     try {
       await lookupRiotAccount(gameName, tagLine);
+      logger.info(
+        {
+          requesterId: interaction.user.id,
+          targetDiscordId: member.id,
+          riotId: `${gameName}#${tagLine}`,
+        },
+        '[admin add-player] Fetched Riot account before registration',
+      );
     } catch {
       await interaction.editReply({ content: 'Could not find that Riot account.' });
       return;
@@ -120,6 +129,15 @@ export class AdminAddPlayerCommand {
 
       const player = result.player;
       const tierDisplay = formatTierDisplay(player.currentTier, player.currentRank, player.currentLP);
+      logger.info(
+        {
+          requesterId: interaction.user.id,
+          targetDiscordId: member.id,
+          riotId: player.riotId ?? `${gameName}#${tagLine}`,
+          godSlug,
+        },
+        '[admin add-player] Registered player',
+      );
 
       const confirmEmbed = new EmbedBuilder()
         .setTitle(`Registered: ${player.gameName}#${player.tagLine}`)

@@ -9,6 +9,7 @@ import { parseRiotId } from "@/lib/riotId";
 import { formatTierDisplay } from "@/lib/format";
 import { EMBED_COLORS, RANK_EMOJIS } from "@/lib/constants";
 import { Tier } from "@/types/Rank";
+import { logger } from "@/lib/logger";
 
 @Discord()
 export class GetUserByAccount {
@@ -40,6 +41,13 @@ export class GetUserByAccount {
 
     try {
       const info = await lookupRiotAccount(gameName, tagLine);
+      logger.info(
+        {
+          requesterId: interaction.user.id,
+          riotId: `${info.gameName ?? gameName}#${info.tagLine ?? tagLine}`,
+        },
+        "[get-user-by-account] Fetched Riot account",
+      );
 
       const usernameDisplay = `${info.gameName}#${info.tagLine}`;
       const tierDisplay = formatTierDisplay(info.tier, info.rank);

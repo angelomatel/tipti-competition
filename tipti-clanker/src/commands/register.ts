@@ -13,6 +13,7 @@ import { parseRiotId } from '@/lib/riotId';
 import { formatTierDisplay } from '@/lib/format';
 import { EMBED_COLORS, GOD_CHOICES } from '@/lib/constants';
 import { sendAuditLog } from '@/lib/auditLog';
+import { logger } from '@/lib/logger';
 
 const GOD_SELECTION_TIMEOUT_MS = 180_000;
 
@@ -87,6 +88,14 @@ export class Register {
 
     try {
       await lookupRiotAccount(gameName, tagLine);
+      logger.info(
+        {
+          requesterId: interaction.user.id,
+          discordId: interaction.user.id,
+          riotId: `${gameName}#${tagLine}`,
+        },
+        '[register] Fetched Riot account before registration',
+      );
     } catch {
       await interaction.editReply({ content: '❌ Could not find that Riot account. Double-check the username and tag.' });
       return;
@@ -171,6 +180,15 @@ export class Register {
 
       const player = result.player;
       const tierDisplay = formatTierDisplay(player.currentTier, player.currentRank, player.currentLP);
+      logger.info(
+        {
+          requesterId: interaction.user.id,
+          discordId: interaction.user.id,
+          riotId: player.riotId ?? `${gameName}#${tagLine}`,
+          godSlug,
+        },
+        '[register] Registered player',
+      );
 
       const confirmEmbed = new EmbedBuilder()
         .setTitle(`✅ Registered: ${player.gameName}#${player.tagLine}`)

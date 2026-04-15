@@ -9,6 +9,7 @@ import { getPlayer, getLeaderboard, getTournamentSettings } from '@/lib/backendC
 import { formatTierDisplay, formatLpGain } from '@/lib/format';
 import { EMBED_COLORS, RANK_EMOJIS, GOD_COLORS } from '@/lib/constants';
 import { Tier } from '@/types/Rank';
+import { logger } from '@/lib/logger';
 
 @Discord()
 export class Profile {
@@ -42,6 +43,15 @@ export class Profile {
         await interaction.editReply({ content: '❌ Player not found. Use `/register` to join first.' });
         return;
       }
+
+      logger.info(
+        {
+          requesterId: interaction.user.id,
+          targetDiscordId: targetId,
+          riotId: player.riotId ?? `${player.gameName}#${player.tagLine}`,
+        },
+        '[profile] Fetched player profile',
+      );
 
       const lbEntries: any[] = leaderboardData.entries ?? [];
       const lbPodium: any[] = leaderboardData.podiumEntries ?? [];
