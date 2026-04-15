@@ -129,6 +129,13 @@ async function getCurrentStreak(puuid: string, beforeDate: Date): Promise<{ coun
   return { count, isWin };
 }
 
+/** Buffs only start once phase 2 begins. Matches before that are never eligible. */
+function getBuffActivationStart(settings: Awaited<ReturnType<typeof getTournamentSettings>>): Date | null {
+  const phase2 = settings.phases.find((p) => p.phase === 2);
+  if (!phase2) return null;
+  return getDayBoundsUTC8(phase2.startDay).dayStart;
+}
+
 /** Compute today's LP gain for a player from snapshots. */
 async function getPlayerDailyLpGain(puuid: string, dayStart: Date, dayEnd: Date): Promise<number> {
   const firstSnapshot = await LpSnapshot.findOne({
@@ -297,6 +304,7 @@ export async function processNewMatchBuffs(): Promise<void> {
   const today = getTodayUTC8();
   const phase = settings.phases.find((p) => today >= p.startDay && today <= p.endDay);
   const phaseNum = phase?.phase ?? settings.currentPhase;
+  const buffActivationStart = getBuffActivationStart(settings);
 
   // Track running daily buff totals per player (to enforce cap across this batch)
   const dailyBuffTotals = new Map<string, number>(); // "playerId:day" → total
@@ -305,6 +313,15 @@ export async function processNewMatchBuffs(): Promise<void> {
     const player = playerByPuuid.get(match.puuid);
     if (!player) {
       // Player not active or no god — mark as processed and skip
+      await MatchRecord.updateOne({ _id: match._id }, { buffProcessed: true });
+      continue;
+    }
+
+    if (buffActivationStart && match.playedAt < buffActivationStart) {
+      logger.debug(
+        { matchId: match.matchId, playedAt: match.playedAt.toISOString(), buffActivationStart: buffActivationStart.toISOString() },
+        '[match-buff] Match occurred before buff activation; marking processed without buffs',
+      );
       await MatchRecord.updateOne({ _id: match._id }, { buffProcessed: true });
       continue;
     }
