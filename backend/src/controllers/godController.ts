@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import * as godService from '@/services/godService';
-import { computePlayerScore } from '@/services/scoringEngine';
+import { computePlayerScoreTotals } from '@/services/scoringEngine';
 import { GOD_SLUGS } from '@/constants';
 
 export async function listGods(req: Request, res: Response): Promise<void> {
@@ -17,8 +17,8 @@ export async function getGod(req: Request, res: Response): Promise<void> {
   }
 
   const players = await godService.getPlayersForGod(slug);
-  const playerScores = await Promise.all(
-    players.map(async (p) => ({
+  const scoreTotals = await computePlayerScoreTotals(players.map((p) => p.discordId));
+  const playerScores = players.map((p) => ({
       discordId: p.discordId,
       gameName: p.gameName,
       tagLine: p.tagLine,
@@ -26,12 +26,11 @@ export async function getGod(req: Request, res: Response): Promise<void> {
       currentTier: p.currentTier,
       currentRank: p.currentRank,
       currentLP: p.currentLP,
-      scorePoints: await computePlayerScore(p.discordId),
+      scorePoints: scoreTotals.get(p.discordId) ?? 0,
       discordAvatarUrl: p.discordAvatarUrl,
       discordUsername: p.discordUsername,
       isEliminatedFromGod: p.isEliminatedFromGod,
-    }))
-  );
+    }));
   playerScores.sort((a, b) => b.scorePoints - a.scorePoints);
 
   res.json({

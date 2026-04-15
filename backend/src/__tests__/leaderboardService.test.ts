@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/db/models/LpSnapshot', () => ({
   LpSnapshot: {
-    findOne: vi.fn(),
+    aggregate: vi.fn(),
   },
 }));
 
@@ -21,23 +21,23 @@ vi.mock('@/services/playerService', () => ({
 }));
 
 vi.mock('@/services/scoringEngine', () => ({
-  computePlayerScore: vi.fn(),
-  computePlayerDailyPointGain: vi.fn(),
+  computePlayerScoreTotals: vi.fn(),
+  computePlayerDailyPointGainTotals: vi.fn(),
 }));
 
 import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { God } from '@/db/models/God';
-import { computeLeaderboard } from '@/services/leaderboardService';
+import { clearLeaderboardCache, computeLeaderboard } from '@/services/leaderboardService';
 import { getTournamentSettings } from '@/services/tournamentService';
 import { listActivePlayers } from '@/services/playerService';
-import { computePlayerScore, computePlayerDailyPointGain } from '@/services/scoringEngine';
+import { computePlayerDailyPointGainTotals, computePlayerScoreTotals } from '@/services/scoringEngine';
 
-const mockFindSnapshot = vi.mocked(LpSnapshot.findOne);
+const mockAggregateSnapshots = vi.mocked(LpSnapshot.aggregate);
 const mockGodFind = vi.mocked(God.find);
 const mockGetTournamentSettings = vi.mocked(getTournamentSettings);
 const mockListActivePlayers = vi.mocked(listActivePlayers);
-const mockComputePlayerScore = vi.mocked(computePlayerScore);
-const mockComputePlayerDailyPointGain = vi.mocked(computePlayerDailyPointGain);
+const mockComputePlayerScoreTotals = vi.mocked(computePlayerScoreTotals);
+const mockComputePlayerDailyPointGainTotals = vi.mocked(computePlayerDailyPointGainTotals);
 
 const players = [
   {
@@ -125,6 +125,7 @@ const players = [
 describe('computeLeaderboard pagination', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearLeaderboardCache();
 
     mockGetTournamentSettings.mockResolvedValue({
       startDate: new Date(Date.now() - 60_000),
@@ -141,16 +142,16 @@ describe('computeLeaderboard pagination', () => {
       user5: 10,
     };
 
-    mockComputePlayerScore.mockImplementation(async (discordId: string) => scoreByDiscordId[discordId] ?? 0);
-    mockComputePlayerDailyPointGain.mockResolvedValue(0);
+    mockComputePlayerScoreTotals.mockResolvedValue(new Map(
+      Object.entries(scoreByDiscordId),
+    ));
+    mockComputePlayerDailyPointGainTotals.mockResolvedValue(new Map());
 
     mockGodFind.mockReturnValue({
       lean: vi.fn().mockResolvedValue([{ slug: 'zeus', name: 'Zeus' }]),
     } as any);
 
-    mockFindSnapshot.mockImplementation(() => ({
-      sort: vi.fn().mockResolvedValue(null),
-    } as any));
+    mockAggregateSnapshots.mockResolvedValue([]);
   });
 
   it('returns podium entries on page 1 as part of the pageSize', async () => {
@@ -189,5 +190,25 @@ describe('computeLeaderboard pagination', () => {
     expect(result.entries).toHaveLength(2);
     expect(result.entries[0].discordId).toBe('user3');
     expect(result.entries[1].discordId).toBe('user4');
+  });
+
+  it('uses batched score and snapshot reads while preserving daily LP and point gains', async () => {
+    mockAggregateSnapshots
+      .mockResolvedValueOnce([
+        { puuid: 'puuid1', tier: 'GOLD', rank: 'II', leaguePoints: 50 },
+      ] as any)
+      .mockResolvedValueOnce([
+        { puuid: 'puuid1', tier: 'GOLD', rank: 'II', leaguePoints: 75 },
+      ] as any);
+    mockComputePlayerDailyPointGainTotals.mockResolvedValue(new Map([['user1', 7]]));
+
+    const result = await computeLeaderboard({ page: 1, pageSize: 2 });
+
+    expect(mockAggregateSnapshots).toHaveBeenCalledTimes(2);
+    expect(mockComputePlayerScoreTotals).toHaveBeenCalledTimes(1);
+    expect(mockComputePlayerDailyPointGainTotals).toHaveBeenCalledTimes(1);
+    expect(result.entries[0].discordId).toBe('user1');
+    expect(result.entries[0].lpGain).toBe(15);
+    expect(result.entries[0].dailyPointGain).toBe(7);
   });
 });

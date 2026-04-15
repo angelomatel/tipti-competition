@@ -18,6 +18,28 @@ export async function computePlayerScore(discordId: string): Promise<number> {
   return result[0]?.total ?? 0;
 }
 
+export async function computePlayerScoreTotals(playerIds: string[]): Promise<Map<string, number>> {
+  if (playerIds.length === 0) return new Map();
+
+  const rows = await PointTransaction.aggregate<{ _id: string; total: number }>([
+    { $match: { playerId: { $in: playerIds } } },
+    { $group: { _id: '$playerId', total: { $sum: '$value' } } },
+  ]);
+
+  return new Map(rows.map((row) => [row._id, row.total]));
+}
+
+export async function computePlayerDailyPointGainTotals(playerIds: string[], day: string): Promise<Map<string, number>> {
+  if (playerIds.length === 0) return new Map();
+
+  const rows = await PointTransaction.aggregate<{ _id: string; total: number }>([
+    { $match: { playerId: { $in: playerIds }, day } },
+    { $group: { _id: '$playerId', total: { $sum: '$value' } } },
+  ]);
+
+  return new Map(rows.map((row) => [row._id, row.total]));
+}
+
 export async function computePlayerScoreBreakdown(discordId: string): Promise<PlayerScoreBreakdown> {
   const result = await PointTransaction.aggregate([
     { $match: { playerId: discordId } },

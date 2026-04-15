@@ -1,7 +1,7 @@
 import { God } from '@/db/models/God';
 import { Player } from '@/db/models/Player';
-import { GOD_DEFINITIONS } from '@/constants';
-import { computeGodScore } from '@/services/scoringEngine';
+import { GOD_DEFINITIONS, GOD_SCORE_TOP_N } from '@/constants';
+import { computePlayerScoreTotals } from '@/services/scoringEngine';
 import type { GodDocument } from '@/types/God';
 import type { GodStanding } from '@/types/God';
 import type { PlayerDocument } from '@/types/Player';
@@ -66,22 +66,47 @@ export async function eliminateGod(godSlug: string, phase: number): Promise<void
 }
 
 export async function getGodStandings(): Promise<GodStanding[]> {
-  const gods = await God.find().sort({ slug: 1 });
-  const standings: GodStanding[] = [];
+  const [gods, players] = await Promise.all([
+    God.find().sort({ slug: 1 }).lean(),
+    Player.find({ isActive: true })
+      .select({ discordId: 1, godSlug: 1, isEliminatedFromGod: 1 })
+      .lean(),
+  ]);
+  const scoreTotals = await computePlayerScoreTotals(players.map((player) => player.discordId));
+  const playersByGod = new Map<string, typeof players>();
 
-  for (const god of gods) {
-    const playerCount = await Player.countDocuments({ godSlug: god.slug, isActive: true });
-    const score = god.isEliminated ? 0 : await computeGodScore(god.slug);
+  for (const player of players) {
+    if (!player.godSlug) continue;
+    const godPlayers = playersByGod.get(player.godSlug) ?? [];
+    godPlayers.push(player);
+    playersByGod.set(player.godSlug, godPlayers);
+  }
 
-    standings.push({
+  const standings: GodStanding[] = gods.map((god) => {
+    const godPlayers = playersByGod.get(god.slug) ?? [];
+    const scoringPlayers = godPlayers.filter((player) => !player.isEliminatedFromGod);
+    const scores = scoringPlayers
+      .map((player) => scoreTotals.get(player.discordId) ?? 0)
+      .sort((a, b) => b - a);
+
+    const n = Math.min(
+      GOD_SCORE_TOP_N.MAX,
+      Math.max(GOD_SCORE_TOP_N.MIN, Math.floor(scoringPlayers.length / 3)),
+    );
+    const topN = scores.slice(0, n);
+    const score = god.isEliminated || topN.length === 0
+      ? 0
+      : topN.reduce((sum, value) => sum + value, 0) / topN.length;
+
+    return {
       slug: god.slug,
       name: god.name,
       title: god.title,
       score,
-      playerCount,
+      playerCount: godPlayers.length,
       isEliminated: god.isEliminated,
-    });
-  }
+    };
+  });
 
   standings.sort((a, b) => {
     if (a.isEliminated !== b.isEliminated) return a.isEliminated ? 1 : -1;

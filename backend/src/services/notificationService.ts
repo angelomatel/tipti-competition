@@ -5,7 +5,7 @@ import { PointTransaction } from '@/db/models/PointTransaction';
 import { normalizeLP } from '@/lib/normalizeLP';
 import { listActivePlayers } from '@/services/playerService';
 import { getTournamentSettings } from '@/services/tournamentService';
-import { DAILY_GRAPH_TOP_N } from '@/constants';
+import { DAILY_GRAPH_TOP_N, NOTIFICATION_FEED_LIMIT } from '@/constants';
 import { getDayBoundsUTC8 } from '@/lib/dateUtils';
 
 export interface FeedNotification {
@@ -28,12 +28,27 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
   const matches = await MatchRecord.find({
     notifiedAt: null,
     playedAt: { $gte: settings.startDate, $lte: settings.endDate },
-  }).sort({ playedAt: 1 });
+  }).sort({ playedAt: 1 }).limit(NOTIFICATION_FEED_LIMIT).lean();
 
   const results: FeedNotification[] = [];
+  const puuids = [...new Set(matches.map((match) => match.puuid))];
+  const matchIds = matches.map((match) => match.matchId);
+  const [players, buffTransactions] = await Promise.all([
+    Player.find({ puuid: { $in: puuids }, isActive: true }).lean(),
+    PointTransaction.find({ matchId: { $in: matchIds }, type: 'buff' }).lean(),
+  ]);
+
+  const playerByPuuid = new Map(players.map((player) => [player.puuid, player]));
+  const buffsByMatchId = new Map<string, Array<{ source: string; value: number }>>();
+  for (const txn of buffTransactions) {
+    if (!txn.matchId) continue;
+    const buffs = buffsByMatchId.get(txn.matchId) ?? [];
+    buffs.push({ source: txn.source, value: txn.value });
+    buffsByMatchId.set(txn.matchId, buffs);
+  }
 
   for (const match of matches) {
-    const player = await Player.findOne({ puuid: match.puuid, isActive: true });
+    const player = playerByPuuid.get(match.puuid);
     if (!player) continue;
 
     // Find snapshot just before and just after the match to compute LP delta
@@ -59,13 +74,6 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
       lpDelta = normCurrent - normAfter;
     }
 
-    // Sum up god buff points for this match
-    const godBuffTxns = await PointTransaction.find({
-      matchId: match.matchId,
-      type: 'buff',
-    });
-    const godBuffs = godBuffTxns.map((t) => ({ source: t.source, value: t.value }));
-
     results.push({
       matchId: match.matchId,
       puuid: match.puuid,
@@ -77,7 +85,7 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
       placement: match.placement,
       lpDelta,
       godSlug: player.godSlug ?? null,
-      godBuffs,
+      godBuffs: buffsByMatchId.get(match.matchId) ?? [],
       playedAt: match.playedAt,
     });
   }

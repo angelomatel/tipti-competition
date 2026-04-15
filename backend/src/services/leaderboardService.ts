@@ -1,10 +1,11 @@
 import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { God } from '@/db/models/God';
 import { getTournamentSettings } from '@/services/tournamentService';
-import { computePlayerScore, computePlayerDailyPointGain } from '@/services/scoringEngine';
+import { computePlayerDailyPointGainTotals, computePlayerScoreTotals } from '@/services/scoringEngine';
 import { normalizeLP } from '@/lib/normalizeLP';
 import { getDayBoundsUTC8, getTodayUTC8 } from '@/lib/dateUtils';
 import { listActivePlayers } from '@/services/playerService';
+import { LEADERBOARD_CACHE_TTL_MS } from '@/constants';
 import type { LeaderboardEntry, LeaderboardResponse } from '@/types/Leaderboard';
 
 const DEFAULT_PAGE = 1;
@@ -15,45 +16,112 @@ interface ComputeLeaderboardOptions {
   pageSize?: number;
 }
 
+interface SnapshotBaseline {
+  puuid: string;
+  tier: string;
+  rank: string;
+  leaguePoints: number;
+}
+
+interface CacheEntry {
+  expiresAt: number;
+  value: LeaderboardResponse;
+}
+
+const leaderboardCache = new Map<string, CacheEntry>();
+
+export function clearLeaderboardCache(): void {
+  leaderboardCache.clear();
+}
+
+function getCachedLeaderboard(key: string): LeaderboardResponse | null {
+  const cached = leaderboardCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    leaderboardCache.delete(key);
+    return null;
+  }
+  return cached.value;
+}
+
+function setCachedLeaderboard(key: string, value: LeaderboardResponse): void {
+  if (LEADERBOARD_CACHE_TTL_MS <= 0) return;
+  leaderboardCache.set(key, {
+    expiresAt: Date.now() + LEADERBOARD_CACHE_TTL_MS,
+    value,
+  });
+}
+
+async function getFirstSnapshotsByPuuid(
+  puuids: string[],
+  capturedAt: Record<string, Date | Record<string, Date>>,
+): Promise<Map<string, SnapshotBaseline>> {
+  if (puuids.length === 0) return new Map();
+
+  const rows = await LpSnapshot.aggregate<SnapshotBaseline & { _id: string }>([
+    { $match: { puuid: { $in: puuids }, capturedAt } },
+    { $sort: { puuid: 1, capturedAt: 1 } },
+    {
+      $group: {
+        _id: '$puuid',
+        puuid: { $first: '$puuid' },
+        tier: { $first: '$tier' },
+        rank: { $first: '$rank' },
+        leaguePoints: { $first: '$leaguePoints' },
+      },
+    },
+  ]);
+
+  return new Map(rows.map((row) => [row.puuid, row]));
+}
+
 export async function computeLeaderboard(options: ComputeLeaderboardOptions = {}): Promise<LeaderboardResponse> {
   const requestedPage = options.page ?? DEFAULT_PAGE;
   const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE;
+  const cacheKey = `${requestedPage}:${pageSize}`;
+  const cached = getCachedLeaderboard(cacheKey);
+  if (cached) return cached;
 
   const settings = await getTournamentSettings();
   const players = await listActivePlayers();
   const today = getTodayUTC8();
   const { dayStart, dayEnd } = getDayBoundsUTC8(today);
+  const playerIds = players.map((player) => player.discordId);
+  const puuids = players.map((player) => player.puuid);
 
   const hideGods = new Date() < settings.startDate;
 
-  // Cache god lookup
-  const gods = await God.find().lean();
+  const [
+    gods,
+    scoreTotals,
+    dailyPointGainTotals,
+    tournamentBaselines,
+    dailyBaselines,
+  ] = await Promise.all([
+    God.find().lean(),
+    computePlayerScoreTotals(playerIds),
+    computePlayerDailyPointGainTotals(playerIds, today),
+    getFirstSnapshotsByPuuid(puuids, { $gte: settings.startDate }),
+    getFirstSnapshotsByPuuid(puuids, { $gte: dayStart, $lte: dayEnd }),
+  ]);
+
   const godMap = new Map(gods.map((g) => [g.slug, g]));
 
-  const entries = await Promise.all(
-    players.map(async (player): Promise<LeaderboardEntry & { _tournamentLpGain: number }> => {
+  const entries = players.map((player): LeaderboardEntry & { _tournamentLpGain: number } => {
       const currentNorm = normalizeLP(player.currentTier, player.currentRank, player.currentLP);
 
-      // Tournament baseline: first snapshot on/after tournament start
-      const tournamentBaseline = await LpSnapshot.findOne({
-        puuid: player.puuid,
-        capturedAt: { $gte: settings.startDate },
-      }).sort({ capturedAt: 1 });
+      const tournamentBaseline = tournamentBaselines.get(player.puuid);
       const tournamentBaseNorm = tournamentBaseline
         ? normalizeLP(tournamentBaseline.tier, tournamentBaseline.rank, tournamentBaseline.leaguePoints)
         : currentNorm;
 
-      // Daily baseline: first snapshot of today (UTC+8)
-      const dailyBaseline = await LpSnapshot.findOne({
-        puuid: player.puuid,
-        capturedAt: { $gte: dayStart, $lte: dayEnd },
-      }).sort({ capturedAt: 1 });
+      const dailyBaseline = dailyBaselines.get(player.puuid);
       const dailyLpGain = dailyBaseline
         ? currentNorm - normalizeLP(dailyBaseline.tier, dailyBaseline.rank, dailyBaseline.leaguePoints)
         : 0;
 
-      const scorePoints = await computePlayerScore(player.discordId);
-      const dailyPointGain = await computePlayerDailyPointGain(player.discordId, today);
+      const scorePoints = scoreTotals.get(player.discordId) ?? 0;
+      const dailyPointGain = dailyPointGainTotals.get(player.discordId) ?? 0;
 
       const god = player.godSlug ? godMap.get(player.godSlug) : null;
 
@@ -79,8 +147,7 @@ export async function computeLeaderboard(options: ComputeLeaderboardOptions = {}
         discordUsername:   player.discordUsername ?? '',
         _tournamentLpGain: currentNorm - tournamentBaseNorm,
       };
-    })
-  );
+    });
 
   // Primary sort: scorePoints descending
   // Secondary sort: normalized LP (tiebreaker)
@@ -111,7 +178,7 @@ export async function computeLeaderboard(options: ComputeLeaderboardOptions = {}
   const podiumEntries = (page === 1 && podiumEligible) ? pageContent.slice(0, 3) : [];
   const paginatedEntries = (page === 1 && podiumEligible) ? pageContent.slice(3) : pageContent;
 
-  return {
+  const response = {
     page,
     pageSize,
     totalEntries,
@@ -120,4 +187,7 @@ export async function computeLeaderboard(options: ComputeLeaderboardOptions = {}
     entries: paginatedEntries,
     updatedAt: new Date().toISOString(),
   };
+
+  setCachedLeaderboard(cacheKey, response);
+  return response;
 }
