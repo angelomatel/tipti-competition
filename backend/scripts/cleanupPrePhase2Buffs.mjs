@@ -10,9 +10,11 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const MONGODB_URI = process.env.MONGODB_URI;
-const DB_NAME = process.argv[2] ?? process.env.MONGODB_DB_NAME ?? 'tft-tournament-testing';
-const SHOULD_APPLY = process.argv.includes('--apply');
-const FORCE_DESTRUCTIVE = process.argv.includes('--force') || process.env.ALLOW_DESTRUCTIVE_MAINTENANCE === 'true';
+const args = process.argv.slice(2);
+const positionalArgs = args.filter((arg) => !arg.startsWith('--'));
+const DB_NAME = positionalArgs[0] ?? process.env.MONGODB_DB_NAME ?? 'tft-tournament-testing';
+const SHOULD_APPLY = args.includes('--apply');
+const FORCE_DESTRUCTIVE = args.includes('--force') || process.env.ALLOW_DESTRUCTIVE_MAINTENANCE === 'true';
 
 if (!MONGODB_URI) {
   throw new Error('MONGODB_URI is not defined in backend/.env');
@@ -54,6 +56,19 @@ function computePhases(startDate, endDate) {
 }
 
 async function run() {
+  if (args.includes('--help')) {
+    console.log([
+      'Usage:',
+      '  node scripts/cleanupPrePhase2Buffs.mjs [dbName] [--apply] [--force]',
+      '',
+      'Examples:',
+      '  node scripts/cleanupPrePhase2Buffs.mjs',
+      '  node scripts/cleanupPrePhase2Buffs.mjs tft-tournament-testing',
+      '  node scripts/cleanupPrePhase2Buffs.mjs tft-tournament --apply --force',
+    ].join('\n'));
+    return;
+  }
+
   if (SHOULD_APPLY) {
     assertSafeTargetDb(DB_NAME);
   }
