@@ -43,9 +43,10 @@ export class Profile {
         return;
       }
 
-      const leaderboardEntry = (leaderboardData.entries ?? []).find(
-        (e: any) => e.discordId === targetId
-      );
+      const lbEntries: any[] = leaderboardData.entries ?? [];
+      const lbPodium: any[] = leaderboardData.podiumEntries ?? [];
+      const combinedLb = (lbPodium.length > 0) ? [...lbPodium, ...lbEntries] : lbEntries;
+      const leaderboardEntry = combinedLb.find((e: any) => e.discordId === targetId);
 
       const eventStarted = new Date() >= new Date(settingsData.startDate);
 

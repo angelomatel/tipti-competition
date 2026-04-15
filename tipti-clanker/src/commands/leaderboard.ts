@@ -19,13 +19,14 @@ export class Leaderboard {
     try {
       const data = await getLeaderboard();
       const entries: any[] = data.entries ?? [];
+      const podiumEntries: any[] = data.podiumEntries ?? [];
+      const combinedEntries = (podiumEntries.length > 0) ? [...podiumEntries, ...entries] : entries;
 
-      if (entries.length === 0) {
+      if (combinedEntries.length === 0) {
         await interaction.editReply({ content: 'No players registered yet.' });
         return;
       }
-
-      const top = entries.slice(0, LEADERBOARD_TOP_N);
+      const top = combinedEntries.slice(0, LEADERBOARD_TOP_N);
       const nameByDiscordId = new Map<string, string>();
 
       if (interaction.guild) {
