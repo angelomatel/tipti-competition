@@ -14,6 +14,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         BACKEND_MODE: 'http',
+        LOG_FILE_PATH: 'logs/backend.jsonl',
       },
     },
     {
@@ -24,6 +25,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         BACKEND_MODE: 'cron',
+        LOG_FILE_PATH: 'logs/backend-cron.jsonl',
       },
     },
     {
@@ -33,6 +35,7 @@ module.exports = {
       watch: false,
       env: {
         NODE_ENV: 'production',
+        LOG_FILE_PATH: 'logs/tipti-bot.jsonl',
       },
     },
   ],
