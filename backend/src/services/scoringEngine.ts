@@ -209,5 +209,16 @@ export async function createLpDeltaTransaction(
     phase: phase?.phase ?? settings.currentPhase,
   });
 
-  logger.debug({ discordId: player.discordId, delta }, `[scoring] LP delta transaction created`);
+  logger.info(
+    {
+      discordId: player.discordId,
+      godSlug: player.godSlug,
+      value: delta,
+      source: 'lp_delta',
+      matchId,
+      day: today,
+      phase: phase?.phase ?? settings.currentPhase,
+    },
+    '[scoring] LP delta transaction created',
+  );
 }

@@ -21,10 +21,17 @@ vi.mock('@/lib/riotUtils', () => ({
   findRankedEntry: vi.fn(),
 }));
 
+vi.mock('@/lib/logger', () => ({
+  logger: {
+    info: vi.fn(),
+  },
+}));
+
 import { Player } from '@/db/models/Player';
 import { getRiotClient } from '@/services/riotService';
 import { findRankedEntry } from '@/lib/riotUtils';
 import { registerPlayer } from '@/services/playerService';
+import { logger } from '@/lib/logger';
 
 const mockFindOne = vi.mocked(Player.findOne);
 const mockCreate = vi.mocked(Player.create);
@@ -60,6 +67,81 @@ describe('registerPlayer duplicate handling', () => {
     ).rejects.toThrow('already registered');
 
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('logs successful player registrations', async () => {
+    mockCreate.mockResolvedValueOnce({
+      discordId: 'discord-1',
+      puuid: 'puuid-1',
+      riotId: 'Summoner#NA1',
+      godSlug: 'ahri',
+      currentTier: 'UNRANKED',
+      currentRank: '',
+      currentLP: 0,
+      currentWins: 0,
+      currentLosses: 0,
+    } as any);
+
+    await registerPlayer({
+      discordId: 'discord-1',
+      gameName: 'Summoner',
+      tagLine: 'NA1',
+      addedBy: 'discord-1',
+      godSlug: 'ahri',
+    });
+
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        discordId: 'discord-1',
+        riotId: 'Summoner#NA1',
+        puuid: 'puuid-1',
+      }),
+      '[player] Fetched Riot account PUUID for registration',
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        discordId: 'discord-1',
+        riotId: 'Summoner#NA1',
+        godSlug: 'ahri',
+      }),
+      '[player] Registered player',
+    );
+  });
+
+  it('logs successful player reactivations', async () => {
+    const existing = {
+      discordId: 'discord-1',
+      puuid: 'puuid-1',
+      riotId: 'Summoner#NA1',
+      isActive: false,
+      save: vi.fn().mockResolvedValue(undefined),
+    };
+    mockFindOne.mockResolvedValueOnce(existing as any);
+
+    await registerPlayer({
+      discordId: 'discord-1',
+      gameName: 'Summoner',
+      tagLine: 'NA1',
+      addedBy: 'discord-1',
+      godSlug: 'ahri',
+    });
+
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        discordId: 'discord-1',
+        riotId: 'Summoner#NA1',
+        puuid: 'puuid-1',
+      }),
+      '[player] Fetched ranked player info from Riot for reactivation',
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        discordId: 'discord-1',
+        riotId: 'Summoner#NA1',
+        godSlug: 'ahri',
+      }),
+      '[player] Reactivated player registration',
+    );
   });
 
   it('converts Mongo duplicate-key errors into an already-registered error', async () => {

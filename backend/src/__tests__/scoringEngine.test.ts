@@ -34,6 +34,7 @@ vi.mock('@/lib/dateUtils', () => ({
 vi.mock('@/lib/logger', () => ({
   logger: {
     debug: vi.fn(),
+    info: vi.fn(),
   },
 }));
 
@@ -41,6 +42,7 @@ import { PointTransaction } from '@/db/models/PointTransaction';
 import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { MatchRecord } from '@/db/models/MatchRecord';
 import { createLpDeltaTransaction } from '@/services/scoringEngine';
+import { logger } from '@/lib/logger';
 
 const mockAggregate = vi.mocked(PointTransaction.aggregate);
 const mockCreate = vi.mocked(PointTransaction.create);
@@ -80,6 +82,7 @@ describe('createLpDeltaTransaction', () => {
 
     expect(mockSnapshotFindOne).not.toHaveBeenCalled();
     expect(mockCreate).not.toHaveBeenCalled();
+    expect(logger.info).not.toHaveBeenCalled();
   });
 
   it('falls back to the tournament start snapshot when no reset baseline exists', async () => {
@@ -115,5 +118,16 @@ describe('createLpDeltaTransaction', () => {
       source: 'lp_delta',
       type: 'match',
     }));
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        discordId: 'user-2',
+        godSlug: 'ahri',
+        value: 100,
+        source: 'lp_delta',
+        day: '2026-04-03',
+        phase: 1,
+      }),
+      '[scoring] LP delta transaction created',
+    );
   });
 });

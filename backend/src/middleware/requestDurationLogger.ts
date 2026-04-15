@@ -17,12 +17,20 @@ export function requestDurationLogger(req: Request, res: Response, next: NextFun
   const startedAt = process.hrtime.bigint();
   res.on('finish', () => {
     const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
-    logger.info({
+    const logPayload = {
       method: req.method,
       path: req.path,
       statusCode: res.statusCode,
       durationMs: Math.round(durationMs * 100) / 100,
-    }, 'HTTP request completed');
+    };
+
+    if (res.statusCode >= 500) {
+      logger.error(logPayload, 'HTTP request completed with server error');
+    } else if (res.statusCode >= 400) {
+      logger.warn(logPayload, 'HTTP request completed with client error');
+    } else {
+      logger.debug(logPayload, 'HTTP request completed');
+    }
   });
 
   next();

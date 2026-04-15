@@ -11,6 +11,19 @@ export async function captureSnapshotForPlayer(player: PlayerDocument): Promise<
   const riot = getRiotClient();
   const entries = await riot.getTftLeagueByPuuid(player.puuid);
   const ranked = findRankedEntry(entries);
+  logger.info(
+    {
+      discordId: player.discordId,
+      puuid: player.puuid,
+      riotId: player.riotId,
+      tier: ranked?.tier ?? 'UNRANKED',
+      rank: ranked?.rank ?? '',
+      leaguePoints: ranked?.leaguePoints ?? 0,
+      wins: ranked?.wins ?? 0,
+      losses: ranked?.losses ?? 0,
+    },
+    '[snapshot] Fetched ranked player info from Riot',
+  );
   if (!ranked) return player;
 
   // Only create a new snapshot if rank data has changed since the last one

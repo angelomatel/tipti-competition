@@ -6,6 +6,7 @@ import { getRiotClient } from '@/services/riotService';
 import { findRankedEntry } from '@/lib/riotUtils';
 import { normalizeLP } from '@/lib/normalizeLP';
 import { PointTransaction } from '@/db/models/PointTransaction';
+import { logger } from '@/lib/logger';
 import type { PlayerDocument } from '@/types/Player';
 import type { RegisterPlayerRequest } from '@/types/User';
 
@@ -25,6 +26,19 @@ export async function registerPlayer(data: RegisterPlayerRequest): Promise<Playe
       const riot = getRiotClient();
       const leagueEntries = await riot.getTftLeagueByPuuid(existing.puuid);
       const ranked = findRankedEntry(leagueEntries);
+      logger.info(
+        {
+          discordId,
+          riotId: existing.riotId,
+          puuid: existing.puuid,
+          tier: ranked?.tier ?? 'UNRANKED',
+          rank: ranked?.rank ?? '',
+          leaguePoints: ranked?.leaguePoints ?? 0,
+          wins: ranked?.wins ?? 0,
+          losses: ranked?.losses ?? 0,
+        },
+        '[player] Fetched ranked player info from Riot for reactivation',
+      );
 
       existing.isActive = true;
       existing.godSlug = godSlug;
@@ -47,6 +61,21 @@ export async function registerPlayer(data: RegisterPlayerRequest): Promise<Playe
         });
       }
 
+      logger.info(
+        {
+          discordId: existing.discordId,
+          riotId: existing.riotId,
+          puuid: existing.puuid,
+          godSlug: existing.godSlug,
+          tier: existing.currentTier,
+          rank: existing.currentRank,
+          leaguePoints: existing.currentLP,
+          wins: existing.currentWins,
+          losses: existing.currentLosses,
+        },
+        '[player] Reactivated player registration',
+      );
+
       return existing;
     }
     throw new Error(`Player with discordId ${discordId} is already registered.`);
@@ -54,6 +83,7 @@ export async function registerPlayer(data: RegisterPlayerRequest): Promise<Playe
 
   const riot = getRiotClient();
   const puuid = await riot.getPuuidByRiotId(gameName, tagLine);
+  logger.info({ discordId, riotId: `${gameName}#${tagLine}`, puuid }, '[player] Fetched Riot account PUUID for registration');
 
   const existingByPuuid = await Player.findOne({ puuid });
   if (existingByPuuid) {
@@ -62,6 +92,19 @@ export async function registerPlayer(data: RegisterPlayerRequest): Promise<Playe
 
   const leagueEntries = await riot.getTftLeagueByPuuid(puuid);
   const ranked = findRankedEntry(leagueEntries);
+  logger.info(
+    {
+      discordId,
+      riotId: `${gameName}#${tagLine}`,
+      puuid,
+      tier: ranked?.tier ?? 'UNRANKED',
+      rank: ranked?.rank ?? '',
+      leaguePoints: ranked?.leaguePoints ?? 0,
+      wins: ranked?.wins ?? 0,
+      losses: ranked?.losses ?? 0,
+    },
+    '[player] Fetched ranked player info from Riot for registration',
+  );
 
   let player: PlayerDocument;
   try {
@@ -100,6 +143,21 @@ export async function registerPlayer(data: RegisterPlayerRequest): Promise<Playe
       losses:        ranked.losses
     });
   }
+
+  logger.info(
+    {
+      discordId: player.discordId,
+      riotId: player.riotId,
+      puuid: player.puuid,
+      godSlug: player.godSlug,
+      tier: player.currentTier,
+      rank: player.currentRank,
+      leaguePoints: player.currentLP,
+      wins: player.currentWins,
+      losses: player.currentLosses,
+    },
+    '[player] Registered player',
+  );
 
   return player;
 }

@@ -453,6 +453,20 @@ export async function processNewMatchBuffs(): Promise<void> {
         day: matchDay,
         phase: phaseNum,
       });
+
+      logger.info(
+        {
+          playerId: player.discordId,
+          godSlug: player.godSlug,
+          type: entry.type,
+          value: finalValue,
+          source: entry.source,
+          matchId: match.matchId,
+          day: matchDay,
+          phase: phaseNum,
+        },
+        '[match-buff] Point transaction created',
+      );
     }
 
     dailyBuffTotals.set(totalKey, currentTotal);
