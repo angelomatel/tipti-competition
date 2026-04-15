@@ -6,6 +6,7 @@ import {
 import { Discord, Slash, SlashOption } from 'discordx';
 import { getGod, getTournamentSettings } from '@/lib/backendClient';
 import { EMBED_COLORS, GOD_CHOICES } from '@/lib/constants';
+import { getPublicErrorMessage, sendCommandErrorAuditLog } from '@/lib/publicCommandErrors';
 
 @Discord()
 export class GodLeaderboardCommand {
@@ -48,7 +49,14 @@ export class GodLeaderboardCommand {
       const players: any[] = data.players ?? [];
 
       if (!god) {
-        await interaction.editReply({ content: `God "${godName}" not found.` });
+        const userMessage = `❌ God "${godName}" not found.`;
+        await interaction.editReply({ content: userMessage });
+        await sendCommandErrorAuditLog(interaction.client, {
+          commandName: '/god-leaderboard',
+          actorId: interaction.user.id,
+          target: godName,
+          userMessage,
+        });
         return;
       }
 
@@ -69,7 +77,18 @@ export class GodLeaderboardCommand {
 
       await interaction.editReply({ embeds: [embed] });
     } catch (err: any) {
-      await interaction.editReply({ content: `Failed to fetch god: ${err?.message ?? err}` });
+      const userMessage = getPublicErrorMessage(err, {
+        notFoundMessage: `❌ God "${godName}" not found.`,
+        fallbackPrefix: '❌ Failed to fetch god',
+      });
+      await interaction.editReply({ content: userMessage });
+      await sendCommandErrorAuditLog(interaction.client, {
+        commandName: '/god-leaderboard',
+        actorId: interaction.user.id,
+        target: godName,
+        userMessage,
+        error: err,
+      });
     }
   }
 }

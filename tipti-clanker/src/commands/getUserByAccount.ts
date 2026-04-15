@@ -10,6 +10,11 @@ import { formatTierDisplay } from "@/lib/format";
 import { EMBED_COLORS, RANK_EMOJIS } from "@/lib/constants";
 import { Tier } from "@/types/Rank";
 import { logger } from "@/lib/logger";
+import {
+  getPublicErrorMessage,
+  PUBLIC_ERROR_MESSAGES,
+  sendCommandErrorAuditLog,
+} from "@/lib/publicCommandErrors";
 
 @Discord()
 export class GetUserByAccount {
@@ -33,8 +38,13 @@ export class GetUserByAccount {
     const { gameName, tagLine, isValid } = parseRiotId(typeof account === "string" ? account : "");
 
     if (!isValid) {
-      await interaction.editReply({
-        content: "Invalid account format. Use `username#tag` (the #tag is required).",
+      const userMessage = '❌ Invalid account format. Use `username#tag` (the #tag is required).';
+      await interaction.editReply({ content: userMessage });
+      await sendCommandErrorAuditLog(interaction.client, {
+        commandName: '/get-user-by-account',
+        actorId: interaction.user.id,
+        target: account,
+        userMessage,
       });
       return;
     }
@@ -68,9 +78,17 @@ export class GetUserByAccount {
 
       await interaction.editReply({ embeds: [embed] });
     } catch (err: any) {
-      const message = err?.message ?? String(err ?? "Unknown error");
-      await interaction.editReply({
-        content: `Failed to fetch account: ${message}`,
+      const userMessage = getPublicErrorMessage(err, {
+        notFoundMessage: PUBLIC_ERROR_MESSAGES.riotAccountNotFound,
+        fallbackPrefix: '❌ Failed to fetch account',
+      });
+      await interaction.editReply({ content: userMessage });
+      await sendCommandErrorAuditLog(interaction.client, {
+        commandName: '/get-user-by-account',
+        actorId: interaction.user.id,
+        target: `${gameName}#${tagLine}`,
+        userMessage,
+        error: err,
       });
     }
   }

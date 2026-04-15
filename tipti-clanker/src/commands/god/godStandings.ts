@@ -2,6 +2,7 @@ import { type CommandInteraction, EmbedBuilder } from 'discord.js';
 import { Discord, Slash } from 'discordx';
 import { getGodStandings, getTournamentSettings } from '@/lib/backendClient';
 import { EMBED_COLORS } from '@/lib/constants';
+import { getPublicErrorMessage, sendCommandErrorAuditLog } from '@/lib/publicCommandErrors';
 
 @Discord()
 export class GodStandingsCommand {
@@ -46,7 +47,14 @@ export class GodStandingsCommand {
 
       await interaction.editReply({ embeds: [embed] });
     } catch (err: any) {
-      await interaction.editReply({ content: `Failed to fetch standings: ${err?.message ?? err}` });
+      const userMessage = getPublicErrorMessage(err, { fallbackPrefix: '❌ Failed to fetch standings' });
+      await interaction.editReply({ content: userMessage });
+      await sendCommandErrorAuditLog(interaction.client, {
+        commandName: '/god-standings',
+        actorId: interaction.user.id,
+        userMessage,
+        error: err,
+      });
     }
   }
 }

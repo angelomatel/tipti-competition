@@ -10,6 +10,11 @@ import { formatTierDisplay, formatLpGain } from '@/lib/format';
 import { EMBED_COLORS, RANK_EMOJIS, GOD_COLORS } from '@/lib/constants';
 import { Tier } from '@/types/Rank';
 import { logger } from '@/lib/logger';
+import {
+  getPublicErrorMessage,
+  PUBLIC_ERROR_MESSAGES,
+  sendCommandErrorAuditLog,
+} from '@/lib/publicCommandErrors';
 
 @Discord()
 export class Profile {
@@ -40,7 +45,14 @@ export class Profile {
 
       const player = profileData.player;
       if (!player) {
-        await interaction.editReply({ content: '❌ Player not found. Use `/register` to join first.' });
+        const userMessage = PUBLIC_ERROR_MESSAGES.playerNotFound;
+        await interaction.editReply({ content: userMessage });
+        await sendCommandErrorAuditLog(interaction.client, {
+          commandName: '/profile',
+          actorId: interaction.user.id,
+          target: targetId,
+          userMessage,
+        });
         return;
       }
 
@@ -105,7 +117,18 @@ export class Profile {
 
       await interaction.editReply({ embeds: [embed] });
     } catch (err: any) {
-      await interaction.editReply({ content: `❌ Failed to fetch profile: ${err?.message ?? err}` });
+      const userMessage = getPublicErrorMessage(err, {
+        notFoundMessage: PUBLIC_ERROR_MESSAGES.playerNotFound,
+        fallbackPrefix: '❌ Failed to fetch profile',
+      });
+      await interaction.editReply({ content: userMessage });
+      await sendCommandErrorAuditLog(interaction.client, {
+        commandName: '/profile',
+        actorId: interaction.user.id,
+        target: targetId,
+        userMessage,
+        error: err,
+      });
     }
   }
 }

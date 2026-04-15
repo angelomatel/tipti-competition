@@ -4,6 +4,7 @@ import { getLeaderboard, getTournamentSettings, updatePlayerProfile } from '@/li
 import { formatTierName, formatLpGain } from '@/lib/format';
 import { EMBED_COLORS, LEADERBOARD_TOP_N, RANK_EMOJIS } from '@/lib/constants';
 import { Tier } from '@/types/Rank';
+import { getPublicErrorMessage, sendCommandErrorAuditLog } from '@/lib/publicCommandErrors';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -76,7 +77,14 @@ export class Leaderboard {
 
       await interaction.editReply({ embeds: [embed] });
     } catch (err: any) {
-      await interaction.editReply({ content: `❌ Failed to fetch leaderboard: ${err?.message ?? err}` });
+      const userMessage = getPublicErrorMessage(err, { fallbackPrefix: '❌ Failed to fetch leaderboard' });
+      await interaction.editReply({ content: userMessage });
+      await sendCommandErrorAuditLog(interaction.client, {
+        commandName: '/leaderboard',
+        actorId: interaction.user.id,
+        userMessage,
+        error: err,
+      });
     }
   }
 }

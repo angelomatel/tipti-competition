@@ -14,31 +14,15 @@ import { formatTierDisplay } from '@/lib/format';
 import { EMBED_COLORS, GOD_CHOICES } from '@/lib/constants';
 import { sendAuditLog } from '@/lib/auditLog';
 import { logger } from '@/lib/logger';
+import {
+  getPublicErrorMessage,
+  isAlreadyRegisteredError,
+  isHttpStatus,
+  PUBLIC_ERROR_MESSAGES,
+  sendCommandErrorAuditLog,
+} from '@/lib/publicCommandErrors';
 
 const GOD_SELECTION_TIMEOUT_MS = 180_000;
-
-function extractBackendErrorMessage(error: unknown): string {
-  const rawMessage = error instanceof Error ? error.message : String(error);
-  const jsonStart = rawMessage.indexOf('{');
-
-  if (jsonStart === -1) {
-    return rawMessage;
-  }
-
-  try {
-    const parsed = JSON.parse(rawMessage.slice(jsonStart)) as { error?: string };
-    return parsed.error ?? rawMessage;
-  } catch {
-    return rawMessage;
-  }
-}
-
-function isAlreadyRegisteredError(error: unknown): boolean {
-  const rawMessage = error instanceof Error ? error.message : String(error);
-  const normalizedMessage = extractBackendErrorMessage(error).toLowerCase();
-
-  return rawMessage.includes('HTTP 409') && normalizedMessage.includes('already registered');
-}
 
 function hasTournamentStarted(settingsResponse: any): boolean {
   const startDate = settingsResponse?.settings?.startDate ?? settingsResponse?.startDate;
@@ -67,22 +51,42 @@ export class Register {
     const { gameName, tagLine, isValid } = parseRiotId(account);
 
     if (!isValid) {
-      await interaction.editReply({ content: '❌ Invalid format. Use `username#TAG` (the #TAG is required).' });
+      const userMessage = '❌ Invalid format. Use `username#TAG` (the #TAG is required).';
+      await interaction.editReply({ content: userMessage });
+      await sendCommandErrorAuditLog(interaction.client, {
+        commandName: '/register',
+        actorId: interaction.user.id,
+        target: account,
+        userMessage,
+      });
       return;
     }
 
     try {
       const existingPlayer = await getPlayer(interaction.user.id);
       if (existingPlayer?.player) {
-        await interaction.editReply({
-          content: '❌ You are already registered for the tournament. Contact an admin if you need your registration updated.',
+        const userMessage = PUBLIC_ERROR_MESSAGES.alreadyRegistered;
+        await interaction.editReply({ content: userMessage });
+        await sendCommandErrorAuditLog(interaction.client, {
+          commandName: '/register',
+          actorId: interaction.user.id,
+          target: `${gameName}#${tagLine}`,
+          userMessage,
         });
         return;
       }
     } catch (err: any) {
-      const msg = err?.message ?? String(err);
-      if (!msg.includes('HTTP 404')) {
-        throw err;
+      if (!isHttpStatus(err, 404)) {
+        const userMessage = getPublicErrorMessage(err);
+        await interaction.editReply({ content: userMessage });
+        await sendCommandErrorAuditLog(interaction.client, {
+          commandName: '/register',
+          actorId: interaction.user.id,
+          target: `${gameName}#${tagLine}`,
+          userMessage,
+          error: err,
+        });
+        return;
       }
     }
 
@@ -96,8 +100,19 @@ export class Register {
         },
         '[register] Fetched Riot account before registration',
       );
-    } catch {
-      await interaction.editReply({ content: '❌ Could not find that Riot account. Double-check the username and tag.' });
+    } catch (err) {
+      const userMessage = getPublicErrorMessage(err, {
+        notFoundMessage: PUBLIC_ERROR_MESSAGES.riotAccountNotFound,
+        fallbackPrefix: '❌ Failed to verify Riot account',
+      });
+      await interaction.editReply({ content: userMessage });
+      await sendCommandErrorAuditLog(interaction.client, {
+        commandName: '/register',
+        actorId: interaction.user.id,
+        target: `${gameName}#${tagLine}`,
+        userMessage,
+        error: err,
+      });
       return;
     }
 
@@ -213,33 +228,26 @@ export class Register {
       });
     } catch (err: any) {
       const msg = err?.message ?? String(err);
+      const isSelectionTimeout = msg.includes('time') || msg.includes('Collector');
+      const alreadyRegistered = !isSelectionTimeout && isAlreadyRegisteredError(err);
+      const userMessage = isSelectionTimeout
+        ? `❌ God selection timed out after ${Math.floor(GOD_SELECTION_TIMEOUT_MS / 60_000)} minutes. Run \`/register\` again.`
+        : alreadyRegistered
+          ? PUBLIC_ERROR_MESSAGES.alreadyRegistered
+          : getPublicErrorMessage(err, { fallbackPrefix: '❌ Failed to register' });
 
-      if (msg.includes('time') || msg.includes('Collector')) {
-        await interaction.editReply({
-          content: `❌ God selection timed out after ${Math.floor(GOD_SELECTION_TIMEOUT_MS / 60_000)} minutes. Run \`/register\` again.`,
-          embeds: [],
-          components: [],
-        });
-      } else {
-        const alreadyRegistered = isAlreadyRegisteredError(err);
-        const backendMessage = extractBackendErrorMessage(err);
+      await interaction.editReply({
+        content: userMessage,
+        embeds: [],
+        components: [],
+      });
 
-        await interaction.editReply({
-          content: alreadyRegistered
-            ? '❌ You are already registered for the tournament. Contact an admin if you need your registration updated.'
-            : `❌ Failed to register: ${backendMessage}`,
-          embeds: [],
-          components: [],
-        });
-      }
-
-      await sendAuditLog(interaction.client, {
-        action: '/register (failed)',
+      await sendCommandErrorAuditLog(interaction.client, {
+        commandName: '/register',
         actorId: interaction.user.id,
-        details: [
-          `Riot: ${gameName}#${tagLine}`,
-          `Reason: ${msg.slice(0, 250)}`,
-        ],
+        target: `${gameName}#${tagLine}`,
+        userMessage,
+        error: err,
       });
     }
   }
