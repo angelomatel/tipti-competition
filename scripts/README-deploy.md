@@ -18,7 +18,7 @@ The deploy listener should be a separate PM2 process named `deploy-webhook`.
 
 ## Environment
 
-Create a real deploy env file on the server using `scripts/deploy.env.example` as the template. Do not commit real secrets.
+Create a real deploy env file on the server at `scripts/.env.deploy` using `scripts/deploy.env.example` as the template. Do not commit real secrets.
 
 Required:
 
@@ -40,7 +40,7 @@ From the repo directory on the server:
 
 ```bash
 set -a
-. ./scripts/deploy.env
+. ./scripts/.env.deploy
 set +a
 pm2 start scripts/webhook-deploy.js --name deploy-webhook --interpreter node
 pm2 save
