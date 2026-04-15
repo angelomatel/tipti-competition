@@ -23,4 +23,8 @@ const PlayerSchema = new Schema<PlayerDocument>({
   lpBaselineOffset:    { type: Number, default: 0 },
 });
 
+PlayerSchema.index({ isActive: 1 });
+PlayerSchema.index({ godSlug: 1, isActive: 1 });
+PlayerSchema.index({ godSlug: 1, isActive: 1, isEliminatedFromGod: 1 });
+
 export const Player = mongoose.model<PlayerDocument>('Player', PlayerSchema, 'players');

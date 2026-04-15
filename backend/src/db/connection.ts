@@ -10,10 +10,11 @@ export async function connectDB(): Promise<void> {
   try {
     await mongoose.connect(MONGODB_URI, {
       dbName: MONGODB_DB_NAME,
-      serverSelectionTimeoutMS: 10_000,
-      connectTimeoutMS: 10_000,
-      socketTimeoutMS: 45_000,
+      serverSelectionTimeoutMS: 5_000,
+      connectTimeoutMS: 5_000,
       maxPoolSize: 5,
+      minPoolSize: 1,
+      waitQueueTimeoutMS: 2_000,
     });
     connected = true;
     logger.info(`MongoDB connected: db=${MONGODB_DB_NAME}`);

@@ -16,6 +16,7 @@ const PointTransactionSchema = new Schema<PointTransactionDocument>({
 PointTransactionSchema.index({ playerId: 1, day: 1 });
 PointTransactionSchema.index({ godSlug: 1, day: 1 });
 PointTransactionSchema.index({ playerId: 1, type: 1 });
+PointTransactionSchema.index({ matchId: 1, type: 1 });
 
 export const PointTransaction = mongoose.model<PointTransactionDocument>(
   'PointTransaction',
