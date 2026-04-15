@@ -31,7 +31,7 @@ export class Profile {
     const targetId = member?.id ?? interaction.user.id;
 
     try {
-      const [profileData, leaderboardData, settingsData] = await Promise.all([
+      const [profileData, leaderboardData, { settings }] = await Promise.all([
         getPlayer(targetId),
         getLeaderboard(),
         getTournamentSettings(),
@@ -48,7 +48,7 @@ export class Profile {
       const combinedLb = (lbPodium.length > 0) ? [...lbPodium, ...lbEntries] : lbEntries;
       const leaderboardEntry = combinedLb.find((e: any) => e.discordId === targetId);
 
-      const eventStarted = new Date() >= new Date(settingsData.startDate);
+      const eventStarted = new Date() >= new Date(settings.startDate);
 
       const tierDisplay = formatTierDisplay(player.currentTier, player.currentRank, player.currentLP);
       const tierEmoji = RANK_EMOJIS[player.currentTier as Tier] ?? '';
