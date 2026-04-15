@@ -5,6 +5,7 @@ import { BACKEND_ADMIN_PASSWORD_HEADER, BACKEND_REQUEST_TIMEOUT_MS } from '@/lib
 
 const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:5000';
 const BACKEND_ADMIN_PASSWORD = process.env.BACKEND_ADMIN_PASSWORD ?? '';
+const DAILY_CRON_REQUEST_TIMEOUT_MS = 60_000;
 
 function getAuthHeaders(method: string): Record<string, string> {
   if (method === 'GET' || !BACKEND_ADMIN_PASSWORD) {
@@ -16,7 +17,7 @@ function getAuthHeaders(method: string): Record<string, string> {
   };
 }
 
-function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+function request<T>(method: string, path: string, body?: unknown, timeoutMs = BACKEND_REQUEST_TIMEOUT_MS): Promise<T> {
   return new Promise((resolve, reject) => {
     const url = new URL(path, BACKEND_URL);
     const data = body ? JSON.stringify(body) : undefined;
@@ -30,7 +31,7 @@ function request<T>(method: string, path: string, body?: unknown): Promise<T> {
         ...(data ? { 'Content-Length': Buffer.byteLength(data) } : {}),
         ...getAuthHeaders(method),
       },
-      timeout: BACKEND_REQUEST_TIMEOUT_MS,
+      timeout: timeoutMs,
     };
     const lib = url.protocol === 'https:' ? https : http;
     const req = lib.request(options, (res) => {
@@ -46,7 +47,7 @@ function request<T>(method: string, path: string, body?: unknown): Promise<T> {
       });
     });
     req.on('timeout', () => {
-      req.destroy(new Error(`Request timed out after ${BACKEND_REQUEST_TIMEOUT_MS}ms: ${method} ${path}`));
+      req.destroy(new Error(`Request timed out after ${timeoutMs}ms: ${method} ${path}`));
     });
     req.on('error', reject);
     if (data) req.write(data);
@@ -138,7 +139,7 @@ export function getPlayerPoints(discordId: string): Promise<any> {
 }
 
 export function triggerDailyCron(day?: string): Promise<any> {
-  return request('POST', '/api/cron/run-daily', day ? { day } : {});
+  return request('POST', '/api/cron/run-daily', day ? { day } : {}, DAILY_CRON_REQUEST_TIMEOUT_MS);
 }
 
 export function seedGods(): Promise<any> {

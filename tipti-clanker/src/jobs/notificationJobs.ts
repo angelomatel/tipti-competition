@@ -239,5 +239,5 @@ export function startNotificationJobs(client: Client): void {
     void runGodStandingsJob(client);
   }, { timezone: 'UTC' });
 
-  logger.debug('[notifications] Feed (*/5 min), daily (16:00 UTC), and god standings (16:05 UTC) jobs scheduled');
+  logger.debug('[notifications] Feed (*/5 min), daily (16:05 UTC), and god standings (16:10 UTC) jobs scheduled');
 }

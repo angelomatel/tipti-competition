@@ -1,6 +1,7 @@
 import { PermissionFlagsBits, type CommandInteraction } from 'discord.js';
 import { Discord, Guild, Slash, SlashGroup } from 'discordx';
 import { sendAuditLog } from '@/lib/auditLog';
+import { triggerDailyCron } from '@/lib/backendClient';
 import { ADMIN_GUILDS } from './shared';
 
 @Discord()
@@ -19,6 +20,7 @@ export class AdminTriggerDailyJobsCommand {
     try {
       const { runDailyJob, runGodStandingsJob } = await import('@/jobs/notificationJobs');
 
+      await triggerDailyCron();
       await runDailyJob(interaction.client);
       await runGodStandingsJob(interaction.client);
 
@@ -27,7 +29,7 @@ export class AdminTriggerDailyJobsCommand {
       await sendAuditLog(interaction.client, {
         action: '/admin trigger-daily-jobs',
         actorId: interaction.user.id,
-        details: ['Manually triggered daily recap and god standings notifications.'],
+        details: ['Manually triggered daily processing, recap, and god standings notifications.'],
       });
     } catch (err: any) {
       await interaction.editReply({ content: `Failed to trigger daily jobs: ${err?.message ?? err}` });

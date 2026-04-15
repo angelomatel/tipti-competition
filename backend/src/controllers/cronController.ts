@@ -12,7 +12,7 @@ export async function triggerCron(_req: Request, res: Response, next: NextFuncti
 export async function triggerDailyCron(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const day = req.body.day as string | undefined;
-    void runDailyProcessing(day);
-    res.json({ message: `Daily processing triggered${day ? ` for ${day}` : ''}.` });
+    await runDailyProcessing(day);
+    res.json({ message: `Daily processing completed${day ? ` for ${day}` : ''}.` });
   } catch (err) { next(err); }
 }

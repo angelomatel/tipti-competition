@@ -14,8 +14,8 @@ export const EMBED_COLORS = {
 /** Cron schedule expressions for notification jobs. */
 export const CRON_SCHEDULES = {
   FEED_JOB: '*/5 * * * *',   // Every 5 minutes
-  DAILY_JOB: '0 16 * * *',   // 16:00 UTC (midnight UTC+8)
-  GOD_STANDINGS_JOB: '5 16 * * *', // 16:05 UTC (5 min after daily processing)
+  DAILY_JOB: '5 16 * * *',   // 16:05 UTC (5 min after daily processing)
+  GOD_STANDINGS_JOB: '10 16 * * *', // 16:10 UTC (after daily recap)
 } as const;
 
 /** Maximum entries shown in the /leaderboard command. */
