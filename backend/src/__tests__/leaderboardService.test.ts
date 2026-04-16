@@ -18,6 +18,7 @@ vi.mock('@/services/tournamentService', () => ({
 
 vi.mock('@/services/playerService', () => ({
   listActivePlayers: vi.fn(),
+  searchActivePlayers: vi.fn(),
 }));
 
 vi.mock('@/services/scoringEngine', () => ({
@@ -29,13 +30,14 @@ import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { God } from '@/db/models/God';
 import { clearLeaderboardCache, computeLeaderboard } from '@/services/leaderboardService';
 import { getTournamentSettings } from '@/services/tournamentService';
-import { listActivePlayers } from '@/services/playerService';
+import { listActivePlayers, searchActivePlayers } from '@/services/playerService';
 import { computePlayerDailyPointGainTotals, computePlayerScoreTotals } from '@/services/scoringEngine';
 
 const mockAggregateSnapshots = vi.mocked(LpSnapshot.aggregate);
 const mockGodFind = vi.mocked(God.find);
 const mockGetTournamentSettings = vi.mocked(getTournamentSettings);
 const mockListActivePlayers = vi.mocked(listActivePlayers);
+const mockSearchActivePlayers = vi.mocked(searchActivePlayers);
 const mockComputePlayerScoreTotals = vi.mocked(computePlayerScoreTotals);
 const mockComputePlayerDailyPointGainTotals = vi.mocked(computePlayerDailyPointGainTotals);
 
@@ -133,6 +135,7 @@ describe('computeLeaderboard pagination', () => {
     } as any);
 
     mockListActivePlayers.mockResolvedValue(players as any);
+    mockSearchActivePlayers.mockResolvedValue(players as any);
 
     const scoreByDiscordId: Record<string, number> = {
       user1: 50,
@@ -210,5 +213,46 @@ describe('computeLeaderboard pagination', () => {
     expect(result.entries[0].discordId).toBe('user1');
     expect(result.entries[0].lpGain).toBe(15);
     expect(result.entries[0].dailyPointGain).toBe(7);
+  });
+
+  it('filters by search while preserving global rank numbers', async () => {
+    mockSearchActivePlayers.mockResolvedValue([players[1], players[3]] as any);
+
+    const result = await computeLeaderboard({ page: 1, pageSize: 10, search: 'o' });
+
+    expect(result.podiumEntries).toEqual([]);
+    expect(result.entries.map((entry) => entry.discordId)).toEqual(['user2', 'user4']);
+    expect(result.entries.map((entry) => entry.rank)).toEqual([2, 4]);
+  });
+
+  it('treats whitespace search as the unfiltered leaderboard', async () => {
+    const result = await computeLeaderboard({ page: 1, pageSize: 5, search: '   ' });
+
+    expect(mockSearchActivePlayers).not.toHaveBeenCalled();
+    expect(result.podiumEntries.map((entry) => entry.discordId)).toEqual(['user1', 'user2', 'user3']);
+  });
+
+  it('returns an empty result when no players match search', async () => {
+    mockSearchActivePlayers.mockResolvedValue([]);
+
+    const result = await computeLeaderboard({ page: 1, pageSize: 10, search: 'missing' });
+
+    expect(result.totalEntries).toBe(0);
+    expect(result.entries).toEqual([]);
+    expect(result.podiumEntries).toEqual([]);
+    expect(mockComputePlayerScoreTotals).not.toHaveBeenCalled();
+  });
+
+  it('uses separate cache entries for different search terms', async () => {
+    mockSearchActivePlayers
+      .mockResolvedValueOnce([players[0]] as any)
+      .mockResolvedValueOnce([players[1]] as any);
+
+    const first = await computeLeaderboard({ page: 1, pageSize: 10, search: 'one' });
+    const second = await computeLeaderboard({ page: 1, pageSize: 10, search: 'two' });
+
+    expect(first.entries.map((entry) => entry.discordId)).toEqual(['user1']);
+    expect(second.entries.map((entry) => entry.discordId)).toEqual(['user2']);
+    expect(mockSearchActivePlayers).toHaveBeenCalledTimes(2);
   });
 });

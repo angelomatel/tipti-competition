@@ -24,6 +24,10 @@ const PlayerSchema = new Schema<PlayerDocument>({
 });
 
 PlayerSchema.index({ isActive: 1 });
+PlayerSchema.index({ isActive: 1, gameName: 1 });
+PlayerSchema.index({ isActive: 1, tagLine: 1 });
+PlayerSchema.index({ isActive: 1, riotId: 1 });
+PlayerSchema.index({ isActive: 1, discordUsername: 1 });
 PlayerSchema.index({ godSlug: 1, isActive: 1 });
 PlayerSchema.index({ godSlug: 1, isActive: 1, isEliminatedFromGod: 1 });
 

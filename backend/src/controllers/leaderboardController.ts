@@ -16,8 +16,9 @@ export async function getLeaderboard(req: Request, res: Response, next: NextFunc
   try {
     const page = parsePositiveInt(req.query.page, DEFAULT_PAGE);
     const pageSize = Math.min(parsePositiveInt(req.query.pageSize, DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
+    const search = Array.isArray(req.query.search) ? req.query.search[0] : req.query.search;
 
-    const data = await computeLeaderboard({ page, pageSize });
+    const data = await computeLeaderboard({ page, pageSize, search: typeof search === 'string' ? search : undefined });
     res.json(data);
   } catch (err) { next(err); }
 }

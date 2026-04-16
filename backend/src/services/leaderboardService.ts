@@ -4,7 +4,7 @@ import { getTournamentSettings } from '@/services/tournamentService';
 import { computePlayerDailyPointGainTotals, computePlayerScoreTotals } from '@/services/scoringEngine';
 import { normalizeLP } from '@/lib/normalizeLP';
 import { getDayBoundsUTC8, getTodayUTC8 } from '@/lib/dateUtils';
-import { listActivePlayers } from '@/services/playerService';
+import { listActivePlayers, searchActivePlayers } from '@/services/playerService';
 import { LEADERBOARD_CACHE_TTL_MS } from '@/constants';
 import type { LeaderboardEntry, LeaderboardResponse } from '@/types/Leaderboard';
 
@@ -14,6 +14,7 @@ const DEFAULT_PAGE_SIZE = 10;
 interface ComputeLeaderboardOptions {
   page?: number;
   pageSize?: number;
+  search?: string;
 }
 
 interface SnapshotBaseline {
@@ -29,6 +30,10 @@ interface CacheEntry {
 }
 
 const leaderboardCache = new Map<string, CacheEntry>();
+
+function normalizeSearchTerm(search?: string): string {
+  return search?.trim() ?? '';
+}
 
 export function clearLeaderboardCache(): void {
   leaderboardCache.clear();
@@ -78,12 +83,32 @@ async function getFirstSnapshotsByPuuid(
 export async function computeLeaderboard(options: ComputeLeaderboardOptions = {}): Promise<LeaderboardResponse> {
   const requestedPage = options.page ?? DEFAULT_PAGE;
   const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE;
-  const cacheKey = `${requestedPage}:${pageSize}`;
+  const search = normalizeSearchTerm(options.search);
+  const cacheKey = `${requestedPage}:${pageSize}:${search.toLowerCase()}`;
   const cached = getCachedLeaderboard(cacheKey);
   if (cached) return cached;
 
   const settings = await getTournamentSettings();
-  const players = await listActivePlayers();
+  const [players, matchedPlayers] = await Promise.all([
+    listActivePlayers(),
+    search ? searchActivePlayers(search) : Promise.resolve([]),
+  ]);
+
+  const matchedDiscordIds = search ? new Set(matchedPlayers.map((player) => player.discordId)) : null;
+  if (matchedDiscordIds && matchedDiscordIds.size === 0) {
+    const emptyResponse = {
+      page: 1,
+      pageSize,
+      totalEntries: 0,
+      totalPages: 1,
+      podiumEntries: [],
+      entries: [],
+      updatedAt: new Date().toISOString(),
+    };
+    setCachedLeaderboard(cacheKey, emptyResponse);
+    return emptyResponse;
+  }
+
   const today = getTodayUTC8();
   const { dayStart, dayEnd } = getDayBoundsUTC8(today);
   const playerIds = players.map((player) => player.discordId);
@@ -164,11 +189,13 @@ export async function computeLeaderboard(options: ComputeLeaderboardOptions = {}
   entries.forEach((e, i) => { e.rank = i + 1; });
 
   // Strip internal field before returning
-  const cleaned: LeaderboardEntry[] = entries.map(({ _tournamentLpGain, ...entry }) => entry);
+  const cleaned: LeaderboardEntry[] = entries
+    .map(({ _tournamentLpGain, ...entry }) => entry)
+    .filter((entry) => !matchedDiscordIds || matchedDiscordIds.has(entry.discordId));
 
   const totalEntries = cleaned.length;
   const hasStarted = new Date() >= settings.startDate;
-  const podiumEligible = hasStarted && totalEntries >= 3 && pageSize >= 3;
+  const podiumEligible = !search && hasStarted && totalEntries >= 3 && pageSize >= 3;
 
   const totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
   const page = Math.min(Math.max(requestedPage, 1), totalPages);

@@ -8,8 +8,10 @@ export async function GET(req: Request) {
 
     const page = searchParams.get('page');
     const pageSize = searchParams.get('pageSize');
+    const search = searchParams.get('search');
     if (page) backendParams.set('page', page);
     if (pageSize) backendParams.set('pageSize', pageSize);
+    if (search?.trim()) backendParams.set('search', search.trim());
 
     const query = backendParams.toString();
     const backendUrl = `${BACKEND_URL}/api/leaderboard${query ? `?${query}` : ''}`;

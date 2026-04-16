@@ -10,6 +10,14 @@ import { logger } from '@/lib/logger';
 import type { PlayerDocument } from '@/types/Player';
 import type { RegisterPlayerRequest } from '@/types/User';
 
+function normalizeSearchTerm(search?: string): string {
+  return search?.trim() ?? '';
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function isMongoDuplicateKeyError(err: unknown): err is { code: number; message?: string } {
   if (!err || typeof err !== 'object') return false;
   const maybeErr = err as { code?: number; message?: string };
@@ -171,6 +179,23 @@ export async function removePlayer(discordId: string): Promise<void> {
 
 export async function listActivePlayers(): Promise<PlayerDocument[]> {
   return Player.find({ isActive: true });
+}
+
+export async function searchActivePlayers(search?: string): Promise<PlayerDocument[]> {
+  const normalizedSearch = normalizeSearchTerm(search);
+  if (!normalizedSearch) return listActivePlayers();
+
+  const pattern = new RegExp(escapeRegex(normalizedSearch), 'i');
+
+  return Player.find({
+    isActive: true,
+    $or: [
+      { gameName: pattern },
+      { tagLine: pattern },
+      { riotId: pattern },
+      { discordUsername: pattern },
+    ],
+  });
 }
 
 export async function getPlayerByDiscordId(discordId: string): Promise<PlayerDocument | null> {

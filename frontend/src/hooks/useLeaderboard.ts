@@ -9,14 +9,17 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 interface UseLeaderboardOptions {
   page?: number;
   pageSize?: number;
+  search?: string;
   shouldFetch?: boolean;
 }
 
-export function useLeaderboard({ page = 1, pageSize = 10, shouldFetch = true }: UseLeaderboardOptions = {}) {
+export function useLeaderboard({ page = 1, pageSize = 10, search = '', shouldFetch = true }: UseLeaderboardOptions = {}) {
   const params = new URLSearchParams({
     page: String(page),
     pageSize: String(pageSize),
   });
+  const normalizedSearch = search.trim();
+  if (normalizedSearch) params.set('search', normalizedSearch);
 
   return useSWR<LeaderboardResponse>(
     shouldFetch ? `/api/leaderboard?${params.toString()}` : null,
