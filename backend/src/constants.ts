@@ -3,11 +3,31 @@ function parsePositiveIntEnv(value: string | undefined, fallback: number): numbe
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function parseBooleanEnv(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined) return fallback;
+
+  const normalized = value.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return fallback;
+}
+
 export const RIOT_API_KEY = process.env.RIOT_API_KEY ?? '';
 export const BACKEND_PORT = parsePositiveIntEnv(process.env.PORT, 5000);
 export const MONGODB_URI = process.env.MONGODB_URI ?? 'mongodb://localhost:27017';
 export const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME ?? 'tft-tournament';
 export const BACKEND_MODE = process.env.BACKEND_MODE ?? 'all';
+export const DATABASE_BACKUP_ENABLED = parseBooleanEnv(
+  process.env.DATABASE_BACKUP_ENABLED,
+  process.env.NODE_ENV === 'production',
+);
+export const DATABASE_BACKUP_CRON = process.env.DATABASE_BACKUP_CRON ?? '0 */12 * * *';
+export const DATABASE_BACKUP_TIMEZONE = process.env.DATABASE_BACKUP_TIMEZONE ?? 'UTC';
+export const DATABASE_BACKUP_DIR = process.env.DATABASE_BACKUP_DIR ?? 'backups';
+export const DATABASE_BACKUP_RETENTION_COUNT = parsePositiveIntEnv(
+  process.env.DATABASE_BACKUP_RETENTION_COUNT,
+  14,
+);
 export const LEADERBOARD_CACHE_TTL_MS = parsePositiveIntEnv(process.env.LEADERBOARD_CACHE_TTL_MS, 30_000);
 export const NOTIFICATION_FEED_LIMIT = parsePositiveIntEnv(process.env.NOTIFICATION_FEED_LIMIT, 50);
 export const TOURNAMENT_START_DATE = new Date(process.env.TOURNAMENT_START_DATE ?? '2025-01-01T00:00:00Z');

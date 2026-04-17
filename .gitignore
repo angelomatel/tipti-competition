@@ -17,6 +17,7 @@ dist
 **/dist
 build
 **/build
+backend/backups/
 .next
 **/.next
 out

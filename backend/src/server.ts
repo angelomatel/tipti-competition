@@ -8,6 +8,7 @@ import { errorHandler } from '@/middleware/errorHandler';
 import { requestDurationLogger } from '@/middleware/requestDurationLogger';
 import { startCronJob } from '@/jobs/cronJob';
 import { startDailyCronJob } from '@/jobs/dailyCronJob';
+import { startDatabaseBackupJob } from '@/jobs/databaseBackupJob';
 import { BACKEND_MODE, BACKEND_PORT } from '@/constants';
 import { logger } from '@/lib/logger';
 
@@ -25,6 +26,7 @@ async function start(): Promise<void> {
   if (BACKEND_MODE === 'cron' || BACKEND_MODE === 'all') {
     startCronJob();
     startDailyCronJob();
+    startDatabaseBackupJob();
     logger.info(`Cron jobs started in BACKEND_MODE=${BACKEND_MODE}`);
   }
 
