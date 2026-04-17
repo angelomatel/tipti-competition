@@ -62,12 +62,23 @@ export interface RiotClientOptions {
   apiKey?: string;
 }
 
+export interface RiotClientRequestMetrics {
+  endpoint: string;
+  queuedAt: number;
+  startedAt: number;
+  finishedAt: number;
+  retryCount: number;
+  rateLimitHitCount: number;
+  statusCode: number | null;
+  status: 'fulfilled' | 'rejected';
+}
+
 export class RiotClient {
   private apiKey: string;
   private queue = new RiotRequestQueue();
 
   constructor(opts?: RiotClientOptions) {
-    this.apiKey = opts?.apiKey ?? process.env.RIOT_API_KEY ?? '';
+    this.apiKey = opts?.apiKey ?? '';
     if (!this.apiKey) {
       throw new Error('Riot API key not set. Provide apiKey or set RIOT_API_KEY.');
     }
@@ -93,38 +104,40 @@ export class RiotClient {
     }
   }
 
-  private request(path: string, region: string): Promise<any> {
+  getRequestMetricsSince(since: number): RiotClientRequestMetrics[] {
+    return this.queue.getCompletedMetricsSince(since);
+  }
+
+  private request(path: string, region: string, endpoint: string): Promise<any> {
     const host = this.mapRegionToHost(region);
-    const sep = path.includes('?') ? '&' : '?';
-    const pathWithKey = `${path}${sep}api_key=${this.apiKey}`;
-    return this.queue.enqueue(pathWithKey, host, this.apiKey);
+    return this.queue.enqueue(path, host, this.apiKey, endpoint);
   }
 
   async getPuuidByRiotId(username: string, tagLine: string, region = 'ASIA'): Promise<string> {
     const path = `/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(username)}/${encodeURIComponent(tagLine)}`;
-    const data: AccountDTO = await this.request(path, region);
+    const data: AccountDTO = await this.request(path, region, 'accountByRiotId');
     return data.puuid;
   }
 
   async getAccountByPuuid(puuid: string, region = 'ASIA'): Promise<AccountDTO> {
     const path = `/riot/account/v1/accounts/by-puuid/${encodeURIComponent(puuid)}`;
-    return this.request(path, region);
+    return this.request(path, region, 'accountByPuuid');
   }
 
   async getTftLeagueByPuuid(puuid: string, region = 'SEA'): Promise<TFTLeagueEntryDTO[]> {
     const path = `/tft/league/v1/by-puuid/${encodeURIComponent(puuid)}`;
-    return this.request(path, region);
+    return this.request(path, region, 'tftLeagueByPuuid');
   }
 
   async getMatchIdsByPuuid(puuid: string, count = 20, region = 'SEA_REGIONAL', startTime?: number): Promise<string[]> {
     let path = `/tft/match/v1/matches/by-puuid/${encodeURIComponent(puuid)}/ids?count=${count}`;
     if (startTime !== undefined) path += `&startTime=${startTime}`;
-    return this.request(path, region);
+    return this.request(path, region, 'matchIdsByPuuid');
   }
 
   async getMatchById(matchId: string, region = 'SEA_REGIONAL'): Promise<TftMatchDTO> {
     const path = `/tft/match/v1/matches/${encodeURIComponent(matchId)}`;
-    return this.request(path, region);
+    return this.request(path, region, 'matchById');
   }
 }
 
