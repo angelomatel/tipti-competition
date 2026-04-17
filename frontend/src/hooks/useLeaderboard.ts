@@ -25,6 +25,7 @@ export function useLeaderboard({ page = 1, pageSize = 10, search = '', shouldFet
     shouldFetch ? `/api/leaderboard?${params.toString()}` : null,
     fetcher,
     {
+      keepPreviousData: true,
       refreshInterval: LEADERBOARD_REFRESH_INTERVAL,
       revalidateOnFocus: false,
     },

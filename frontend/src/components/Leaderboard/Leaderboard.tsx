@@ -34,14 +34,18 @@ const Leaderboard = () => {
   const isSearchActive = debouncedSearch.length > 0;
   const hasSearchQuery = searchTerm.trim().length > 0 || isSearchActive;
 
-  const { data, error, isLoading: isLeaderboardLoading } = useLeaderboard({ 
+  const {
+    data,
+    error,
+    isLoading: isLeaderboardLoading,
+  } = useLeaderboard({
     page: currentPage, 
     pageSize: PLAYERS_PER_PAGE,
     search: debouncedSearch,
     shouldFetch: true
   });
 
-  const isLoading = isTournamentLoading || isLeaderboardLoading;
+  const isInitialLoading = isTournamentLoading || (!data && isLeaderboardLoading);
 
   const entries = data?.entries ?? [];
   const podiumEntries = data?.podiumEntries ?? [];
@@ -110,21 +114,21 @@ const Leaderboard = () => {
 
   return (
     <>
-      {isLoading && <LeaderboardSkeleton />}
+      {isInitialLoading && <LeaderboardSkeleton />}
 
-      {!isLoading && (error || !data) && (
+      {!isInitialLoading && (error || !data) && (
         <p className="text-center py-12 text-text-muted">
           Could not load leaderboard. Make sure the backend is running.
         </p>
       )}
 
-      {!isLoading && data && totalEntries === 0 && !hasSearchQuery && (
+      {!isInitialLoading && data && totalEntries === 0 && !hasSearchQuery && (
         <p className="text-center py-12 text-text-muted">
           No players registered yet. Use <code className="text-accent-cyan">/register</code> in Discord to join.
         </p>
       )}
 
-      {!isLoading && data && showLeaderboardContent && (
+      {!isInitialLoading && data && showLeaderboardContent && (
         <div className="flex flex-col gap-1.5 sm:gap-3">
           {/* Podium: only when event started, page 1, desktop */}
           {showPodium && (
@@ -157,7 +161,6 @@ const Leaderboard = () => {
 
             {renderPaginationControls()}
           </div>
-
           {totalEntries === 0 && isSearchActive ? (
             <p className="text-center py-12 text-text-muted">
               No players found for <span className="text-text-primary">{debouncedSearch}</span>.
