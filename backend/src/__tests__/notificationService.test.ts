@@ -124,7 +124,7 @@ describe('notification service', () => {
         { matchId: 'match-1', source: 'varus_flat', value: 7 },
       ]) as any)
       .mockReturnValueOnce(mockFindLean([
-        { matchId: 'match-1', source: 'lp_delta', value: 44 },
+        { playerId: 'user-1', matchId: 'match-1', source: 'lp_delta', value: 44 },
       ]) as any);
     mockSnapshotFind.mockReturnValue({
       sort: vi.fn().mockReturnValue(mockFindLean([
@@ -195,6 +195,75 @@ describe('notification service', () => {
       discordId: 'user-1',
       lpDelta: null,
       lpStatus: 'unknown',
+    });
+  });
+
+  it('uses player-specific lp deltas when multiple tracked players share a match id', async () => {
+    const matches = [
+      {
+        puuid: 'puuid-1',
+        matchId: 'match-shared',
+        placement: 1,
+        playedAt: new Date('2026-01-10T10:00:00Z'),
+        lpAttributionStatus: null,
+      },
+      {
+        puuid: 'puuid-2',
+        matchId: 'match-shared',
+        placement: 4,
+        playedAt: new Date('2026-01-10T10:00:00Z'),
+        lpAttributionStatus: null,
+      },
+    ];
+    const leanMatches = vi.fn().mockResolvedValue(matches);
+    const limitMatches = vi.fn().mockReturnValue({ lean: leanMatches });
+    const sortMatches = vi.fn().mockReturnValue({ limit: limitMatches });
+    mockMatchFind.mockReturnValue({ sort: sortMatches } as any);
+
+    mockPlayerFind.mockReturnValue(mockFindLean([
+      {
+        puuid: 'puuid-1',
+        discordId: 'user-1',
+        gameName: 'One',
+        tagLine: 'TAG',
+        discordUsername: 'one',
+        discordAvatarUrl: '',
+        godSlug: 'zeus',
+      },
+      {
+        puuid: 'puuid-2',
+        discordId: 'user-2',
+        gameName: 'Two',
+        tagLine: 'TAG',
+        discordUsername: 'two',
+        discordAvatarUrl: '',
+        godSlug: 'hera',
+      },
+    ]) as any);
+    mockPointTransactionFind
+      .mockReturnValueOnce(mockFindLean([]) as any)
+      .mockReturnValueOnce(mockFindLean([
+        { playerId: 'user-1', matchId: 'match-shared', source: 'lp_delta', value: 74 },
+        { playerId: 'user-2', matchId: 'match-shared', source: 'lp_delta', value: 10 },
+      ]) as any);
+    mockSnapshotFind.mockReturnValue({
+      sort: vi.fn().mockReturnValue(mockFindLean([])),
+    } as any);
+
+    const result = await getFeedNotifications();
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({
+      matchId: 'match-shared',
+      discordId: 'user-1',
+      lpDelta: 74,
+      lpStatus: 'known',
+    });
+    expect(result[1]).toMatchObject({
+      matchId: 'match-shared',
+      discordId: 'user-2',
+      lpDelta: 10,
+      lpStatus: 'known',
     });
   });
 

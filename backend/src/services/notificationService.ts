@@ -54,10 +54,11 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
     buffsByMatchId.set(txn.matchId, buffs);
   }
 
-  const lpDeltaByMatchId = new Map<string, number>();
+  const lpDeltaByPlayerMatch = new Map<string, number>();
   for (const txn of matchTransactions) {
     if (!txn.matchId) continue;
-    lpDeltaByMatchId.set(txn.matchId, (lpDeltaByMatchId.get(txn.matchId) ?? 0) + txn.value);
+    const key = `${txn.playerId}:${txn.matchId}`;
+    lpDeltaByPlayerMatch.set(key, (lpDeltaByPlayerMatch.get(key) ?? 0) + txn.value);
   }
 
   const snapshotsByPuuid = new Map<string, typeof snapshots>();
@@ -70,12 +71,13 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
   for (const match of matches) {
     const player = playerByPuuid.get(match.puuid);
     if (!player) continue;
+    const playerMatchKey = `${player.discordId}:${match.matchId}`;
     const playerSnapshots = snapshotsByPuuid.get(match.puuid) ?? [];
     const snapshotBefore = [...playerSnapshots].reverse().find((snapshot) => snapshot.capturedAt <= match.playedAt) ?? null;
     const snapshotAfter = playerSnapshots.find((snapshot) => snapshot.capturedAt > match.playedAt) ?? null;
-    const lpDelta = lpDeltaByMatchId.get(match.matchId)
+    const lpDelta = lpDeltaByPlayerMatch.get(playerMatchKey)
       ?? resolveSnapshotLpDelta(snapshotBefore, snapshotAfter);
-    const lpStatus = lpDeltaByMatchId.has(match.matchId)
+    const lpStatus = lpDeltaByPlayerMatch.has(playerMatchKey)
       ? 'known'
       : match.lpAttributionStatus === 'ambiguous'
         ? 'unknown'
