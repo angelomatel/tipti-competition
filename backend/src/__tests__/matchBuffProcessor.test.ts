@@ -3,29 +3,27 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/db/models/PointTransaction', () => ({
   PointTransaction: {
     aggregate: vi.fn(),
-    create: vi.fn(),
+    find: vi.fn(),
+    insertMany: vi.fn(),
   },
 }));
 
 vi.mock('@/db/models/MatchRecord', () => ({
   MatchRecord: {
     find: vi.fn(),
-    updateOne: vi.fn(),
-    findOne: vi.fn(),
-    countDocuments: vi.fn(),
+    updateMany: vi.fn(),
   },
 }));
 
 vi.mock('@/db/models/Player', () => ({
   Player: {
     find: vi.fn(),
-    findOne: vi.fn(),
   },
 }));
 
 vi.mock('@/db/models/LpSnapshot', () => ({
   LpSnapshot: {
-    findOne: vi.fn(),
+    find: vi.fn(),
   },
 }));
 
@@ -34,7 +32,7 @@ vi.mock('@/services/tournamentService', () => ({
 }));
 
 vi.mock('@/services/scoringEngine', () => ({
-  computePlayerScore: vi.fn(),
+  computePlayerScoreTotals: vi.fn(),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -49,16 +47,21 @@ vi.mock('@/lib/logger', () => ({
 import { MatchRecord } from '@/db/models/MatchRecord';
 import { Player } from '@/db/models/Player';
 import { PointTransaction } from '@/db/models/PointTransaction';
+import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { processNewMatchBuffs } from '@/services/matchBuffProcessor';
 import { getTournamentSettings } from '@/services/tournamentService';
+import { computePlayerScoreTotals } from '@/services/scoringEngine';
 import { logger } from '@/lib/logger';
 
 const mockMatchFind = vi.mocked(MatchRecord.find);
-const mockMatchUpdateOne = vi.mocked(MatchRecord.updateOne);
-const mockPlayerFind = vi.mocked(Player.find) as any;
+const mockMatchUpdateMany = vi.mocked(MatchRecord.updateMany);
+const mockPlayerFind = vi.mocked(Player.find);
 const mockPointAggregate = vi.mocked(PointTransaction.aggregate);
-const mockPointCreate = vi.mocked(PointTransaction.create);
+const mockPointFind = vi.mocked(PointTransaction.find);
+const mockPointInsertMany = vi.mocked(PointTransaction.insertMany);
+const mockSnapshotFind = vi.mocked(LpSnapshot.find);
 const mockGetTournamentSettings = vi.mocked(getTournamentSettings);
+const mockComputePlayerScoreTotals = vi.mocked(computePlayerScoreTotals);
 const mockDebug = vi.mocked(logger.debug);
 const mockInfo = vi.mocked(logger.info);
 
@@ -76,23 +79,40 @@ function makeSettings() {
   } as any;
 }
 
+function mockFindSortLean<T>(value: T) {
+  return {
+    sort: vi.fn().mockReturnValue({
+      lean: vi.fn().mockResolvedValue(value),
+    }),
+  };
+}
+
 describe('processNewMatchBuffs', () => {
   const player = {
     discordId: 'discord-1',
     puuid: 'puuid-1',
     godSlug: 'ahri',
     currentTier: 'GOLD',
+    isEliminatedFromGod: false,
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetTournamentSettings.mockResolvedValue(makeSettings());
-    mockPointAggregate.mockResolvedValue([{ _id: null, total: 0 }] as any);
-    (mockPlayerFind as any).mockImplementation(async (query: any) => {
-      if (query?.puuid) return [player] as any;
-      if (query?.godSlug) return [player] as any;
-      return [] as any;
-    });
+    mockComputePlayerScoreTotals.mockResolvedValue(new Map());
+    mockPointAggregate.mockResolvedValue([] as any);
+    mockPointFind.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue([]),
+      }),
+      lean: vi.fn().mockResolvedValue([]),
+    } as any);
+    mockSnapshotFind.mockReturnValue(mockFindSortLean([]) as any);
+    mockPlayerFind.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue([player]),
+      }),
+    } as any);
   });
 
   it('skips matches from phase 1 even if they are still buffered for processing', async () => {
@@ -103,17 +123,17 @@ describe('processNewMatchBuffs', () => {
       placement: 1,
       playedAt: new Date('2026-04-02T12:00:00.000Z'),
     };
-    mockMatchFind.mockReturnValue({
-      sort: vi.fn().mockResolvedValue([match]),
-    } as any);
-    mockMatchUpdateOne.mockResolvedValue({} as any);
+    mockMatchFind
+      .mockReturnValueOnce(mockFindSortLean([match]) as any)
+      .mockReturnValueOnce(mockFindSortLean([match]) as any);
+    mockMatchUpdateMany.mockResolvedValue({ modifiedCount: 1 } as any);
 
     await processNewMatchBuffs();
 
-    expect(mockPointCreate).not.toHaveBeenCalled();
-    expect(mockMatchUpdateOne).toHaveBeenCalledWith(
-      { _id: match._id },
-      { buffProcessed: true },
+    expect(mockPointInsertMany).not.toHaveBeenCalled();
+    expect(mockMatchUpdateMany).toHaveBeenCalledWith(
+      { _id: { $in: [match._id] } },
+      { $set: { buffProcessed: true } },
     );
     expect(mockDebug).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -134,27 +154,29 @@ describe('processNewMatchBuffs', () => {
       placement: 1,
       playedAt: new Date('2026-04-06T12:00:00.000Z'),
     };
-    mockMatchFind.mockReturnValue({
-      sort: vi.fn().mockResolvedValue([match]),
-    } as any);
-    mockMatchUpdateOne.mockResolvedValue({} as any);
-    mockPointCreate.mockResolvedValue({} as any);
+    mockMatchFind
+      .mockReturnValueOnce(mockFindSortLean([match]) as any)
+      .mockReturnValueOnce(mockFindSortLean([match]) as any);
+    mockMatchUpdateMany.mockResolvedValue({ modifiedCount: 1 } as any);
+    mockPointInsertMany.mockResolvedValue([] as any);
 
     await processNewMatchBuffs();
 
-    expect(mockPointCreate).toHaveBeenCalledWith(expect.objectContaining({
-      playerId: player.discordId,
-      godSlug: player.godSlug,
-      type: 'buff',
-      source: 'ahri_first_place',
-      matchId: match.matchId,
-      day: '2026-04-06',
-      phase: 2,
-      value: 17,
-    }));
-    expect(mockMatchUpdateOne).toHaveBeenCalledWith(
-      { _id: match._id },
-      { buffProcessed: true },
+    expect(mockPointInsertMany).toHaveBeenCalledWith([
+      expect.objectContaining({
+        playerId: player.discordId,
+        godSlug: player.godSlug,
+        type: 'buff',
+        source: 'ahri_first_place',
+        matchId: match.matchId,
+        day: '2026-04-06',
+        phase: 2,
+        value: 17,
+      }),
+    ], { ordered: false });
+    expect(mockMatchUpdateMany).toHaveBeenCalledWith(
+      { _id: { $in: [match._id] } },
+      { $set: { buffProcessed: true } },
     );
     expect(mockInfo).toHaveBeenCalledWith(
       expect.objectContaining({

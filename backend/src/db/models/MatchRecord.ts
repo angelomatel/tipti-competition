@@ -13,7 +13,9 @@ const MatchRecordSchema = new Schema<MatchRecordDocument>({
 
 MatchRecordSchema.index({ puuid: 1, matchId: 1 }, { unique: true });
 MatchRecordSchema.index({ buffProcessed: 1, puuid: 1 });
+MatchRecordSchema.index({ buffProcessed: 1, playedAt: 1 });
 MatchRecordSchema.index({ notifiedAt: 1, playedAt: 1 });
 MatchRecordSchema.index({ puuid: 1, playedAt: -1 });
+MatchRecordSchema.index({ puuid: 1, capturedAt: -1 });
 
 export const MatchRecord = mongoose.model<MatchRecordDocument>('MatchRecord', MatchRecordSchema, 'match_records');

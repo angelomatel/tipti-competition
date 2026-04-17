@@ -3,7 +3,7 @@ import { PointTransaction } from '@/db/models/PointTransaction';
 import { Player } from '@/db/models/Player';
 import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { getTournamentSettings } from '@/services/tournamentService';
-import { computePlayerScore } from '@/services/scoringEngine';
+import { computePlayerScoreTotals } from '@/services/scoringEngine';
 import { normalizeLP, TIER_ORDER } from '@/lib/normalizeLP';
 import { getCurrentPhtDay, getPhtDayBounds, dateToPhtDayStr } from '@/lib/dateUtils';
 import {
@@ -33,9 +33,6 @@ import {
   ASOL_SHIFT_CAP,
 } from '@/constants';
 import { logger } from '@/lib/logger';
-import type { MatchRecordDocument } from '@/types/Player';
-
-// ── Types ────────────────────────────────────────────────────────────
 
 interface BuffEntry {
   value: number;
@@ -51,11 +48,26 @@ interface PlayerContext {
   riotId?: string;
 }
 
+type LeanMatchRecord = {
+  _id: unknown;
+  puuid: string;
+  matchId: string;
+  placement: number;
+  playedAt: Date;
+};
+
+type LeanLpSnapshot = {
+  _id: unknown;
+  puuid: string;
+  tier: string;
+  rank: string;
+  leaguePoints: number;
+  capturedAt: Date;
+};
+
 function getPlayerLogLabel(player: Pick<PlayerContext, 'discordId' | 'riotId'>): string {
   return player.riotId ?? `discord:${player.discordId}`;
 }
-
-// ── Helpers ──────────────────────────────────────────────────────────
 
 function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -72,110 +84,39 @@ function getEvelynnLpThreshold(tierOrder: number): number {
   return EVELYNN_LP_DEFAULT_THRESHOLD;
 }
 
-/** Get the sum of positive buff PointTransactions for a player+day. */
-async function getPlayerDailyBuffTotal(playerId: string, day: string): Promise<number> {
-  const result = await PointTransaction.aggregate([
-    { $match: { playerId, day, type: 'buff' } },
-    { $group: { _id: null, total: { $sum: '$value' } } },
-  ]);
-  return result[0]?.total ?? 0;
-}
-
-/** Get the placement from the most recent MatchRecord before a given date. */
-async function getPreviousPlacement(puuid: string, beforeDate: Date): Promise<number | null> {
-  const prev = await MatchRecord.findOne({
-    puuid,
-    playedAt: { $lt: beforeDate },
-  }).sort({ playedAt: -1 });
-  return prev?.placement ?? null;
-}
-
-/** Get number of matches played today (buffProcessed or not). */
-async function getTodayMatchCount(puuid: string, dayStart: Date, dayEnd: Date): Promise<number> {
-  return MatchRecord.countDocuments({
-    puuid,
-    playedAt: { $gte: dayStart, $lte: dayEnd },
-  });
-}
-
-/** Check if Kayle activity bonus was already awarded today. */
-async function hasKayleActivityBonus(playerId: string, day: string): Promise<boolean> {
-  const existing = await PointTransaction.findOne({
-    playerId,
-    day,
-    source: 'kayle_activity',
-  });
-  return !!existing;
-}
-
-/** Get current win/loss streak ending before a given date. Returns {count, isWin}. */
-async function getCurrentStreak(puuid: string, beforeDate: Date): Promise<{ count: number; isWin: boolean }> {
-  // Fetch recent matches before this one, sorted newest first
-  const recentMatches = await MatchRecord.find({
-    puuid,
-    playedAt: { $lt: beforeDate },
-  }).sort({ playedAt: -1 }).limit(SORAKA_STREAK_CAP);
-
-  if (recentMatches.length === 0) return { count: 0, isWin: true };
-
-  const firstPlacement = recentMatches[0].placement;
-  const isWin = firstPlacement <= 4;
-
-  let count = 0;
-  for (const m of recentMatches) {
-    const matchIsWin = m.placement <= 4;
-    if (matchIsWin === isWin) {
-      count++;
-    } else {
-      break;
-    }
-  }
-
-  return { count, isWin };
-}
-
-/** Buffs only start once phase 2 begins. Matches before that are never eligible. */
 function getBuffActivationStart(settings: Awaited<ReturnType<typeof getTournamentSettings>>): Date | null {
-  const phase2 = settings.phases.find((p) => p.phase === 2);
+  const phase2 = settings.phases.find((phase) => phase.phase === 2);
   if (!phase2) return null;
   return getPhtDayBounds(phase2.startDay).dayStart;
 }
 
-/** Compute today's LP gain for a player from snapshots. */
-async function getPlayerDailyLpGain(puuid: string, dayStart: Date, dayEnd: Date): Promise<number> {
-  const firstSnapshot = await LpSnapshot.findOne({
-    puuid,
-    capturedAt: { $gte: dayStart, $lte: dayEnd },
-  }).sort({ capturedAt: 1 });
+function buildGodRankings(
+  players: Array<{ discordId: string; godSlug?: string | null; isEliminatedFromGod?: boolean }>,
+  scoreTotals: Map<string, number>,
+): Map<string, Map<string, number>> {
+  const playersByGod = new Map<string, Array<{ discordId: string; score: number }>>();
 
-  const lastSnapshot = await LpSnapshot.findOne({
-    puuid,
-    capturedAt: { $gte: dayStart, $lte: dayEnd },
-  }).sort({ capturedAt: -1 });
+  for (const player of players) {
+    if (!player.godSlug || player.isEliminatedFromGod) continue;
+    const godPlayers = playersByGod.get(player.godSlug) ?? [];
+    godPlayers.push({
+      discordId: player.discordId,
+      score: scoreTotals.get(player.discordId) ?? 0,
+    });
+    playersByGod.set(player.godSlug, godPlayers);
+  }
 
-  if (!firstSnapshot || !lastSnapshot) return 0;
+  const rankingsByGod = new Map<string, Map<string, number>>();
+  for (const [godSlug, godPlayers] of playersByGod) {
+    godPlayers.sort((a, b) => b.score - a.score);
+    rankingsByGod.set(
+      godSlug,
+      new Map(godPlayers.map((player, index) => [player.discordId, index + 1])),
+    );
+  }
 
-  return normalizeLP(lastSnapshot.tier, lastSnapshot.rank, lastSnapshot.leaguePoints) -
-    normalizeLP(firstSnapshot.tier, firstSnapshot.rank, firstSnapshot.leaguePoints);
+  return rankingsByGod;
 }
-
-/** Get god leaderboard rankings: Map<playerId, rank> (1-indexed). */
-async function getGodRankings(godSlug: string): Promise<Map<string, number>> {
-  const players = await Player.find({ godSlug, isActive: true });
-  const scores = await Promise.all(
-    players.map(async (p) => ({
-      playerId: p.discordId,
-      score: await computePlayerScore(p.discordId),
-    })),
-  );
-  scores.sort((a, b) => b.score - a.score);
-
-  const rankings = new Map<string, number>();
-  scores.forEach((s, i) => rankings.set(s.playerId, i + 1));
-  return rankings;
-}
-
-// ── Per-Match Buff Compute Functions ─────────────────────────────────
 
 function computeVarusMatchBuff(rank: number): BuffEntry[] {
   const results: BuffEntry[] = [];
@@ -227,9 +168,6 @@ function computeYasuoMatchBuff(placement: number): BuffEntry[] {
 }
 
 function computeSorakaMatchBuff(streakCount: number, isWinStreak: boolean): BuffEntry[] {
-  // streakCount = number of consecutive same-direction matches BEFORE this one
-  // Current match extends the streak, so effective position = streakCount + 1
-  // Bonus = (position - 1) * per = streakCount * per
   const cappedStreak = Math.min(streakCount, SORAKA_STREAK_CAP - 1);
   if (cappedStreak === 0) return [];
 
@@ -260,8 +198,6 @@ function computeAsolMatchBuff(placement: number): BuffEntry[] {
   }];
 }
 
-// ── Main Processor ───────────────────────────────────────────────────
-
 export async function processNewMatchBuffs(): Promise<void> {
   const settings = await getTournamentSettings();
   if (!settings.buffsEnabled) {
@@ -269,62 +205,191 @@ export async function processNewMatchBuffs(): Promise<void> {
     return;
   }
 
-  const unprocessed = await MatchRecord.find({ buffProcessed: false }).sort({ playedAt: 1 });
+  const unprocessed = await MatchRecord.find({ buffProcessed: false }).sort({ playedAt: 1 }).lean() as LeanMatchRecord[];
   if (unprocessed.length === 0) return;
 
   logger.debug(`[match-buff] Processing ${unprocessed.length} unprocessed match(es)`);
 
-  // Build player lookup: puuid → PlayerContext
-  const puuids = [...new Set(unprocessed.map((m) => m.puuid))];
-  const players = await Player.find({ puuid: { $in: puuids }, isActive: true });
+  const unprocessedMatchIds = new Set(unprocessed.map((match) => match.matchId));
+  const puuids = [...new Set(unprocessed.map((match) => match.puuid))];
+  const matchDays = [...new Set(unprocessed.map((match) => dateToPhtDayStr(match.playedAt)))].sort();
+
+  const allActivePlayers = await Player.find({ isActive: true })
+    .select({ discordId: 1, puuid: 1, godSlug: 1, isEliminatedFromGod: 1, currentTier: 1, riotId: 1 })
+    .lean();
+  const scoreTotals = await computePlayerScoreTotals(allActivePlayers.map((player) => player.discordId));
+  const godRankingsCache = buildGodRankings(allActivePlayers, scoreTotals);
+
   const playerByPuuid = new Map<string, PlayerContext>();
-  for (const p of players) {
-    if (!p.godSlug) continue;
-    playerByPuuid.set(p.puuid, {
-      discordId: p.discordId,
-      puuid: p.puuid,
-      godSlug: p.godSlug,
-      currentTier: p.currentTier,
-      riotId: p.riotId ?? undefined,
+  for (const player of allActivePlayers) {
+    if (!puuids.includes(player.puuid) || !player.godSlug) continue;
+    playerByPuuid.set(player.puuid, {
+      discordId: player.discordId,
+      puuid: player.puuid,
+      godSlug: player.godSlug,
+      currentTier: player.currentTier,
+      riotId: player.riotId ?? undefined,
     });
   }
 
-  // Pre-compute god rankings (cached for this cycle)
-  const godSlugs = [...new Set([...playerByPuuid.values()].map((p) => p.godSlug))];
-  const godRankingsCache = new Map<string, Map<string, number>>();
-  for (const slug of godSlugs) {
-    godRankingsCache.set(slug, await getGodRankings(slug));
-  }
-
-  // Pre-compute Thresh top 1 latest placement
-  const threshTop1Placement = new Map<string, number | null>(); // day → placement
+  let threshTop1PlayerPuuid: string | null = null;
   const threshRankings = godRankingsCache.get('thresh');
-  let threshTop1Id: string | null = null;
   if (threshRankings) {
     for (const [playerId, rank] of threshRankings) {
-      if (rank === 1) { threshTop1Id = playerId; break; }
+      if (rank !== 1) continue;
+      threshTop1PlayerPuuid = allActivePlayers.find((player) => player.discordId === playerId)?.puuid ?? null;
+      break;
     }
   }
 
-  // Determine current phase
+  const minDayStart = matchDays.length > 0 ? getPhtDayBounds(matchDays[0]!).dayStart : null;
+  const maxDayEnd = matchDays.length > 0 ? getPhtDayBounds(matchDays[matchDays.length - 1]!).dayEnd : null;
+  const contextPuuids = threshTop1PlayerPuuid
+    ? [...new Set([...puuids, threshTop1PlayerPuuid])]
+    : puuids;
+  const playerIds = [...new Set([...playerByPuuid.values()].map((player) => player.discordId))];
+
+  const [historicalMatches, snapshots, dailyBuffRows, kayleActivityTransactions] = await Promise.all([
+    maxDayEnd
+      ? MatchRecord.find({
+        puuid: { $in: contextPuuids },
+        playedAt: { $lte: maxDayEnd },
+      })
+        .sort({ puuid: 1, playedAt: 1 })
+        .lean() as Promise<LeanMatchRecord[]>
+      : Promise.resolve([] as LeanMatchRecord[]),
+    minDayStart && maxDayEnd
+      ? LpSnapshot.find({
+        puuid: { $in: puuids },
+        capturedAt: { $gte: minDayStart, $lte: maxDayEnd },
+      })
+        .sort({ puuid: 1, capturedAt: 1 })
+        .lean() as Promise<LeanLpSnapshot[]>
+      : Promise.resolve([] as LeanLpSnapshot[]),
+    PointTransaction.aggregate<{ _id: { playerId: string; day: string }; total: number }>([
+      {
+        $match: {
+          playerId: { $in: playerIds },
+          day: { $in: matchDays },
+          type: 'buff',
+        },
+      },
+      {
+        $group: {
+          _id: { playerId: '$playerId', day: '$day' },
+          total: { $sum: '$value' },
+        },
+      },
+    ]),
+    PointTransaction.find({
+      playerId: { $in: playerIds },
+      day: { $in: matchDays },
+      source: 'kayle_activity',
+    })
+      .select({ playerId: 1, day: 1, _id: 0 })
+      .lean(),
+  ]);
+
+  const historicalMatchesByPuuid = new Map<string, LeanMatchRecord[]>();
+  const matchesByPuuidDay = new Map<string, LeanMatchRecord[]>();
+  for (const match of historicalMatches) {
+    const playerMatches = historicalMatchesByPuuid.get(match.puuid) ?? [];
+    playerMatches.push(match);
+    historicalMatchesByPuuid.set(match.puuid, playerMatches);
+
+    const dayKey = `${match.puuid}:${dateToPhtDayStr(match.playedAt)}`;
+    const dayMatches = matchesByPuuidDay.get(dayKey) ?? [];
+    dayMatches.push(match);
+    matchesByPuuidDay.set(dayKey, dayMatches);
+  }
+
+  const previousPlacementByMatchId = new Map<string, number | null>();
+  const streakByMatchId = new Map<string, { count: number; isWin: boolean }>();
+  for (const playerMatches of historicalMatchesByPuuid.values()) {
+    for (let index = 0; index < playerMatches.length; index += 1) {
+      const match = playerMatches[index]!;
+      if (!unprocessedMatchIds.has(match.matchId)) continue;
+
+      const previousMatch = index > 0 ? playerMatches[index - 1]! : null;
+      previousPlacementByMatchId.set(match.matchId, previousMatch?.placement ?? null);
+
+      if (!previousMatch) {
+        streakByMatchId.set(match.matchId, { count: 0, isWin: true });
+        continue;
+      }
+
+      const isWin = previousMatch.placement <= 4;
+      let count = 0;
+      for (let cursor = index - 1; cursor >= 0 && count < SORAKA_STREAK_CAP; cursor -= 1) {
+        const streakMatch = playerMatches[cursor]!;
+        if ((streakMatch.placement <= 4) !== isWin) break;
+        count += 1;
+      }
+      streakByMatchId.set(match.matchId, { count, isWin });
+    }
+  }
+
+  const firstSnapshotByKey = new Map<string, LeanLpSnapshot>();
+  const lastSnapshotByKey = new Map<string, LeanLpSnapshot>();
+  for (const snapshot of snapshots) {
+    const snapshotKey = `${snapshot.puuid}:${dateToPhtDayStr(snapshot.capturedAt)}`;
+    if (!firstSnapshotByKey.has(snapshotKey)) {
+      firstSnapshotByKey.set(snapshotKey, snapshot);
+    }
+    lastSnapshotByKey.set(snapshotKey, snapshot);
+  }
+
+  const dailyLpGainByKey = new Map<string, number>();
+  for (const [snapshotKey, firstSnapshot] of firstSnapshotByKey) {
+    const lastSnapshot = lastSnapshotByKey.get(snapshotKey);
+    if (!lastSnapshot) continue;
+    dailyLpGainByKey.set(
+      snapshotKey,
+      normalizeLP(lastSnapshot.tier, lastSnapshot.rank, lastSnapshot.leaguePoints) -
+        normalizeLP(firstSnapshot.tier, firstSnapshot.rank, firstSnapshot.leaguePoints),
+    );
+  }
+
+  const dailyBuffTotals = new Map<string, number>(
+    dailyBuffRows.map((row) => [`${row._id.playerId}:${row._id.day}`, row.total]),
+  );
+  const kayleActivityAwarded = new Set(
+    kayleActivityTransactions.map((transaction) => `${transaction.playerId}:${transaction.day}`),
+  );
+
+  const threshTop1PlacementByDay = new Map<string, number | null>();
+  if (threshTop1PlayerPuuid) {
+    for (const day of matchDays) {
+      const dayMatches = matchesByPuuidDay.get(`${threshTop1PlayerPuuid}:${day}`) ?? [];
+      threshTop1PlacementByDay.set(day, dayMatches.length > 0 ? dayMatches[dayMatches.length - 1]!.placement : null);
+    }
+  }
+
   const today = getCurrentPhtDay();
-  const phase = settings.phases.find((p) => today >= p.startDay && today <= p.endDay);
+  const phase = settings.phases.find((phaseConfig) => today >= phaseConfig.startDay && today <= phaseConfig.endDay);
   const phaseNum = phase?.phase ?? settings.currentPhase;
   const buffActivationStart = getBuffActivationStart(settings);
 
-  // Track running daily buff totals per player (to enforce cap across this batch)
-  const dailyBuffTotals = new Map<string, number>(); // "playerId:day" → total
+  const processedMatchIds: unknown[] = [];
+  const transactionDocs: Array<{
+    playerId: string;
+    godSlug: string;
+    type: 'buff' | 'penalty';
+    value: number;
+    source: string;
+    matchId: string;
+    day: string;
+    phase: number;
+  }> = [];
 
   for (const match of unprocessed) {
     const player = playerByPuuid.get(match.puuid);
     if (!player) {
-      // Player not active or no god — mark as processed and skip
-      await MatchRecord.updateOne({ _id: match._id }, { buffProcessed: true });
+      processedMatchIds.push(match._id);
       continue;
     }
 
     if (buffActivationStart && match.playedAt < buffActivationStart) {
-      const playerLabel = getPlayerLogLabel(player);
       logger.debug(
         {
           discordId: player.discordId,
@@ -334,130 +399,80 @@ export async function processNewMatchBuffs(): Promise<void> {
           playedAt: match.playedAt.toISOString(),
           buffActivationStart: buffActivationStart.toISOString(),
         },
-        `[match-buff] Match ${match.matchId} for ${playerLabel} occurred before buff activation; marking processed without buffs`,
+        `[match-buff] Match ${match.matchId} for ${getPlayerLogLabel(player)} occurred before buff activation; marking processed without buffs`,
       );
-      await MatchRecord.updateOne({ _id: match._id }, { buffProcessed: true });
+      processedMatchIds.push(match._id);
       continue;
     }
 
     const matchDay = dateToPhtDayStr(match.playedAt);
-    const { dayStart, dayEnd } = getPhtDayBounds(matchDay);
-    const cap = getDailyCap(player.godSlug);
-
-    // Get or initialize running daily total
     const totalKey = `${player.discordId}:${matchDay}`;
-    if (!dailyBuffTotals.has(totalKey)) {
-      dailyBuffTotals.set(totalKey, await getPlayerDailyBuffTotal(player.discordId, matchDay));
-    }
-
-    // Compute buff entries based on god
+    const cap = getDailyCap(player.godSlug);
+    let currentTotal = dailyBuffTotals.get(totalKey) ?? 0;
     let entries: BuffEntry[] = [];
 
     switch (player.godSlug) {
       case 'varus': {
-        const rankings = godRankingsCache.get('varus')!;
-        const rank = rankings.get(player.discordId) ?? 999;
-        entries = computeVarusMatchBuff(rank);
+        const rankings = godRankingsCache.get('varus') ?? new Map<string, number>();
+        entries = computeVarusMatchBuff(rankings.get(player.discordId) ?? 999);
         break;
       }
-      case 'ekko': {
-        const prevPlacement = await getPreviousPlacement(match.puuid, match.playedAt);
-        entries = computeEkkoMatchBuff(match.placement, prevPlacement);
+      case 'ekko':
+        entries = computeEkkoMatchBuff(match.placement, previousPlacementByMatchId.get(match.matchId) ?? null);
         break;
-      }
       case 'evelynn': {
-        const dailyLpGain = await getPlayerDailyLpGain(match.puuid, dayStart, dayEnd);
+        const dailyLpGain = dailyLpGainByKey.get(`${match.puuid}:${matchDay}`) ?? 0;
         const tierOrder = TIER_ORDER[player.currentTier as keyof typeof TIER_ORDER] ?? 0;
         entries = computeEvelynnMatchBuff(dailyLpGain, tierOrder);
         break;
       }
       case 'thresh': {
-        const rankings = godRankingsCache.get('thresh')!;
+        const rankings = godRankingsCache.get('thresh') ?? new Map<string, number>();
         const rank = rankings.get(player.discordId) ?? 999;
         const isTop1 = rank === 1;
-
-        // Get top 1's latest placement for today
-        let top1Placement: number | null = null;
-        if (!isTop1 && threshTop1Id) {
-          const cacheKey = matchDay;
-          if (!threshTop1Placement.has(cacheKey)) {
-            const top1Player = players.find((p) => p.discordId === threshTop1Id);
-            if (top1Player) {
-              const latestMatch = await MatchRecord.findOne({
-                puuid: top1Player.puuid,
-                playedAt: { $gte: dayStart, $lte: dayEnd },
-              }).sort({ playedAt: -1 });
-              threshTop1Placement.set(cacheKey, latestMatch?.placement ?? null);
-            } else {
-              // Top 1 player not in current batch — look up directly
-              const top1PlayerDoc = await Player.findOne({ discordId: threshTop1Id });
-              if (top1PlayerDoc) {
-                const latestMatch = await MatchRecord.findOne({
-                  puuid: top1PlayerDoc.puuid,
-                  playedAt: { $gte: dayStart, $lte: dayEnd },
-                }).sort({ playedAt: -1 });
-                threshTop1Placement.set(cacheKey, latestMatch?.placement ?? null);
-              } else {
-                threshTop1Placement.set(cacheKey, null);
-              }
-            }
-          }
-          top1Placement = threshTop1Placement.get(cacheKey) ?? null;
-        }
-
+        const top1Placement = isTop1 ? null : (threshTop1PlacementByDay.get(matchDay) ?? null);
         entries = computeThreshMatchBuff(match.placement, isTop1, top1Placement);
         break;
       }
-      case 'yasuo': {
+      case 'yasuo':
         entries = computeYasuoMatchBuff(match.placement);
         break;
-      }
       case 'soraka': {
-        const streak = await getCurrentStreak(match.puuid, match.playedAt);
+        const streak = streakByMatchId.get(match.matchId) ?? { count: 0, isWin: true };
         const isWin = match.placement <= 4;
-        // If direction matches existing streak, extend it; otherwise reset
-        const effectiveCount = (streak.count > 0 && streak.isWin === isWin) ? streak.count : 0;
+        const effectiveCount = streak.count > 0 && streak.isWin === isWin ? streak.count : 0;
         entries = computeSorakaMatchBuff(effectiveCount, isWin);
         break;
       }
       case 'kayle': {
         entries = [{ value: KAYLE_FLAT_PER_MATCH, source: 'kayle_flat', type: 'buff' }];
-        const matchesToday = await getTodayMatchCount(match.puuid, dayStart, dayEnd);
-        if (matchesToday >= KAYLE_ACTIVITY_MIN_MATCHES) {
-          const alreadyAwarded = await hasKayleActivityBonus(player.discordId, matchDay);
-          if (!alreadyAwarded) {
-            entries.push({ value: KAYLE_ACTIVITY_BONUS, source: 'kayle_activity', type: 'buff' });
-          }
+        const matchesToday = matchesByPuuidDay.get(`${match.puuid}:${matchDay}`)?.length ?? 0;
+        if (matchesToday >= KAYLE_ACTIVITY_MIN_MATCHES && !kayleActivityAwarded.has(totalKey)) {
+          entries.push({ value: KAYLE_ACTIVITY_BONUS, source: 'kayle_activity', type: 'buff' });
+          kayleActivityAwarded.add(totalKey);
         }
         break;
       }
-      case 'ahri': {
+      case 'ahri':
         entries = computeAhriMatchBuff(match.placement);
         break;
-      }
-      case 'aurelion_sol': {
+      case 'aurelion_sol':
         entries = computeAsolMatchBuff(match.placement);
         break;
-      }
     }
-
-    // Apply daily cap and create transactions
-    let currentTotal = dailyBuffTotals.get(totalKey)!;
 
     for (const entry of entries) {
       let finalValue = entry.value;
-
       if (finalValue > 0) {
         const remaining = cap - currentTotal;
         if (remaining <= 0) continue;
         finalValue = Math.min(finalValue, remaining);
         currentTotal += finalValue;
       }
-      // Penalties pass through uncapped
 
       if (finalValue === 0) continue;
 
-      await PointTransaction.create({
+      transactionDocs.push({
         playerId: player.discordId,
         godSlug: player.godSlug,
         type: entry.type,
@@ -486,7 +501,17 @@ export async function processNewMatchBuffs(): Promise<void> {
     }
 
     dailyBuffTotals.set(totalKey, currentTotal);
-    await MatchRecord.updateOne({ _id: match._id }, { buffProcessed: true });
+    processedMatchIds.push(match._id);
+  }
+
+  if (transactionDocs.length > 0) {
+    await PointTransaction.insertMany(transactionDocs, { ordered: false });
+  }
+  if (processedMatchIds.length > 0) {
+    await MatchRecord.updateMany(
+      { _id: { $in: processedMatchIds } },
+      { $set: { buffProcessed: true } },
+    );
   }
 
   logger.debug(`[match-buff] Processed ${unprocessed.length} match buff(s)`);

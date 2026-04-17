@@ -3,17 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/db/models/MatchRecord', () => ({
   MatchRecord: {
     findOne: vi.fn(),
-    exists: vi.fn(),
-    create: vi.fn(),
+    find: vi.fn(),
+    bulkWrite: vi.fn(),
   },
 }));
 
 vi.mock('@/services/riotService', () => ({
   getRiotClient: vi.fn(),
-}));
-
-vi.mock('@/services/tournamentService', () => ({
-  getTournamentSettings: vi.fn(),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -36,32 +32,32 @@ vi.mock('@/lib/riotClient', () => ({
 
 import { MatchRecord } from '@/db/models/MatchRecord';
 import { getRiotClient } from '@/services/riotService';
-import { getTournamentSettings } from '@/services/tournamentService';
 import { logger } from '@/lib/logger';
 import { captureMatchesForPlayer } from '@/services/matchService';
 
 const mockFindOne = vi.mocked(MatchRecord.findOne);
-const mockExists = vi.mocked(MatchRecord.exists);
-const mockCreate = vi.mocked(MatchRecord.create);
+const mockFind = vi.mocked(MatchRecord.find);
+const mockBulkWrite = vi.mocked(MatchRecord.bulkWrite);
 const mockGetRiotClient = vi.mocked(getRiotClient);
-const mockGetTournamentSettings = vi.mocked(getTournamentSettings);
 const mockInfo = vi.mocked(logger.info);
 
 describe('captureMatchesForPlayer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockGetTournamentSettings.mockResolvedValue({
-      startDate: new Date('2026-04-01T00:00:00.000Z'),
-      endDate: new Date('2026-04-30T23:59:59.000Z'),
-    } as any);
-
     mockFindOne.mockReturnValue({
-      sort: vi.fn().mockResolvedValue(null),
+      sort: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue(null),
+      }),
     } as any);
 
-    mockExists.mockResolvedValue(false as any);
-    mockCreate.mockResolvedValue({} as any);
+    mockFind.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue([]),
+      }),
+    } as any);
+
+    mockBulkWrite.mockResolvedValue({ upsertedCount: 1 } as any);
   });
 
   it('logs captured matches with match and player identifiers', async () => {
@@ -84,8 +80,14 @@ describe('captureMatchesForPlayer', () => {
       riotId: 'Player#SEA',
       gameName: 'Player',
       tagLine: 'SEA',
-    } as any);
+    } as any, {
+      settings: {
+        startDate: new Date('2026-04-01T00:00:00.000Z'),
+        endDate: new Date('2026-04-30T23:59:59.000Z'),
+      },
+    });
 
+    expect(mockBulkWrite).toHaveBeenCalledTimes(1);
     expect(mockInfo).toHaveBeenCalledWith(
       expect.objectContaining({
         discordId: 'discord-1',
@@ -101,6 +103,7 @@ describe('captureMatchesForPlayer', () => {
         discordId: 'discord-1',
         riotId: 'Player#SEA',
         capturedCount: 1,
+        requestedMatchIdCount: 10,
       }),
       '[match] Match capture summary for Player#SEA',
     );
