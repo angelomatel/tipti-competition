@@ -6,26 +6,27 @@ import { getTournamentSettings } from '@/services/tournamentService';
 import { listActivePlayers } from '@/services/playerService';
 import { processEndOfPhase, processEndOfTournament } from '@/services/phaseService';
 import { normalizeLP } from '@/lib/normalizeLP';
-import { getDayBoundsUTC8, getTodayUTC8 } from '@/lib/dateUtils';
+import { getCurrentPhtDay, getPhtDayBounds } from '@/lib/dateUtils';
 import { logger } from '@/lib/logger';
 import { getPlayerLogLabel } from '@/lib/playerLogLabel';
 import { runScheduledDataFetchJob } from '@/lib/scheduledDataFetch';
+import { PHT_TIMEZONE } from '@/constants';
 
-function getYesterdayUTC8(): string {
-  const today = getTodayUTC8();
+function getYesterdayPhtDay(): string {
+  const today = getCurrentPhtDay();
   const d = new Date(today + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() - 1);
   return d.toISOString().slice(0, 10);
 }
 
 export async function runDailyProcessing(day?: string): Promise<void> {
-  const targetDay = day ?? getYesterdayUTC8();
+  const targetDay = day ?? getYesterdayPhtDay();
   logger.info(`[daily-cron] Starting daily processing for ${targetDay}`);
   logger.debug({ targetDay }, '[daily-cron] Resolving settings and active players for daily processing');
 
   const settings = await getTournamentSettings();
   const players = await listActivePlayers();
-  const { dayStart, dayEnd } = getDayBoundsUTC8(targetDay);
+  const { dayStart, dayEnd } = getPhtDayBounds(targetDay);
   logger.debug({ playerCount: players.length, dayStart: dayStart.toISOString(), dayEnd: dayEnd.toISOString() }, '[daily-cron] Loaded active players and computed day bounds');
 
   // Determine current phase for this day
@@ -132,9 +133,8 @@ export async function runDailyProcessing(day?: string): Promise<void> {
 }
 
 export function startDailyCronJob(): void {
-  // Run at 16:00 UTC (midnight UTC+8)
-  cron.schedule('0 16 * * *', () => {
+  cron.schedule('0 0 * * *', () => {
     void runScheduledDataFetchJob('daily-cron', () => runDailyProcessing());
-  });
-  logger.info('[daily-cron] Daily processing job scheduled (0 16 * * *).');
+  }, { timezone: PHT_TIMEZONE });
+  logger.info(`[daily-cron] Daily processing job scheduled (0 0 * * *, timezone=${PHT_TIMEZONE}).`);
 }

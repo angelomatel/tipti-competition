@@ -1,7 +1,7 @@
 import { TournamentSettings } from '@/db/models/TournamentSettings';
 import type { TournamentSettingsDocument } from '@/db/models/TournamentSettings';
 import { TOURNAMENT_START_DATE, TOURNAMENT_END_DATE } from '@/constants';
-import { computePhases, getTodayUTC8 } from '@/lib/dateUtils';
+import { computePhases, getCurrentPhtDay } from '@/lib/dateUtils';
 
 /**
  * Returns the active tournament settings document.
@@ -21,7 +21,7 @@ export async function getTournamentSettings(): Promise<TournamentSettingsDocumen
   settings.phases = phases;
 
   // Derive currentPhase and buffsEnabled from today's date
-  const today = getTodayUTC8();
+  const today = getCurrentPhtDay();
   const currentPhaseObj = phases.find((p) => today >= p.startDay && today <= p.endDay);
   if (currentPhaseObj) {
     settings.currentPhase = currentPhaseObj.phase;

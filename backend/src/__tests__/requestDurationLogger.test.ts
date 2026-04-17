@@ -95,4 +95,25 @@ describe('requestDurationLogger', () => {
     expect(logger.warn).not.toHaveBeenCalled();
     expect(logger.error).not.toHaveBeenCalled();
   });
+
+  it('treats daily summary and graph routes as monitored', () => {
+    for (const path of ['/api/notifications/daily-summary', '/api/notifications/daily-graph']) {
+      vi.clearAllMocks();
+
+      const req = { method: 'GET', path };
+      const res = makeResponse(200);
+
+      requestDurationLogger(req as any, res as any, vi.fn());
+      res.emit('finish');
+
+      expect(logger.debug).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'GET',
+          path,
+          statusCode: 200,
+        }),
+        'HTTP request completed',
+      );
+    }
+  });
 });

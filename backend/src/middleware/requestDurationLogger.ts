@@ -4,6 +4,8 @@ import { logger } from '@/lib/logger';
 const MONITORED_ROUTES = new Set([
   '/api/leaderboard',
   '/api/notifications/feed',
+  '/api/notifications/daily-summary',
+  '/api/notifications/daily-graph',
   '/api/gods',
   '/api/gods/standings',
 ]);

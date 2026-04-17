@@ -14,6 +14,7 @@ const DailyPlayerScoreSchema = new Schema<DailyPlayerScoreDocument>({
 
 DailyPlayerScoreSchema.index({ playerId: 1, day: 1 }, { unique: true });
 DailyPlayerScoreSchema.index({ godSlug: 1, day: 1 });
+DailyPlayerScoreSchema.index({ day: 1, rawLpGain: -1 });
 
 export const DailyPlayerScore = mongoose.model<DailyPlayerScoreDocument>(
   'DailyPlayerScore',

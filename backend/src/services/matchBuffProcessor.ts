@@ -5,7 +5,7 @@ import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { getTournamentSettings } from '@/services/tournamentService';
 import { computePlayerScore } from '@/services/scoringEngine';
 import { normalizeLP, TIER_ORDER } from '@/lib/normalizeLP';
-import { getTodayUTC8, getDayBoundsUTC8, dateToUTC8Str } from '@/lib/dateUtils';
+import { getCurrentPhtDay, getPhtDayBounds, dateToPhtDayStr } from '@/lib/dateUtils';
 import {
   BUFF_DAILY_CAP,
   GOD_DAILY_CAP_OVERRIDES,
@@ -138,7 +138,7 @@ async function getCurrentStreak(puuid: string, beforeDate: Date): Promise<{ coun
 function getBuffActivationStart(settings: Awaited<ReturnType<typeof getTournamentSettings>>): Date | null {
   const phase2 = settings.phases.find((p) => p.phase === 2);
   if (!phase2) return null;
-  return getDayBoundsUTC8(phase2.startDay).dayStart;
+  return getPhtDayBounds(phase2.startDay).dayStart;
 }
 
 /** Compute today's LP gain for a player from snapshots. */
@@ -307,7 +307,7 @@ export async function processNewMatchBuffs(): Promise<void> {
   }
 
   // Determine current phase
-  const today = getTodayUTC8();
+  const today = getCurrentPhtDay();
   const phase = settings.phases.find((p) => today >= p.startDay && today <= p.endDay);
   const phaseNum = phase?.phase ?? settings.currentPhase;
   const buffActivationStart = getBuffActivationStart(settings);
@@ -340,8 +340,8 @@ export async function processNewMatchBuffs(): Promise<void> {
       continue;
     }
 
-    const matchDay = dateToUTC8Str(match.playedAt);
-    const { dayStart, dayEnd } = getDayBoundsUTC8(matchDay);
+    const matchDay = dateToPhtDayStr(match.playedAt);
+    const { dayStart, dayEnd } = getPhtDayBounds(matchDay);
     const cap = getDailyCap(player.godSlug);
 
     // Get or initialize running daily total

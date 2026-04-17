@@ -4,7 +4,7 @@ import { MatchRecord } from '@/db/models/MatchRecord';
 import { Player } from '@/db/models/Player';
 import { GOD_SCORE_TOP_N } from '@/constants';
 import { normalizeLP } from '@/lib/normalizeLP';
-import { dateToUTC8Str, getTodayUTC8 } from '@/lib/dateUtils';
+import { getCurrentPhtDay } from '@/lib/dateUtils';
 import { logger } from '@/lib/logger';
 import { getPlayerLogLabel } from '@/lib/playerLogLabel';
 import type { TournamentSettingsDocument } from '@/db/models/TournamentSettings';
@@ -181,7 +181,7 @@ export async function createLpDeltaTransaction(
   const delta = expectedTotal - existingTotal;
   if (delta === 0) return;
 
-  const today = getTodayUTC8();
+  const today = getCurrentPhtDay();
   const phase = settings.phases.find((p) => today >= p.startDay && today <= p.endDay);
 
   const linkedMatchIds = await PointTransaction.distinct('matchId', {

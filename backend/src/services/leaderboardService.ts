@@ -3,7 +3,7 @@ import { God } from '@/db/models/God';
 import { getTournamentSettings } from '@/services/tournamentService';
 import { computePlayerDailyPointGainTotals, computePlayerScoreTotals } from '@/services/scoringEngine';
 import { normalizeLP } from '@/lib/normalizeLP';
-import { getDayBoundsUTC8, getTodayUTC8 } from '@/lib/dateUtils';
+import { getCurrentPhtDay, getPhtDayBounds } from '@/lib/dateUtils';
 import { listActivePlayers, searchActivePlayers } from '@/services/playerService';
 import { LEADERBOARD_CACHE_TTL_MS } from '@/constants';
 import type { LeaderboardEntry, LeaderboardResponse } from '@/types/Leaderboard';
@@ -109,8 +109,8 @@ export async function computeLeaderboard(options: ComputeLeaderboardOptions = {}
     return emptyResponse;
   }
 
-  const today = getTodayUTC8();
-  const { dayStart, dayEnd } = getDayBoundsUTC8(today);
+  const today = getCurrentPhtDay();
+  const { dayStart, dayEnd } = getPhtDayBounds(today);
   const playerIds = players.map((player) => player.discordId);
   const puuids = players.map((player) => player.puuid);
 

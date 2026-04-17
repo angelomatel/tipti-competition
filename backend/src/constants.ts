@@ -22,7 +22,8 @@ export const DATABASE_BACKUP_ENABLED = parseBooleanEnv(
   process.env.NODE_ENV === 'production',
 );
 export const DATABASE_BACKUP_CRON = process.env.DATABASE_BACKUP_CRON ?? '0 */12 * * *';
-export const DATABASE_BACKUP_TIMEZONE = process.env.DATABASE_BACKUP_TIMEZONE ?? 'UTC';
+export const PHT_TIMEZONE = 'Asia/Manila';
+export const DATABASE_BACKUP_TIMEZONE = process.env.DATABASE_BACKUP_TIMEZONE ?? PHT_TIMEZONE;
 export const DATABASE_BACKUP_DIR = process.env.DATABASE_BACKUP_DIR ?? 'backups';
 export const DATABASE_BACKUP_RETENTION_COUNT = parsePositiveIntEnv(
   process.env.DATABASE_BACKUP_RETENTION_COUNT,
@@ -49,8 +50,9 @@ export const DAILY_GRAPH_TOP_N = 5;
 /** Regex for validating YYYY-MM-DD date query parameters. */
 export const DATE_PARAM_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Milliseconds offset for UTC+8 (Asia/Manila) timezone. */
-export const UTC8_OFFSET_MS = 8 * 60 * 60 * 1000;
+/** Milliseconds offset for PHT (Asia/Manila). */
+export const PHT_UTC_OFFSET_MS = 8 * 60 * 60 * 1000;
+export const UTC8_OFFSET_MS = PHT_UTC_OFFSET_MS;
 
 /** Timeout in milliseconds for outbound Riot API requests. */
 export const RIOT_REQUEST_TIMEOUT_MS = 15_000;

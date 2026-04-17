@@ -25,16 +25,38 @@ vi.mock('@/db/models/PointTransaction', () => ({
   },
 }));
 
+vi.mock('@/db/models/DailyPlayerScore', () => ({
+  DailyPlayerScore: {
+    find: vi.fn(),
+  },
+}));
+
 vi.mock('@/services/tournamentService', () => ({
   getTournamentSettings: vi.fn(),
+}));
+
+vi.mock('@/services/playerService', () => ({
+  listActivePlayers: vi.fn(),
+}));
+
+vi.mock('@/lib/logger', () => ({
+  logger: {
+    warn: vi.fn(),
+    debug: vi.fn(),
+    info: vi.fn(),
+    error: vi.fn(),
+  },
 }));
 
 import { MatchRecord } from '@/db/models/MatchRecord';
 import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { Player } from '@/db/models/Player';
 import { PointTransaction } from '@/db/models/PointTransaction';
-import { getFeedNotifications, ackFeedNotifications } from '@/services/notificationService';
+import { DailyPlayerScore } from '@/db/models/DailyPlayerScore';
+import { getFeedNotifications, ackFeedNotifications, getDailySummary } from '@/services/notificationService';
 import { getTournamentSettings } from '@/services/tournamentService';
+import { listActivePlayers } from '@/services/playerService';
+import { logger } from '@/lib/logger';
 import { NOTIFICATION_FEED_LIMIT } from '@/constants';
 
 const mockMatchFind = vi.mocked(MatchRecord.find);
@@ -42,13 +64,16 @@ const mockUpdateMany = vi.mocked(MatchRecord.updateMany);
 const mockSnapshotFindOne = vi.mocked(LpSnapshot.findOne);
 const mockPlayerFind = vi.mocked(Player.find);
 const mockPointTransactionFind = vi.mocked(PointTransaction.find);
+const mockDailyPlayerScoreFind = vi.mocked(DailyPlayerScore.find);
 const mockGetTournamentSettings = vi.mocked(getTournamentSettings);
+const mockListActivePlayers = vi.mocked(listActivePlayers);
+const mockWarn = vi.mocked(logger.warn);
 
 function mockFindLean<T>(value: T) {
   return { lean: vi.fn().mockResolvedValue(value) };
 }
 
-describe('notification feed optimization', () => {
+describe('notification service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -122,5 +147,57 @@ describe('notification feed optimization', () => {
       { matchId: { $in: ['match-1', 'match-2'] }, notifiedAt: null },
       { $set: { notifiedAt: expect.any(Date) } },
     );
+  });
+
+  it('prefers precomputed daily scores for daily summary', async () => {
+    mockDailyPlayerScoreFind.mockReturnValue(mockFindLean([
+      { playerId: 'user-1', day: '2026-01-10', rawLpGain: 42 },
+      { playerId: 'user-2', day: '2026-01-10', rawLpGain: -15 },
+    ]) as any);
+    mockPlayerFind.mockReturnValue(mockFindLean([
+      { discordId: 'user-1', gameName: 'One' },
+      { discordId: 'user-2', gameName: 'Two' },
+    ]) as any);
+
+    const summary = await getDailySummary('2026-01-10');
+
+    expect(summary).toEqual({
+      date: '2026-01-10',
+      climber: { discordId: 'user-1', gameName: 'One', lpGain: 42 },
+      slider: { discordId: 'user-2', gameName: 'Two', lpGain: -15 },
+    });
+    expect(mockListActivePlayers).not.toHaveBeenCalled();
+    expect(mockWarn).not.toHaveBeenCalled();
+  });
+
+  it('falls back to snapshot recompute when daily scores are unavailable', async () => {
+    mockDailyPlayerScoreFind.mockReturnValue(mockFindLean([]) as any);
+    mockListActivePlayers.mockResolvedValue([
+      { discordId: 'user-1', gameName: 'One', puuid: 'puuid-1' },
+      { discordId: 'user-2', gameName: 'Two', puuid: 'puuid-2' },
+    ] as any);
+
+    const snapshotResults = [
+      { _id: { equals: vi.fn().mockReturnValue(false) }, tier: 'GOLD', rank: 'III', leaguePoints: 50 },
+      { _id: { equals: vi.fn().mockReturnValue(false) }, tier: 'GOLD', rank: 'II', leaguePoints: 25 },
+      { _id: { equals: vi.fn().mockReturnValue(false) }, tier: 'GOLD', rank: 'II', leaguePoints: 20 },
+      { _id: { equals: vi.fn().mockReturnValue(false) }, tier: 'GOLD', rank: 'III', leaguePoints: 10 },
+    ];
+    let snapshotIndex = 0;
+    mockSnapshotFindOne.mockImplementation(() => ({
+      sort: vi.fn().mockResolvedValue(snapshotResults[snapshotIndex++] ?? null),
+    }) as any);
+
+    const summary = await getDailySummary('2026-01-10');
+
+    expect(mockWarn).toHaveBeenCalledWith(
+      { date: '2026-01-10' },
+      '[daily-summary] Falling back to snapshot recompute because daily scores were unavailable.',
+    );
+    expect(summary).toEqual({
+      date: '2026-01-10',
+      climber: { discordId: 'user-1', gameName: 'One', lpGain: 75 },
+      slider: { discordId: 'user-2', gameName: 'Two', lpGain: -110 },
+    });
   });
 });

@@ -2,11 +2,13 @@ import { MatchRecord } from '@/db/models/MatchRecord';
 import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { Player } from '@/db/models/Player';
 import { PointTransaction } from '@/db/models/PointTransaction';
+import { DailyPlayerScore } from '@/db/models/DailyPlayerScore';
 import { normalizeLP } from '@/lib/normalizeLP';
 import { listActivePlayers } from '@/services/playerService';
 import { getTournamentSettings } from '@/services/tournamentService';
 import { DAILY_GRAPH_TOP_N, NOTIFICATION_FEED_LIMIT } from '@/constants';
-import { getDayBoundsUTC8 } from '@/lib/dateUtils';
+import { getPhtDayBounds } from '@/lib/dateUtils';
+import { logger } from '@/lib/logger';
 
 export interface FeedNotification {
   matchId: string;
@@ -112,9 +114,48 @@ export interface DailySummary {
   date: string;
 }
 
+function buildDailySummaryFromStats(stats: DailyPlayerStat[], date: string): DailySummary {
+  if (stats.length === 0) return { climber: null, slider: null, date };
 
-export async function getDailySummary(date: string): Promise<DailySummary> {
-  const { dayStart, dayEnd } = getDayBoundsUTC8(date);
+  stats.sort((a, b) => b.lpGain - a.lpGain);
+  const climber = stats[0].lpGain > 0 ? stats[0] : null;
+  const slider = stats[stats.length - 1].lpGain < 0 ? stats[stats.length - 1] : null;
+
+  return { climber, slider, date };
+}
+
+async function getDailySummaryFromScores(date: string): Promise<DailySummary | null> {
+  const dailyScores = await DailyPlayerScore.find({ day: date }).lean();
+  if (dailyScores.length === 0) {
+    return null;
+  }
+
+  const players = await Player.find({
+    discordId: { $in: dailyScores.map((score) => score.playerId) },
+    isActive: true,
+  }).lean();
+
+  const playerByDiscordId = new Map(players.map((player) => [player.discordId, player]));
+  const stats = dailyScores.flatMap((score) => {
+    const player = playerByDiscordId.get(score.playerId);
+    if (!player) return [];
+
+    return [{
+      discordId: player.discordId,
+      gameName: player.gameName,
+      lpGain: score.rawLpGain,
+    }];
+  });
+
+  if (stats.length === 0) {
+    return null;
+  }
+
+  return buildDailySummaryFromStats(stats, date);
+}
+
+async function recomputeDailySummaryFromSnapshots(date: string): Promise<DailySummary> {
+  const { dayStart, dayEnd } = getPhtDayBounds(date);
   const players = await listActivePlayers();
 
   const stats: DailyPlayerStat[] = [];
@@ -139,13 +180,17 @@ export async function getDailySummary(date: string): Promise<DailySummary> {
     stats.push({ discordId: player.discordId, gameName: player.gameName, lpGain });
   }
 
-  if (stats.length === 0) return { climber: null, slider: null, date };
+  return buildDailySummaryFromStats(stats, date);
+}
 
-  stats.sort((a, b) => b.lpGain - a.lpGain);
-  const climber = stats[0].lpGain > 0 ? stats[0] : null;
-  const slider = stats[stats.length - 1].lpGain < 0 ? stats[stats.length - 1] : null;
+export async function getDailySummary(date: string): Promise<DailySummary> {
+  const scoreSummary = await getDailySummaryFromScores(date);
+  if (scoreSummary) {
+    return scoreSummary;
+  }
 
-  return { climber, slider, date };
+  logger.warn({ date }, '[daily-summary] Falling back to snapshot recompute because daily scores were unavailable.');
+  return recomputeDailySummaryFromSnapshots(date);
 }
 
 export interface PlayerGraphSeries {
@@ -168,7 +213,7 @@ export interface DailyGraphData {
 }
 
 export async function getDailyGraphData(date: string): Promise<DailyGraphData> {
-  const { dayStart, dayEnd } = getDayBoundsUTC8(date);
+  const { dayStart, dayEnd } = getPhtDayBounds(date);
   const players = await listActivePlayers();
 
   // Rank players by current normalized LP to pick top N
