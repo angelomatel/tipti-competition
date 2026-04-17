@@ -133,6 +133,11 @@ async function runFeedJob(client: Client): Promise<void> {
     const notifications: any[] = feedRes.notifications ?? [];
     if (notifications.length === 0) return;
 
+    logger.debug(
+      { notificationCount: notifications.length, channelId: channel.id },
+      '[feed-job] Received notifications from backend',
+    );
+
     for (const notif of notifications) {
       if (channel.guild && notif.discordId) {
         try {
@@ -166,6 +171,35 @@ async function runFeedJob(client: Client): Promise<void> {
       const inGameName = `${notif.gameName}#${notif.tagLine}`;
       const footerOpts: { text: string; iconURL?: string } = { text: inGameName };
       if (notif.discordAvatarUrl) footerOpts.iconURL = notif.discordAvatarUrl;
+
+      logger.debug(
+        {
+          matchId: notif.matchId,
+          discordId: notif.discordId ?? null,
+          riotId: inGameName,
+          placement: notif.placement,
+          lpDelta: notif.lpDelta,
+          lpStatus: notif.lpStatus,
+          godBuffCount: notif.godBuffs?.length ?? 0,
+          channelId: channel.id,
+        },
+        '[feed-job] Rendering notification',
+      );
+
+      if (notif.lpStatus !== 'known') {
+        logger.warn(
+          {
+            matchId: notif.matchId,
+            discordId: notif.discordId ?? null,
+            riotId: inGameName,
+            placement: notif.placement,
+            lpDelta: notif.lpDelta,
+            lpStatus: notif.lpStatus,
+            channelId: channel.id,
+          },
+          '[feed-job] Posting notification without definitive LP attribution',
+        );
+      }
 
       const embed = new EmbedBuilder()
         .setTimestamp(new Date(notif.playedAt))

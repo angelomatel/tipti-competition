@@ -47,6 +47,11 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
   ]);
   const playerByPuuid = new Map(players.map((player) => [player.puuid, player]));
   const buffsByMatchId = new Map<string, Array<{ source: string; value: number }>>();
+  const trackedPlayersByMatchId = new Map<string, number>();
+  for (const match of matches) {
+    trackedPlayersByMatchId.set(match.matchId, (trackedPlayersByMatchId.get(match.matchId) ?? 0) + 1);
+  }
+
   for (const txn of buffTransactions) {
     if (!txn.matchId) continue;
     const buffs = buffsByMatchId.get(txn.matchId) ?? [];
@@ -55,10 +60,12 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
   }
 
   const lpDeltaByPlayerMatch = new Map<string, number>();
+  const lpTxnCountByPlayerMatch = new Map<string, number>();
   for (const txn of matchTransactions) {
     if (!txn.matchId) continue;
     const key = `${txn.playerId}:${txn.matchId}`;
     lpDeltaByPlayerMatch.set(key, (lpDeltaByPlayerMatch.get(key) ?? 0) + txn.value);
+    lpTxnCountByPlayerMatch.set(key, (lpTxnCountByPlayerMatch.get(key) ?? 0) + 1);
   }
 
   const snapshotsByPuuid = new Map<string, typeof snapshots>();
@@ -68,15 +75,42 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
     snapshotsByPuuid.set(snapshot.puuid, playerSnapshots);
   }
 
+  logger.debug(
+    {
+      pendingMatchCount: matches.length,
+      uniquePuuidCount: puuids.length,
+      uniqueMatchCount: new Set(matchIds).size,
+      playerCount: players.length,
+      buffTransactionCount: buffTransactions.length,
+      lpTransactionCount: matchTransactions.length,
+      snapshotCount: snapshots.length,
+    },
+    '[feed] Loaded pending notifications and attribution inputs',
+  );
+
   for (const match of matches) {
     const player = playerByPuuid.get(match.puuid);
-    if (!player) continue;
+    if (!player) {
+      logger.warn(
+        {
+          matchId: match.matchId,
+          puuid: match.puuid,
+          placement: match.placement,
+          playedAt: match.playedAt,
+        },
+        '[feed] Skipping notification because no active player record matched the match puuid',
+      );
+      continue;
+    }
+
     const playerMatchKey = `${player.discordId}:${match.matchId}`;
     const playerSnapshots = snapshotsByPuuid.get(match.puuid) ?? [];
     const snapshotBefore = [...playerSnapshots].reverse().find((snapshot) => snapshot.capturedAt <= match.playedAt) ?? null;
     const snapshotAfter = playerSnapshots.find((snapshot) => snapshot.capturedAt > match.playedAt) ?? null;
-    const lpDelta = lpDeltaByPlayerMatch.get(playerMatchKey)
-      ?? resolveSnapshotLpDelta(snapshotBefore, snapshotAfter);
+    const transactionLpDelta = lpDeltaByPlayerMatch.get(playerMatchKey);
+    const snapshotLpDelta = resolveSnapshotLpDelta(snapshotBefore, snapshotAfter);
+    const lpDelta = transactionLpDelta
+      ?? snapshotLpDelta;
     const lpStatus = lpDeltaByPlayerMatch.has(playerMatchKey)
       ? 'known'
       : match.lpAttributionStatus === 'ambiguous'
@@ -84,6 +118,56 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
         : lpDelta !== null
           ? 'known'
           : 'none';
+    const lpSource = transactionLpDelta !== undefined
+      ? 'transaction'
+      : snapshotLpDelta !== null
+        ? 'snapshot'
+        : 'none';
+    const trackedPlayersInMatch = trackedPlayersByMatchId.get(match.matchId) ?? 1;
+    const lpTxnCount = lpTxnCountByPlayerMatch.get(playerMatchKey) ?? 0;
+
+    logger.debug(
+      {
+        matchId: match.matchId,
+        discordId: player.discordId,
+        riotId: `${player.gameName}#${player.tagLine}`,
+        placement: match.placement,
+        playedAt: match.playedAt,
+        lpDelta,
+        lpStatus,
+        lpSource,
+        transactionLpDelta: transactionLpDelta ?? null,
+        snapshotLpDelta,
+        lpTxnCount,
+        buffCount: (buffsByMatchId.get(match.matchId) ?? []).length,
+        trackedPlayersInMatch,
+        matchLpAttributionStatus: match.lpAttributionStatus ?? null,
+        hasSnapshotBefore: Boolean(snapshotBefore),
+        hasSnapshotAfter: Boolean(snapshotAfter),
+      },
+      '[feed] Resolved notification attribution',
+    );
+
+    if (lpSource === 'none' || lpStatus !== 'known') {
+      logger.warn(
+        {
+          matchId: match.matchId,
+          discordId: player.discordId,
+          riotId: `${player.gameName}#${player.tagLine}`,
+          placement: match.placement,
+          playedAt: match.playedAt,
+          lpDelta,
+          lpStatus,
+          lpSource,
+          trackedPlayersInMatch,
+          lpTxnCount,
+          matchLpAttributionStatus: match.lpAttributionStatus ?? null,
+          hasSnapshotBefore: Boolean(snapshotBefore),
+          hasSnapshotAfter: Boolean(snapshotAfter),
+        },
+        '[feed] Notification is missing a definitive LP attribution',
+      );
+    }
 
     results.push({
       matchId: match.matchId,
@@ -101,6 +185,14 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
       playedAt: match.playedAt,
     });
   }
+
+  logger.debug(
+    {
+      notificationCount: results.length,
+      matchIds: results.map((result) => result.matchId),
+    },
+    '[feed] Prepared notifications for delivery',
+  );
 
   return results;
 }
