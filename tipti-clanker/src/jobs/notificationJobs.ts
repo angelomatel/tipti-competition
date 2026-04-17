@@ -45,6 +45,30 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
+function buildMatchLinks(gameName: string, tagLine: string, matchId: string): string {
+  const ttUrl = `https://tactics.tools/player/sg/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}/${matchId}`;
+  const metatftUrl = `https://www.metatft.com/player/SG2/${encodeURIComponent(gameName)}-${encodeURIComponent(tagLine)}?match=${matchId}`;
+  return `[tactics.tools](${ttUrl}) | [metatft](${metatftUrl})`;
+}
+
+function formatGroupedMatchLines(
+  gameName: string,
+  tagLine: string,
+  matches: Array<{ matchId: string; placement: number; godBuffs?: Array<{ source: string; value: number }> }>,
+): string {
+  return matches.map((match: any) => {
+    const lines = [
+      `• **${formatOrdinal(match.placement)}** place`,
+      `-# ${buildMatchLinks(gameName, tagLine, match.matchId)}`,
+    ];
+    for (const buff of match.godBuffs ?? []) {
+      const name = SOURCE_LABELS[buff.source] || buff.source;
+      lines.push(`-# God buff: **${name}** ${buff.value > 0 ? '+' : ''}${buff.value} pts`);
+    }
+    return lines.join('\n');
+  }).join('\n');
+}
+
 async function postDailyRecapOnce(client: Client, date: string): Promise<void> {
   const settingsRes = await getTournamentSettings();
   const settings = settingsRes.settings;
@@ -151,19 +175,7 @@ async function runFeedJob(client: Client): Promise<void> {
 
       const lpStr = notif.lpStatus === 'unknown' ? 'LP unknown' : formatLpDelta(notif.lpDelta);
       const lpPart = lpStr ? ` (${lpStr})` : '';
-
-      let buffLine = '';
-      if (notif.godBuffs && notif.godBuffs.length > 0) {
-        const buffStrings = notif.godBuffs.map((b: any) => {
-          const name = SOURCE_LABELS[b.source] || b.source;
-          return `🌟 **${name}**: ${b.value > 0 ? '+' : ''}${b.value} pts`;
-        });
-        buffLine = '\n> ' + buffStrings.join('\n> ');
-      }
-
-      const ttUrl = `https://tactics.tools/player/sg/${encodeURIComponent(notif.gameName)}/${encodeURIComponent(notif.tagLine)}/${notif.matchId}`;
-      const metatftUrl = `https://www.metatft.com/player/SG2/${encodeURIComponent(notif.gameName)}-${encodeURIComponent(notif.tagLine)}?match=${notif.matchId}`;
-      const linksLine = `\n-# [tactics.tools](${ttUrl}) | [metatft](${metatftUrl})`;
+      const primaryLinksLine = `\n-# ${buildMatchLinks(notif.gameName, notif.tagLine, notif.matchId)}`;
 
       const godColor: number | undefined = notif.godSlug ? GOD_COLORS[notif.godSlug] : undefined;
 
@@ -174,7 +186,9 @@ async function runFeedJob(client: Client): Promise<void> {
 
       logger.debug(
         {
+          notificationType: notif.notificationType ?? 'single_match',
           matchId: notif.matchId,
+          matchIds: notif.matchIds ?? [notif.matchId],
           discordId: notif.discordId ?? null,
           riotId: inGameName,
           placement: notif.placement,
@@ -205,14 +219,20 @@ async function runFeedJob(client: Client): Promise<void> {
         .setTimestamp(new Date(notif.playedAt))
         .setFooter(footerOpts);
 
-      if (notif.placement === 1) {
+      if (notif.notificationType === 'grouped_matches') {
+        const direction = (notif.lpDelta ?? 0) >= 0 ? 'gained' : 'lost';
+        const groupedLines = formatGroupedMatchLines(notif.gameName, notif.tagLine, notif.matches ?? []);
+        embed
+          .setColor(godColor ?? ((notif.lpDelta ?? 0) >= 0 ? EMBED_COLORS.REGULAR_TOP : EMBED_COLORS.REGULAR_BOT))
+          .setDescription(`📊 **${username}** ${direction} **${lpStr}** across **${notif.matchIds.length} matches**\n\n${groupedLines}`);
+      } else if (notif.placement === 1) {
         embed
           .setColor(godColor ?? EMBED_COLORS.GOLD)
-          .setDescription(`🫅 **${username}** just secured a **1st Place**${lpPart}!${buffLine}${linksLine}`);
+          .setDescription(`🫅 **${username}** just secured a **1st Place**${lpPart}!${renderSingleMatchBuffs(notif.godBuffs)}${primaryLinksLine}`);
       } else if (notif.placement === 8) {
         embed
           .setColor(godColor ?? EMBED_COLORS.DANGER)
-          .setDescription(`🚨 **${username}** just went **8th**${lpPart}! The tilt is real!${buffLine}${linksLine}`);
+          .setDescription(`🚨 **${username}** just went **8th**${lpPart}! The tilt is real!${renderSingleMatchBuffs(notif.godBuffs)}${primaryLinksLine}`);
       } else {
         const ordinal = formatOrdinal(notif.placement);
         const topHalf = notif.placement <= 4;
@@ -220,13 +240,13 @@ async function runFeedJob(client: Client): Promise<void> {
         const fallbackColor = topHalf ? EMBED_COLORS.REGULAR_TOP : EMBED_COLORS.REGULAR_BOT;
         embed
           .setColor(godColor ?? fallbackColor)
-          .setDescription(`${emoji} **${username}** placed **${ordinal}**${lpPart}${buffLine}${linksLine}`);
+          .setDescription(`${emoji} **${username}** placed **${ordinal}**${lpPart}${renderSingleMatchBuffs(notif.godBuffs)}${primaryLinksLine}`);
       }
 
       await channel.send({ embeds: [embed] });
-      await ackNotificationFeed([notif.matchId]);
+      await ackNotificationFeed(notif.matchIds ?? [notif.matchId]);
       logger.debug(
-        { matchId: notif.matchId, placement: notif.placement, discordId: notif.discordId ?? null, riotId: notif.gameName && notif.tagLine ? `${notif.gameName}#${notif.tagLine}` : null, channelId: channel.id },
+        { matchId: notif.matchId, matchIds: notif.matchIds ?? [notif.matchId], placement: notif.placement, discordId: notif.discordId ?? null, riotId: notif.gameName && notif.tagLine ? `${notif.gameName}#${notif.tagLine}` : null, channelId: channel.id },
         `[feed-job] Posted notification for match ${notif.matchId}`,
       );
     }
@@ -236,6 +256,17 @@ async function runFeedJob(client: Client): Promise<void> {
       err?.message ?? String(err),
     ], { err });
   }
+}
+
+function renderSingleMatchBuffs(godBuffs: Array<{ source: string; value: number }> | undefined): string {
+  if (!godBuffs || godBuffs.length === 0) return '';
+
+  const buffStrings = godBuffs.map((b) => {
+    const name = SOURCE_LABELS[b.source] || b.source;
+    return `🌟 **${name}**: ${b.value > 0 ? '+' : ''}${b.value} pts`;
+  });
+
+  return '\n> ' + buffStrings.join('\n> ');
 }
 
 export async function runDailyJob(client: Client): Promise<void> {
