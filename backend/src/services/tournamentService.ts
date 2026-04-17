@@ -1,5 +1,4 @@
-import { TournamentSettings } from '@/db/models/TournamentSettings';
-import type { TournamentSettingsDocument } from '@/db/models/TournamentSettings';
+import { TournamentSettings, type TournamentSettingsDocument } from '@/db/models/TournamentSettings';
 import { TOURNAMENT_START_DATE, TOURNAMENT_END_DATE } from '@/constants';
 import { computePhases, getCurrentPhtDay } from '@/lib/dateUtils';
 

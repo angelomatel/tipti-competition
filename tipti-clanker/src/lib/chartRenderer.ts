@@ -1,7 +1,6 @@
 import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
 import type { ChartConfiguration } from 'chart.js';
-import { loadImage, createCanvas } from 'canvas';
-import type { Image } from 'canvas';
+import { loadImage, createCanvas, type Image } from 'canvas';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import path from 'path';
 

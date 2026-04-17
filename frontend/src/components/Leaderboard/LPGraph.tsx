@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
+import type { TooltipContentProps } from 'recharts';
 import type { MatchPoint } from '@/src/types/PlayerProfile';
 import { formatTier } from '@/src/types/Rank';
 import { COLORS } from '@/src/lib/theme';
@@ -29,9 +30,10 @@ function formatDate(dateStr: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-const CustomTooltip = ({ active, payload }: any) => {
+const CustomTooltip = ({ active, payload }: TooltipContentProps<number, string>) => {
   if (!active || !payload?.length) return null;
-  const point = payload[0].payload as MatchPoint;
+  const point = payload[0]?.payload as MatchPoint | undefined;
+  if (!point) return null;
   return (
     <div
       style={{ backgroundColor: COLORS.surface0 }}

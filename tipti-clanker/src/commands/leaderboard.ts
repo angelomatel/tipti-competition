@@ -1,9 +1,9 @@
 import { type CommandInteraction, EmbedBuilder } from 'discord.js';
 import { Discord, Slash } from 'discordx';
-import { getLeaderboard, getTournamentSettings, updatePlayerProfile } from '@/lib/backendClient';
+import { getLeaderboard, updatePlayerProfile } from '@/lib/backendClient';
 import { formatTierName, formatLpGain } from '@/lib/format';
 import { EMBED_COLORS, LEADERBOARD_TOP_N, RANK_EMOJIS } from '@/lib/constants';
-import { Tier } from '@/types/Rank';
+import type { Tier } from '@/types/Rank';
 import { getPublicErrorMessage, sendCommandErrorAuditLog } from '@/lib/publicCommandErrors';
 
 const MEDALS = ['🥇', '🥈', '🥉'];

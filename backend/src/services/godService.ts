@@ -2,8 +2,7 @@ import { God } from '@/db/models/God';
 import { Player } from '@/db/models/Player';
 import { GOD_DEFINITIONS, GOD_SCORE_TOP_N } from '@/constants';
 import { computePlayerScoreTotals } from '@/services/scoringEngine';
-import type { GodDocument } from '@/types/God';
-import type { GodStanding } from '@/types/God';
+import type { GodDocument, GodStanding } from '@/types/God';
 import type { PlayerDocument } from '@/types/Player';
 
 export async function seedGods(): Promise<GodDocument[]> {
