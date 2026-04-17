@@ -27,6 +27,9 @@ export const BACKEND_REQUEST_TIMEOUT_MS = 10_000;
 /** Shared header name used for protected backend mutations. */
 export const BACKEND_ADMIN_PASSWORD_HEADER = 'x-admin-password';
 
+/** Fallback bootcamp chat channel used when not configured in tournament settings. */
+export const DEFAULT_BOOTCAMP_CHAT_CHANNEL_ID = '1487949806021247016';
+
 /** God definitions for Discord interactions. */
 export const GOD_CHOICES = [
   { slug: 'varus',        name: 'Varus',        title: 'Love' },

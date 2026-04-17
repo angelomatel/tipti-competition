@@ -21,6 +21,7 @@ import {
   PUBLIC_ERROR_MESSAGES,
   sendCommandErrorAuditLog,
 } from '@/lib/publicCommandErrors';
+import { sendRegistrationFailureNotice } from '@/lib/registrationFailureNotice';
 
 const GOD_SELECTION_TIMEOUT_MS = 180_000;
 
@@ -50,15 +51,31 @@ export class Register {
 
     const { gameName, tagLine, isValid } = parseRiotId(account);
 
+    const handleFailure = async (
+      userMessage: string,
+      options: { error?: unknown; target?: string } = {},
+    ): Promise<void> => {
+      await interaction.editReply({
+        content: userMessage,
+        embeds: [],
+        components: [],
+      });
+
+      await Promise.allSettled([
+        sendCommandErrorAuditLog(interaction.client, {
+          commandName: '/register',
+          actorId: interaction.user.id,
+          target: options.target ?? `${gameName}#${tagLine}`,
+          userMessage,
+          error: options.error,
+        }),
+        sendRegistrationFailureNotice(interaction.client, interaction.user.id, userMessage),
+      ]);
+    };
+
     if (!isValid) {
       const userMessage = '❌ Invalid format. Use `username#TAG` (the #TAG is required).';
-      await interaction.editReply({ content: userMessage });
-      await sendCommandErrorAuditLog(interaction.client, {
-        commandName: '/register',
-        actorId: interaction.user.id,
-        target: account,
-        userMessage,
-      });
+      await handleFailure(userMessage, { target: account });
       return;
     }
 
@@ -66,26 +83,13 @@ export class Register {
       const existingPlayer = await getPlayer(interaction.user.id);
       if (existingPlayer?.player) {
         const userMessage = PUBLIC_ERROR_MESSAGES.alreadyRegistered;
-        await interaction.editReply({ content: userMessage });
-        await sendCommandErrorAuditLog(interaction.client, {
-          commandName: '/register',
-          actorId: interaction.user.id,
-          target: `${gameName}#${tagLine}`,
-          userMessage,
-        });
+        await handleFailure(userMessage);
         return;
       }
     } catch (err: any) {
       if (!isHttpStatus(err, 404)) {
         const userMessage = getPublicErrorMessage(err);
-        await interaction.editReply({ content: userMessage });
-        await sendCommandErrorAuditLog(interaction.client, {
-          commandName: '/register',
-          actorId: interaction.user.id,
-          target: `${gameName}#${tagLine}`,
-          userMessage,
-          error: err,
-        });
+        await handleFailure(userMessage, { error: err });
         return;
       }
     }
@@ -105,14 +109,7 @@ export class Register {
         notFoundMessage: PUBLIC_ERROR_MESSAGES.riotAccountNotFound,
         fallbackPrefix: '❌ Failed to verify Riot account',
       });
-      await interaction.editReply({ content: userMessage });
-      await sendCommandErrorAuditLog(interaction.client, {
-        commandName: '/register',
-        actorId: interaction.user.id,
-        target: `${gameName}#${tagLine}`,
-        userMessage,
-        error: err,
-      });
+      await handleFailure(userMessage, { error: err });
       return;
     }
 
@@ -236,19 +233,7 @@ export class Register {
           ? PUBLIC_ERROR_MESSAGES.alreadyRegistered
           : getPublicErrorMessage(err, { fallbackPrefix: '❌ Failed to register' });
 
-      await interaction.editReply({
-        content: userMessage,
-        embeds: [],
-        components: [],
-      });
-
-      await sendCommandErrorAuditLog(interaction.client, {
-        commandName: '/register',
-        actorId: interaction.user.id,
-        target: `${gameName}#${tagLine}`,
-        userMessage,
-        error: err,
-      });
+      await handleFailure(userMessage, { error: err });
     }
   }
 }
