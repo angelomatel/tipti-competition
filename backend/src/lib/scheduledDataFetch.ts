@@ -1,11 +1,10 @@
+import { ENABLE_DEV_DATA_FETCH_CRONS_ENV, IS_PRODUCTION } from '@/constants';
 import { logger } from '@/lib/logger';
-
-export const ENABLE_DEV_DATA_FETCH_CRONS_ENV = 'ENABLE_DEV_DATA_FETCH_CRONS';
 
 const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on']);
 
 export function shouldRunScheduledDataFetches(env: NodeJS.ProcessEnv = process.env): boolean {
-  if (env.NODE_ENV === 'production') {
+  if ((env.NODE_ENV ?? (IS_PRODUCTION ? 'production' : 'development')) === 'production') {
     return true;
   }
 

@@ -2,11 +2,17 @@ import pino from 'pino';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { Writable } from 'node:stream';
+import {
+  IS_PRODUCTION,
+  LOG_CONSOLE_COLORS_ENABLED,
+  LOG_FILE_PATH,
+  LOG_LEVEL,
+} from '@/constants';
 
-const level = process.env.LOG_LEVEL ?? (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
-const isProduction = process.env.NODE_ENV === 'production';
-const logFilePath = resolve(process.cwd(), process.env.LOG_FILE_PATH ?? 'logs/app.jsonl');
-const consoleColorsEnabled = process.env.NO_COLOR !== '1' && process.env.NO_COLOR !== 'true';
+const level = LOG_LEVEL;
+const isProduction = IS_PRODUCTION;
+const logFilePath = resolve(process.cwd(), LOG_FILE_PATH);
+const consoleColorsEnabled = LOG_CONSOLE_COLORS_ENABLED;
 
 type LogRecord = {
   level?: number | string;

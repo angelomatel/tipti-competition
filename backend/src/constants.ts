@@ -3,38 +3,31 @@ function parsePositiveIntEnv(value: string | undefined, fallback: number): numbe
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function parseBooleanEnv(value: string | undefined, fallback: boolean): boolean {
-  if (value === undefined) return fallback;
-
-  const normalized = value.trim().toLowerCase();
-  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
-  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
-  return fallback;
-}
-
+export const APP_ENV = process.env.NODE_ENV ?? 'development';
+export const IS_PRODUCTION = APP_ENV === 'production';
 export const RIOT_API_KEY = process.env.RIOT_API_KEY ?? '';
 export const BACKEND_PORT = parsePositiveIntEnv(process.env.PORT, 5000);
 export const MONGODB_URI = process.env.MONGODB_URI ?? 'mongodb://localhost:27017';
 export const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME ?? 'tft-tournament';
-export const BACKEND_MODE = process.env.BACKEND_MODE ?? 'all';
-export const DATABASE_BACKUP_ENABLED = parseBooleanEnv(
-  process.env.DATABASE_BACKUP_ENABLED,
-  process.env.NODE_ENV === 'production',
-);
-export const DATABASE_BACKUP_CRON = process.env.DATABASE_BACKUP_CRON ?? '0 */12 * * *';
+export const BACKEND_MODE: 'all' | 'cron' | 'http' = 'all';
+export const FETCH_INTERVAL_MINUTES = 5;
+export const CRON_PLAYER_CONCURRENCY = 4;
+export const DATABASE_BACKUP_ENABLED = IS_PRODUCTION;
+export const DATABASE_BACKUP_CRON = '0 */12 * * *';
 export const PHT_TIMEZONE = 'Asia/Manila';
-export const DATABASE_BACKUP_TIMEZONE = process.env.DATABASE_BACKUP_TIMEZONE ?? PHT_TIMEZONE;
-export const DATABASE_BACKUP_DIR = process.env.DATABASE_BACKUP_DIR ?? 'backups';
-export const DATABASE_BACKUP_RETENTION_COUNT = parsePositiveIntEnv(
-  process.env.DATABASE_BACKUP_RETENTION_COUNT,
-  14,
-);
-export const LEADERBOARD_CACHE_TTL_MS = parsePositiveIntEnv(process.env.LEADERBOARD_CACHE_TTL_MS, 30_000);
-export const NOTIFICATION_FEED_LIMIT = parsePositiveIntEnv(process.env.NOTIFICATION_FEED_LIMIT, 50);
-export const TOURNAMENT_START_DATE = new Date(process.env.TOURNAMENT_START_DATE ?? '2025-01-01T00:00:00Z');
-export const TOURNAMENT_END_DATE = new Date(process.env.TOURNAMENT_END_DATE ?? '2025-01-14T23:59:59Z');
+export const DATABASE_BACKUP_TIMEZONE = PHT_TIMEZONE;
+export const DATABASE_BACKUP_DIR = 'backups';
+export const DATABASE_BACKUP_RETENTION_COUNT = 14;
+export const LEADERBOARD_CACHE_TTL_MS = 30_000;
+export const NOTIFICATION_FEED_LIMIT = 50;
+export const TOURNAMENT_START_DATE = new Date('2025-01-01T00:00:00Z');
+export const TOURNAMENT_END_DATE = new Date('2025-01-14T23:59:59Z');
 export const ADMIN_PASSWORD_HEADER = 'x-admin-password';
 export const ADMIN_PASSWORD = process.env.ADMIN_API_PASSWORD ?? '';
+export const LOG_LEVEL = IS_PRODUCTION ? 'info' : 'debug';
+export const LOG_FILE_PATH = 'logs/app.jsonl';
+export const LOG_CONSOLE_COLORS_ENABLED = true;
+export const ENABLE_DEV_DATA_FETCH_CRONS_ENV = 'ENABLE_DEV_DATA_FETCH_CRONS';
 
 /** Maximum number of snapshots/matches returned in player queries. */
 export const QUERY_LIMITS = {
@@ -56,6 +49,13 @@ export const UTC8_OFFSET_MS = PHT_UTC_OFFSET_MS;
 
 /** Timeout in milliseconds for outbound Riot API requests. */
 export const RIOT_REQUEST_TIMEOUT_MS = 15_000;
+export const RIOT_APP_RATE_PER_SECOND = 18;
+export const RIOT_APP_RATE_PER_120_SECONDS = 90;
+export const RIOT_QUEUE_MAX_IN_FLIGHT = 3;
+export const MATCH_ID_FETCH_COUNT_NORMAL = 10;
+export const MATCH_ID_FETCH_COUNT_CATCHUP = 25;
+export const MATCH_DETAIL_FETCH_CAP_NORMAL = 3;
+export const MATCH_DETAIL_FETCH_CAP_CATCHUP = 10;
 
 /** How long Mongoose buffers commands while disconnected before failing them. */
 export const MONGODB_BUFFER_TIMEOUT_MS = 30_000;

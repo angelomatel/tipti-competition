@@ -6,9 +6,9 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
+import { ENABLE_DEV_DATA_FETCH_CRONS_ENV } from '@/constants';
 import { logger } from '@/lib/logger';
 import {
-  ENABLE_DEV_DATA_FETCH_CRONS_ENV,
   runScheduledDataFetchJob,
   shouldRunScheduledDataFetches,
 } from '@/lib/scheduledDataFetch';
