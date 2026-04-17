@@ -35,11 +35,14 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
   const results: FeedNotification[] = [];
   const puuids = [...new Set(matches.map((match) => match.puuid))];
   const matchIds = matches.map((match) => match.matchId);
-  const [players, buffTransactions] = await Promise.all([
+  const [players, buffTransactions, snapshots] = await Promise.all([
     Player.find({ puuid: { $in: puuids }, isActive: true }).lean(),
     PointTransaction.find({ matchId: { $in: matchIds }, type: 'buff' }).lean(),
+    LpSnapshot.find({
+      puuid: { $in: puuids },
+      capturedAt: { $gte: settings.startDate, $lte: settings.endDate },
+    }).sort({ puuid: 1, capturedAt: 1 }).lean(),
   ]);
-
   const playerByPuuid = new Map(players.map((player) => [player.puuid, player]));
   const buffsByMatchId = new Map<string, Array<{ source: string; value: number }>>();
   for (const txn of buffTransactions) {
@@ -49,20 +52,19 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
     buffsByMatchId.set(txn.matchId, buffs);
   }
 
+  const snapshotsByPuuid = new Map<string, typeof snapshots>();
+  for (const snapshot of snapshots) {
+    const playerSnapshots = snapshotsByPuuid.get(snapshot.puuid) ?? [];
+    playerSnapshots.push(snapshot);
+    snapshotsByPuuid.set(snapshot.puuid, playerSnapshots);
+  }
+
   for (const match of matches) {
     const player = playerByPuuid.get(match.puuid);
     if (!player) continue;
-
-    // Find snapshot just before and just after the match to compute LP delta
-    const snapshotBefore = await LpSnapshot.findOne({
-      puuid: match.puuid,
-      capturedAt: { $lte: match.playedAt },
-    }).sort({ capturedAt: -1 });
-
-    const snapshotAfter = await LpSnapshot.findOne({
-      puuid: match.puuid,
-      capturedAt: { $gt: match.playedAt },
-    }).sort({ capturedAt: 1 });
+    const playerSnapshots = snapshotsByPuuid.get(match.puuid) ?? [];
+    const snapshotBefore = [...playerSnapshots].reverse().find((snapshot) => snapshot.capturedAt <= match.playedAt) ?? null;
+    const snapshotAfter = playerSnapshots.find((snapshot) => snapshot.capturedAt > match.playedAt) ?? null;
 
     let lpDelta: number | null = null;
     if (snapshotBefore && snapshotAfter) {
@@ -157,28 +159,33 @@ async function getDailySummaryFromScores(date: string): Promise<DailySummary | n
 async function recomputeDailySummaryFromSnapshots(date: string): Promise<DailySummary> {
   const { dayStart, dayEnd } = getPhtDayBounds(date);
   const players = await listActivePlayers();
+  const snapshots = await LpSnapshot.find({
+    puuid: { $in: players.map((player) => player.puuid) },
+    capturedAt: { $gte: dayStart, $lte: dayEnd },
+  })
+    .sort({ puuid: 1, capturedAt: 1 })
+    .lean();
+  const firstSnapshotByPuuid = new Map<string, (typeof snapshots)[number]>();
+  const lastSnapshotByPuuid = new Map<string, (typeof snapshots)[number]>();
+  for (const snapshot of snapshots) {
+    if (!firstSnapshotByPuuid.has(snapshot.puuid)) {
+      firstSnapshotByPuuid.set(snapshot.puuid, snapshot);
+    }
+    lastSnapshotByPuuid.set(snapshot.puuid, snapshot);
+  }
 
-  const stats: DailyPlayerStat[] = [];
-
-  for (const player of players) {
-    const firstSnap = await LpSnapshot.findOne({
-      puuid: player.puuid,
-      capturedAt: { $gte: dayStart, $lte: dayEnd },
-    }).sort({ capturedAt: 1 });
-
-    const lastSnap = await LpSnapshot.findOne({
-      puuid: player.puuid,
-      capturedAt: { $gte: dayStart, $lte: dayEnd },
-    }).sort({ capturedAt: -1 });
-
-    if (!firstSnap || !lastSnap || firstSnap._id.equals(lastSnap._id)) continue;
+  const stats: DailyPlayerStat[] = players.flatMap((player) => {
+    const firstSnap = firstSnapshotByPuuid.get(player.puuid);
+    const lastSnap = lastSnapshotByPuuid.get(player.puuid);
+    if (!firstSnap || !lastSnap || String(firstSnap._id) === String(lastSnap._id)) {
+      return [];
+    }
 
     const normFirst = normalizeLP(firstSnap.tier, firstSnap.rank, firstSnap.leaguePoints);
     const normLast = normalizeLP(lastSnap.tier, lastSnap.rank, lastSnap.leaguePoints);
     const lpGain = normLast - normFirst;
-
-    stats.push({ discordId: player.discordId, gameName: player.gameName, lpGain });
-  }
+    return [{ discordId: player.discordId, gameName: player.gameName, lpGain }];
+  });
 
   return buildDailySummaryFromStats(stats, date);
 }
@@ -222,32 +229,40 @@ export async function getDailyGraphData(date: string): Promise<DailyGraphData> {
     .sort((a, b) => b.norm - a.norm)
     .slice(0, DAILY_GRAPH_TOP_N);
 
-  const series: PlayerGraphSeries[] = [];
+  const rankedPlayers = ranked.map(({ player }) => player);
+  const snapshots = await LpSnapshot.find({
+    puuid: { $in: rankedPlayers.map((player) => player.puuid) },
+    capturedAt: { $gte: dayStart, $lte: dayEnd },
+  })
+    .sort({ puuid: 1, capturedAt: 1 })
+    .lean();
+  const snapshotsByPuuid = new Map<string, typeof snapshots>();
+  for (const snapshot of snapshots) {
+    const playerSnapshots = snapshotsByPuuid.get(snapshot.puuid) ?? [];
+    playerSnapshots.push(snapshot);
+    snapshotsByPuuid.set(snapshot.puuid, playerSnapshots);
+  }
 
-  for (const { player } of ranked) {
-    const snapshots = await LpSnapshot.find({
-      puuid: player.puuid,
-      capturedAt: { $gte: dayStart, $lte: dayEnd },
-    }).sort({ capturedAt: 1 });
+  const series: PlayerGraphSeries[] = rankedPlayers.flatMap((player) => {
+    const playerSnapshots = snapshotsByPuuid.get(player.puuid) ?? [];
+    if (playerSnapshots.length === 0) return [];
 
-    if (snapshots.length === 0) continue;
-
-    const dataPoints = snapshots.map((s) => ({
-      time: s.capturedAt.toISOString(),
-      normalizedLP: normalizeLP(s.tier, s.rank, s.leaguePoints),
-      tier: s.tier,
-      rank: s.rank,
-      leaguePoints: s.leaguePoints,
+    const dataPoints = playerSnapshots.map((snapshot) => ({
+      time: snapshot.capturedAt.toISOString(),
+      normalizedLP: normalizeLP(snapshot.tier, snapshot.rank, snapshot.leaguePoints),
+      tier: snapshot.tier,
+      rank: snapshot.rank,
+      leaguePoints: snapshot.leaguePoints,
     }));
 
-    series.push({ 
-      discordId: player.discordId, 
-      gameName: player.gameName, 
+    return [{
+      discordId: player.discordId,
+      gameName: player.gameName,
       tagLine: player.tagLine,
       discordAvatarUrl: player.discordAvatarUrl,
       dataPoints,
-    });
-  }
+    }];
+  });
 
   return { players: series, date };
 }

@@ -63,8 +63,10 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
 
     // Snapshots in ascending order (oldest first)
     const rawSnapshots = await LpSnapshot.find({ puuid: player.puuid })
-      .sort({ capturedAt: 1 })
-      .limit(QUERY_LIMITS.SNAPSHOTS);
+      .sort({ capturedAt: -1 })
+      .limit(QUERY_LIMITS.SNAPSHOTS)
+      .lean();
+    rawSnapshots.reverse();
 
     const snapshots = rawSnapshots.map((s) => ({
       capturedAt: s.capturedAt,
@@ -78,8 +80,10 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
 
     // Match records in ascending order
     const rawMatches = await MatchRecord.find({ puuid: player.puuid })
-      .sort({ playedAt: 1 })
-      .limit(QUERY_LIMITS.MATCHES);
+      .sort({ playedAt: -1 })
+      .limit(QUERY_LIMITS.MATCHES)
+      .lean();
+    rawMatches.reverse();
 
     const matches = rawMatches.map((m) => ({
       matchId: m.matchId,

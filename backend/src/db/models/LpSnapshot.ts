@@ -12,5 +12,6 @@ const LpSnapshotSchema = new Schema<LpSnapshotDocument>({
 });
 
 LpSnapshotSchema.index({ puuid: 1, capturedAt: 1 });
+LpSnapshotSchema.index({ puuid: 1, capturedAt: -1 });
 
 export const LpSnapshot = mongoose.model<LpSnapshotDocument>('LpSnapshot', LpSnapshotSchema, 'lp_snapshots');

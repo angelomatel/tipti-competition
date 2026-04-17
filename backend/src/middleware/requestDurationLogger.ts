@@ -8,10 +8,20 @@ const MONITORED_ROUTES = new Set([
   '/api/notifications/daily-graph',
   '/api/gods',
   '/api/gods/standings',
+  '/api/cron/run',
+  '/api/cron/run-daily',
 ]);
 
+const MONITORED_ROUTE_PATTERNS = [
+  /^\/api\/players\/[^/]+$/,
+];
+
+function isMonitoredRoute(path: string): boolean {
+  return MONITORED_ROUTES.has(path) || MONITORED_ROUTE_PATTERNS.some((pattern) => pattern.test(path));
+}
+
 export function requestDurationLogger(req: Request, res: Response, next: NextFunction): void {
-  if (!MONITORED_ROUTES.has(req.path)) {
+  if (!isMonitoredRoute(req.path)) {
     next();
     return;
   }

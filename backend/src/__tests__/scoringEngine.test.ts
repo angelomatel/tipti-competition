@@ -27,6 +27,7 @@ vi.mock('@/db/models/Player', () => ({
 }));
 
 vi.mock('@/lib/dateUtils', () => ({
+  getCurrentPhtDay: vi.fn(() => '2026-04-03'),
   getTodayUTC8: vi.fn(() => '2026-04-03'),
   dateToUTC8Str: vi.fn(),
 }));

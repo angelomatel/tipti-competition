@@ -9,7 +9,7 @@ vi.mock('@/db/models/MatchRecord', () => ({
 
 vi.mock('@/db/models/LpSnapshot', () => ({
   LpSnapshot: {
-    findOne: vi.fn(),
+    find: vi.fn(),
   },
 }));
 
@@ -61,7 +61,7 @@ import { NOTIFICATION_FEED_LIMIT } from '@/constants';
 
 const mockMatchFind = vi.mocked(MatchRecord.find);
 const mockUpdateMany = vi.mocked(MatchRecord.updateMany);
-const mockSnapshotFindOne = vi.mocked(LpSnapshot.findOne);
+const mockSnapshotFind = vi.mocked(LpSnapshot.find);
 const mockPlayerFind = vi.mocked(Player.find);
 const mockPointTransactionFind = vi.mocked(PointTransaction.find);
 const mockDailyPlayerScoreFind = vi.mocked(DailyPlayerScore.find);
@@ -81,13 +81,9 @@ describe('notification service', () => {
       startDate: new Date('2026-01-01T00:00:00Z'),
       endDate: new Date('2026-01-31T23:59:59Z'),
     } as any);
-
-    mockSnapshotFindOne.mockReturnValue({
-      sort: vi.fn().mockResolvedValue(null),
-    } as any);
   });
 
-  it('limits feed matches and batches players and buff transactions', async () => {
+  it('limits feed matches and batches players, transactions, and snapshots', async () => {
     const matches = [
       {
         puuid: 'puuid-1',
@@ -124,16 +120,24 @@ describe('notification service', () => {
     mockPointTransactionFind.mockReturnValue(mockFindLean([
       { matchId: 'match-1', source: 'varus_flat', value: 7 },
     ]) as any);
+    mockSnapshotFind.mockReturnValue({
+      sort: vi.fn().mockReturnValue(mockFindLean([
+        { puuid: 'puuid-1', capturedAt: new Date('2026-01-10T09:00:00Z'), tier: 'GOLD', rank: 'III', leaguePoints: 80 },
+        { puuid: 'puuid-1', capturedAt: new Date('2026-01-10T10:30:00Z'), tier: 'GOLD', rank: 'II', leaguePoints: 90 },
+      ])),
+    } as any);
 
     const result = await getFeedNotifications();
 
     expect(limitMatches).toHaveBeenCalledWith(NOTIFICATION_FEED_LIMIT);
     expect(mockPlayerFind).toHaveBeenCalledTimes(1);
     expect(mockPointTransactionFind).toHaveBeenCalledTimes(1);
+    expect(mockSnapshotFind).toHaveBeenCalledTimes(1);
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       matchId: 'match-1',
       discordId: 'user-1',
+      lpDelta: 110,
       godBuffs: [{ source: 'varus_flat', value: 7 }],
     });
   });
@@ -176,17 +180,14 @@ describe('notification service', () => {
       { discordId: 'user-1', gameName: 'One', puuid: 'puuid-1' },
       { discordId: 'user-2', gameName: 'Two', puuid: 'puuid-2' },
     ] as any);
-
-    const snapshotResults = [
-      { _id: { equals: vi.fn().mockReturnValue(false) }, tier: 'GOLD', rank: 'III', leaguePoints: 50 },
-      { _id: { equals: vi.fn().mockReturnValue(false) }, tier: 'GOLD', rank: 'II', leaguePoints: 25 },
-      { _id: { equals: vi.fn().mockReturnValue(false) }, tier: 'GOLD', rank: 'II', leaguePoints: 20 },
-      { _id: { equals: vi.fn().mockReturnValue(false) }, tier: 'GOLD', rank: 'III', leaguePoints: 10 },
-    ];
-    let snapshotIndex = 0;
-    mockSnapshotFindOne.mockImplementation(() => ({
-      sort: vi.fn().mockResolvedValue(snapshotResults[snapshotIndex++] ?? null),
-    }) as any);
+    mockSnapshotFind.mockReturnValue({
+      sort: vi.fn().mockReturnValue(mockFindLean([
+        { _id: 'a', puuid: 'puuid-1', tier: 'GOLD', rank: 'III', leaguePoints: 50, capturedAt: new Date('2026-01-10T01:00:00Z') },
+        { _id: 'b', puuid: 'puuid-1', tier: 'GOLD', rank: 'II', leaguePoints: 25, capturedAt: new Date('2026-01-10T23:00:00Z') },
+        { _id: 'c', puuid: 'puuid-2', tier: 'GOLD', rank: 'II', leaguePoints: 20, capturedAt: new Date('2026-01-10T01:00:00Z') },
+        { _id: 'd', puuid: 'puuid-2', tier: 'GOLD', rank: 'III', leaguePoints: 10, capturedAt: new Date('2026-01-10T23:00:00Z') },
+      ])),
+    } as any);
 
     const summary = await getDailySummary('2026-01-10');
 
