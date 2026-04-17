@@ -109,8 +109,14 @@ const PointBreakdown: React.FC<PointBreakdownProps> = ({ dailyPoints, gameName, 
                       )}
                     </div>
                     <span className="shrink-0" style={{ color: tx.value >= 0 ? 'var(--accent-cyan)' : '#f87171' }}>
-                      {tx.value >= 0 ? '+' : ''}{tx.value}
-                      {(tx.source === 'lp_data' || tx.source === 'lp_delta') ? ' LP' : ''}
+                      {tx.lpStatus === 'unknown'
+                        ? 'LP unknown'
+                        : (
+                          <>
+                            {tx.value >= 0 ? '+' : ''}{tx.value}
+                            {(tx.source === 'lp_data' || tx.source === 'lp_delta') ? ' LP' : ''}
+                          </>
+                        )}
                     </span>
                   </div>
                 ))}

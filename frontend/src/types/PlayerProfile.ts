@@ -14,6 +14,7 @@ export interface MatchEntry {
   matchId: string;
   placement: number;
   playedAt: string;
+  lpStatus?: 'known' | 'unknown' | 'none';
 }
 
 export interface MatchPoint {
@@ -48,6 +49,7 @@ export interface DailyPointTransaction {
   matchId?: string | null;
   placement?: number;
   playedAt?: string;
+  lpStatus?: 'known' | 'unknown' | 'none';
 }
 
 export interface DailyPointEntry {

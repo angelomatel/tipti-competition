@@ -144,7 +144,7 @@ async function runFeedJob(client: Client): Promise<void> {
         }
       }
 
-      const lpStr = formatLpDelta(notif.lpDelta);
+      const lpStr = notif.lpStatus === 'unknown' ? 'LP unknown' : formatLpDelta(notif.lpDelta);
       const lpPart = lpStr ? ` (${lpStr})` : '';
 
       let buffLine = '';
