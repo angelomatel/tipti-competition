@@ -49,6 +49,8 @@ const mockCaptureMatches = vi.mocked(captureMatchesForPlayer);
 const mockCreateLpDelta = vi.mocked(createLpDeltaTransaction);
 const mockProcessBuffs = vi.mocked(processNewMatchBuffs);
 const mockWarn = vi.mocked(logger.warn);
+const mockDebug = vi.mocked(logger.debug);
+const mockError = vi.mocked(logger.error);
 
 function makeSettings(startOffset: number, endOffset: number) {
   const now = Date.now();
@@ -105,6 +107,14 @@ describe('runCronCycle', () => {
     expect(mockProcessBuffs).toHaveBeenCalledTimes(1);
     expect(mockCaptureSnapshot).toHaveBeenCalledWith(players[0]);
     expect(mockCaptureSnapshot).toHaveBeenCalledWith(players[1]);
+    expect(mockDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        discordId: 'user1',
+        riotId: 'One#NA1',
+        puuid: 'puuid1',
+      }),
+      '[cron] Processing player One#NA1',
+    );
   });
 
   it('continues processing when one player fails', async () => {
@@ -133,6 +143,14 @@ describe('runCronCycle', () => {
     expect(mockCaptureSnapshot).toHaveBeenCalledTimes(2);
     expect(mockCaptureMatches).toHaveBeenCalledTimes(1);
     expect(mockCreateLpDelta).toHaveBeenCalledTimes(1);
+    expect(mockError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        discordId: 'user1',
+        riotId: 'One#NA1',
+        puuid: 'puuid1',
+      }),
+      '[cron] Failed processing One#NA1',
+    );
   });
 
   it('skips scoring when competitive state does not change', async () => {

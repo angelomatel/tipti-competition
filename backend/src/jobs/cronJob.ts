@@ -6,6 +6,7 @@ import { processNewMatchBuffs } from '@/services/matchBuffProcessor';
 import { getTournamentSettings } from '@/services/tournamentService';
 import { listActivePlayers } from '@/services/playerService';
 import { logger } from '@/lib/logger';
+import { getPlayerLogLabel } from '@/lib/playerLogLabel';
 import { runScheduledDataFetchJob } from '@/lib/scheduledDataFetch';
 import type { PlayerDocument } from '@/types/Player';
 
@@ -81,7 +82,14 @@ export async function runCronCycle(): Promise<void> {
     logger.debug(`[cron] Processing ${players.length} active players with concurrency ${concurrency}`);
 
     await runWithConcurrency(players, concurrency, async (player) => {
-      logger.debug({ discordId: player.discordId, gameName: player.gameName }, `[cron] Processing player ${player.gameName}#${player.tagLine}`);
+      const playerLabel = getPlayerLogLabel(player);
+      const playerContext = {
+        discordId: player.discordId,
+        riotId: player.riotId ?? (player.gameName && player.tagLine ? `${player.gameName}#${player.tagLine}` : null),
+        puuid: player.puuid,
+      };
+
+      logger.debug(playerContext, `[cron] Processing player ${playerLabel}`);
       try {
         const beforeState = {
           currentTier: player.currentTier,
@@ -90,15 +98,25 @@ export async function runCronCycle(): Promise<void> {
           currentWins: player.currentWins,
           currentLosses: player.currentLosses,
         };
-        logger.debug({ discordId: player.discordId, beforeState }, '[cron] Current player competitive state before refresh');
+        logger.debug({ ...playerContext, beforeState }, `[cron] Current competitive state before refresh for ${playerLabel}`);
 
-        logger.debug({ discordId: player.discordId }, '[cron] Fetching latest player ranked snapshot from Riot');
+        logger.debug(playerContext, `[cron] Fetching latest ranked snapshot for ${playerLabel}`);
         const updatedPlayer = await captureSnapshotForPlayer(player);
-        logger.debug({ discordId: player.discordId, currentTier: updatedPlayer.currentTier, currentRank: updatedPlayer.currentRank, currentLP: updatedPlayer.currentLP, currentWins: updatedPlayer.currentWins, currentLosses: updatedPlayer.currentLosses }, '[cron] Player snapshot refresh complete');
+        logger.debug(
+          {
+            ...playerContext,
+            currentTier: updatedPlayer.currentTier,
+            currentRank: updatedPlayer.currentRank,
+            currentLP: updatedPlayer.currentLP,
+            currentWins: updatedPlayer.currentWins,
+            currentLosses: updatedPlayer.currentLosses,
+          },
+          `[cron] Ranked snapshot refresh complete for ${playerLabel}`,
+        );
 
-        logger.debug({ discordId: player.discordId }, '[cron] Fetching match history for player');
+        logger.debug(playerContext, `[cron] Fetching match history for ${playerLabel}`);
         await captureMatchesForPlayer(player);
-        logger.debug({ discordId: player.discordId }, '[cron] Match history capture complete');
+        logger.debug(playerContext, `[cron] Match history capture complete for ${playerLabel}`);
 
         const hasChanged = hasCompetitiveStateChanged(beforeState, {
           currentTier: updatedPlayer.currentTier,
@@ -109,15 +127,15 @@ export async function runCronCycle(): Promise<void> {
         });
 
         if (!hasChanged) {
-          logger.debug({ discordId: player.discordId }, '[cron] Skipping scoring (no competitive state change)');
+          logger.debug(playerContext, `[cron] No competitive state change for ${playerLabel}; skipping scoring`);
         } else {
-          logger.debug({ discordId: player.discordId }, '[cron] Competitive state changed, creating scoring delta transaction');
+          logger.debug(playerContext, `[cron] Competitive state changed for ${playerLabel}; creating LP delta transaction`);
           await createLpDeltaTransaction(updatedPlayer, settings);
         }
 
-        logger.debug({ discordId: player.discordId }, `[cron] Done processing ${player.gameName}#${player.tagLine}`);
+        logger.debug(playerContext, `[cron] Finished processing ${playerLabel}`);
       } catch (err) {
-        logger.error({ err, discordId: player.discordId }, `[cron] Failed for player ${player.discordId}`);
+        logger.error({ err, ...playerContext }, `[cron] Failed processing ${playerLabel}`);
       }
     });
 

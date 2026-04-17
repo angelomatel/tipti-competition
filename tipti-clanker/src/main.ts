@@ -6,6 +6,8 @@ import { Client } from 'discordx';
 import { startNotificationJobs } from '@/jobs/notificationJobs';
 import { logger } from '@/lib/logger';
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 export const bot = new Client({
   intents: [
     IntentsBitField.Flags.Guilds,
@@ -15,7 +17,7 @@ export const bot = new Client({
     IntentsBitField.Flags.GuildVoiceStates,
     IntentsBitField.Flags.MessageContent,
   ],
-  silent: false,
+  silent: isProduction,
   simpleCommand: {
     prefix: '!',
   },

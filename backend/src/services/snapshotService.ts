@@ -3,6 +3,7 @@ import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { getRiotClient } from '@/services/riotService';
 import { findRankedEntry } from '@/lib/riotUtils';
 import { logger } from '@/lib/logger';
+import { getPlayerLogLabel } from '@/lib/playerLogLabel';
 import { withRetry } from '@/lib/withRetry';
 import { listActivePlayers } from '@/services/playerService';
 import type { PlayerDocument } from '@/types/Player';
@@ -11,18 +12,19 @@ export async function captureSnapshotForPlayer(player: PlayerDocument): Promise<
   const riot = getRiotClient();
   const entries = await riot.getTftLeagueByPuuid(player.puuid);
   const ranked = findRankedEntry(entries);
+  const playerLabel = getPlayerLogLabel(player);
   logger.info(
     {
       discordId: player.discordId,
       puuid: player.puuid,
-      riotId: player.riotId,
+      riotId: player.riotId ?? null,
       tier: ranked?.tier ?? 'UNRANKED',
       rank: ranked?.rank ?? '',
       leaguePoints: ranked?.leaguePoints ?? 0,
       wins: ranked?.wins ?? 0,
       losses: ranked?.losses ?? 0,
     },
-    '[snapshot] Fetched ranked player info from Riot',
+    `[snapshot] Fetched ranked player info from Riot for ${playerLabel}`,
   );
   if (!ranked) return player;
 
@@ -67,7 +69,10 @@ export async function captureAllSnapshots(): Promise<void> {
     try {
       await captureSnapshotForPlayer(player);
     } catch (err) {
-      logger.error({ err, discordId: player.discordId }, `Snapshot failed for player ${player.discordId}`);
+      logger.error(
+        { err, discordId: player.discordId, riotId: player.riotId ?? null, puuid: player.puuid },
+        `[snapshot] Failed to capture snapshot for ${getPlayerLogLabel(player)}`,
+      );
     }
   }
 }

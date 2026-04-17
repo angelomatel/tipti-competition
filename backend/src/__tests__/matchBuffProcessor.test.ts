@@ -51,6 +51,7 @@ import { Player } from '@/db/models/Player';
 import { PointTransaction } from '@/db/models/PointTransaction';
 import { processNewMatchBuffs } from '@/services/matchBuffProcessor';
 import { getTournamentSettings } from '@/services/tournamentService';
+import { logger } from '@/lib/logger';
 
 const mockMatchFind = vi.mocked(MatchRecord.find);
 const mockMatchUpdateOne = vi.mocked(MatchRecord.updateOne);
@@ -58,6 +59,8 @@ const mockPlayerFind = vi.mocked(Player.find) as any;
 const mockPointAggregate = vi.mocked(PointTransaction.aggregate);
 const mockPointCreate = vi.mocked(PointTransaction.create);
 const mockGetTournamentSettings = vi.mocked(getTournamentSettings);
+const mockDebug = vi.mocked(logger.debug);
+const mockInfo = vi.mocked(logger.info);
 
 function makeSettings() {
   return {
@@ -112,6 +115,15 @@ describe('processNewMatchBuffs', () => {
       { _id: match._id },
       { buffProcessed: true },
     );
+    expect(mockDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        discordId: player.discordId,
+        riotId: null,
+        godSlug: player.godSlug,
+        matchId: match.matchId,
+      }),
+      '[match-buff] Match match-1 for discord:discord-1 occurred before buff activation; marking processed without buffs',
+    );
   });
 
   it('applies buffs to matches once phase 2 has begun', async () => {
@@ -143,6 +155,18 @@ describe('processNewMatchBuffs', () => {
     expect(mockMatchUpdateOne).toHaveBeenCalledWith(
       { _id: match._id },
       { buffProcessed: true },
+    );
+    expect(mockInfo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        playerId: player.discordId,
+        discordId: player.discordId,
+        riotId: null,
+        godSlug: player.godSlug,
+        source: 'ahri_first_place',
+        matchId: match.matchId,
+        value: 17,
+      }),
+      '[match-buff] Created buff transaction of 17 from ahri_first_place for discord:discord-1 on match match-2',
     );
   });
 });

@@ -3,6 +3,7 @@ import { getRiotClient } from '@/services/riotService';
 import { getTournamentSettings } from '@/services/tournamentService';
 import { TftQueueId } from '@/lib/riotClient';
 import { logger } from '@/lib/logger';
+import { getPlayerLogLabel } from '@/lib/playerLogLabel';
 import { withRetry } from '@/lib/withRetry';
 import type { PlayerDocument } from '@/types/Player';
 
@@ -14,7 +15,11 @@ export async function captureMatchesForPlayer(player: PlayerDocument): Promise<v
   let outOfWindowCount = 0;
   let missingParticipantCount = 0;
   let capturedCount = 0;
-  logger.debug({ discordId: player.discordId, puuid: player.puuid }, '[match] Starting match capture for player');
+  const playerLabel = getPlayerLogLabel(player);
+  logger.debug(
+    { discordId: player.discordId, riotId: player.riotId ?? null, puuid: player.puuid },
+    `[match] Starting match capture for ${playerLabel}`,
+  );
 
   // Use the player's most recent captured match as startTime to avoid gaps
   const lastMatch = await MatchRecord.findOne({ puuid: player.puuid }).sort({ playedAt: -1 });
@@ -76,15 +81,19 @@ export async function captureMatchesForPlayer(player: PlayerDocument): Promise<v
       logger.info(
         {
           discordId: player.discordId,
+          riotId: player.riotId ?? null,
           puuid: player.puuid,
           matchId,
           placement: participant.placement,
           playedAt: matchDate.toISOString(),
         },
-        '[match] Captured ranked tournament match',
+        `[match] Captured ranked tournament match ${matchId} for ${playerLabel}`,
       );
     } catch (err) {
-      logger.error({ err, matchId }, `Match fetch failed for ${matchId}`);
+      logger.error(
+        { err, discordId: player.discordId, riotId: player.riotId ?? null, matchId },
+        `[match] Failed to fetch match ${matchId} for ${playerLabel}`,
+      );
     }
   }
 
@@ -92,6 +101,7 @@ export async function captureMatchesForPlayer(player: PlayerDocument): Promise<v
     logger.info(
       {
         discordId: player.discordId,
+        riotId: player.riotId ?? null,
         puuid: player.puuid,
         fetchedMatchIdCount: matchIds.length,
         capturedCount,
@@ -100,9 +110,12 @@ export async function captureMatchesForPlayer(player: PlayerDocument): Promise<v
         outOfWindowCount,
         missingParticipantCount,
       },
-      '[match] Match capture summary for player',
+      `[match] Match capture summary for ${playerLabel}`,
     );
   }
 
-  logger.debug({ discordId: player.discordId }, '[match] Match capture complete for player');
+  logger.debug(
+    { discordId: player.discordId, riotId: player.riotId ?? null, puuid: player.puuid },
+    `[match] Match capture complete for ${playerLabel}`,
+  );
 }

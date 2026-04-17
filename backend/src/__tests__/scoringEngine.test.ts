@@ -121,13 +121,14 @@ describe('createLpDeltaTransaction', () => {
     expect(logger.info).toHaveBeenCalledWith(
       expect.objectContaining({
         discordId: 'user-2',
+        riotId: null,
         godSlug: 'ahri',
         value: 100,
         source: 'lp_delta',
         day: '2026-04-03',
         phase: 1,
       }),
-      '[scoring] LP delta transaction created',
+      '[scoring] Created LP delta transaction of 100 for discord:user-2',
     );
   });
 });

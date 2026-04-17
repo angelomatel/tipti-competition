@@ -111,7 +111,10 @@ async function runFeedJob(client: Client): Promise<void> {
 
       await channel.send({ embeds: [embed] });
       await ackNotificationFeed([notif.matchId]);
-      logger.debug({ matchId: notif.matchId, placement: notif.placement }, '[feed-job] Posted notification');
+      logger.debug(
+        { matchId: notif.matchId, placement: notif.placement, discordId: notif.discordId ?? null, riotId: notif.gameName && notif.tagLine ? `${notif.gameName}#${notif.tagLine}` : null, channelId: channel.id },
+        `[feed-job] Posted notification for match ${notif.matchId}`,
+      );
     }
   } catch (err) {
     logger.error({ err }, '[feed-job] Error in feed job');
@@ -184,7 +187,7 @@ export async function runDailyJob(client: Client): Promise<void> {
       await channel.send({ embeds: [embed] });
     }
 
-    logger.debug({ date }, '[daily-job] Posted daily recap');
+    logger.debug({ date, channelId: channel.id }, `[daily-job] Posted daily recap for ${date}`);
   } catch (err) {
     logger.error({ err }, '[daily-job] Error in daily job');
   }
@@ -220,7 +223,7 @@ export async function runGodStandingsJob(client: Client): Promise<void> {
       .setTimestamp();
 
     await channel.send({ embeds: [embed] });
-    logger.debug('[god-standings-job] Posted god standings update');
+    logger.debug({ channelId: channel.id, standingCount: standings.length }, `[god-standings-job] Posted god standings update with ${standings.length} entries`);
   } catch (err) {
     logger.error({ err }, '[god-standings-job] Error in god standings job');
   }

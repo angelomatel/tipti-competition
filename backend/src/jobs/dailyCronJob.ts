@@ -8,6 +8,7 @@ import { processEndOfPhase, processEndOfTournament } from '@/services/phaseServi
 import { normalizeLP } from '@/lib/normalizeLP';
 import { getDayBoundsUTC8, getTodayUTC8 } from '@/lib/dateUtils';
 import { logger } from '@/lib/logger';
+import { getPlayerLogLabel } from '@/lib/playerLogLabel';
 import { runScheduledDataFetchJob } from '@/lib/scheduledDataFetch';
 
 function getYesterdayUTC8(): string {
@@ -39,7 +40,13 @@ export async function runDailyProcessing(day?: string): Promise<void> {
     if (!player.godSlug) continue;
 
     try {
-      logger.debug({ discordId: player.discordId, puuid: player.puuid }, '[daily-cron] Computing daily score inputs for player');
+      const playerLabel = getPlayerLogLabel(player);
+      const playerContext = {
+        discordId: player.discordId,
+        riotId: player.riotId ?? null,
+        puuid: player.puuid,
+      };
+      logger.debug(playerContext, `[daily-cron] Computing daily score inputs for ${playerLabel}`);
 
       // Get first and last snapshot of the day
       const firstSnapshot = await LpSnapshot.findOne({
@@ -56,15 +63,18 @@ export async function runDailyProcessing(day?: string): Promise<void> {
         ? normalizeLP(lastSnapshot.tier, lastSnapshot.rank, lastSnapshot.leaguePoints) -
           normalizeLP(firstSnapshot.tier, firstSnapshot.rank, firstSnapshot.leaguePoints)
         : 0;
-      logger.debug({ discordId: player.discordId, hasFirstSnapshot: Boolean(firstSnapshot), hasLastSnapshot: Boolean(lastSnapshot), rawLpGain }, '[daily-cron] Snapshot delta computed');
+      logger.debug(
+        { ...playerContext, hasFirstSnapshot: Boolean(firstSnapshot), hasLastSnapshot: Boolean(lastSnapshot), rawLpGain },
+        `[daily-cron] Snapshot delta computed for ${playerLabel}`,
+      );
 
       // Get matches played that day
-      logger.debug({ discordId: player.discordId }, '[daily-cron] Fetching daily match history for player');
+      logger.debug(playerContext, `[daily-cron] Fetching daily match history for ${playerLabel}`);
       const matches = await MatchRecord.find({
         puuid: player.puuid,
         playedAt: { $gte: dayStart, $lte: dayEnd },
       }).sort({ playedAt: 1 });
-      logger.debug({ discordId: player.discordId, matchCount: matches.length }, '[daily-cron] Daily match history fetched');
+      logger.debug({ ...playerContext, matchCount: matches.length }, `[daily-cron] Daily match history fetched for ${playerLabel}`);
 
       const placements = matches.map((m) => m.placement);
 
@@ -82,11 +92,17 @@ export async function runDailyProcessing(day?: string): Promise<void> {
         },
         { upsert: true, new: true },
       );
-      logger.debug({ discordId: player.discordId, targetDay, rawLpGain, matchCount: matches.length }, '[daily-cron] Daily player score upserted');
+      logger.debug(
+        { ...playerContext, targetDay, rawLpGain, matchCount: matches.length },
+        `[daily-cron] Daily player score upserted for ${playerLabel}`,
+      );
 
       // Match PointTransactions are now created in real-time by the 15-min cron (lp_delta).
     } catch (err) {
-      logger.error({ err, discordId: player.discordId }, `[daily-cron] Failed for ${player.discordId}`);
+      logger.error(
+        { err, discordId: player.discordId, riotId: player.riotId ?? null, puuid: player.puuid },
+        `[daily-cron] Failed daily processing for ${getPlayerLogLabel(player)}`,
+      );
     }
   }
 

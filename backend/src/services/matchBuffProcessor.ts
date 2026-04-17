@@ -48,6 +48,11 @@ interface PlayerContext {
   puuid: string;
   godSlug: string;
   currentTier: string;
+  riotId?: string;
+}
+
+function getPlayerLogLabel(player: Pick<PlayerContext, 'discordId' | 'riotId'>): string {
+  return player.riotId ?? `discord:${player.discordId}`;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -280,6 +285,7 @@ export async function processNewMatchBuffs(): Promise<void> {
       puuid: p.puuid,
       godSlug: p.godSlug,
       currentTier: p.currentTier,
+      riotId: p.riotId ?? undefined,
     });
   }
 
@@ -318,9 +324,17 @@ export async function processNewMatchBuffs(): Promise<void> {
     }
 
     if (buffActivationStart && match.playedAt < buffActivationStart) {
+      const playerLabel = getPlayerLogLabel(player);
       logger.debug(
-        { matchId: match.matchId, playedAt: match.playedAt.toISOString(), buffActivationStart: buffActivationStart.toISOString() },
-        '[match-buff] Match occurred before buff activation; marking processed without buffs',
+        {
+          discordId: player.discordId,
+          riotId: player.riotId ?? null,
+          godSlug: player.godSlug,
+          matchId: match.matchId,
+          playedAt: match.playedAt.toISOString(),
+          buffActivationStart: buffActivationStart.toISOString(),
+        },
+        `[match-buff] Match ${match.matchId} for ${playerLabel} occurred before buff activation; marking processed without buffs`,
       );
       await MatchRecord.updateOne({ _id: match._id }, { buffProcessed: true });
       continue;
@@ -457,6 +471,8 @@ export async function processNewMatchBuffs(): Promise<void> {
       logger.info(
         {
           playerId: player.discordId,
+          discordId: player.discordId,
+          riotId: player.riotId ?? null,
           godSlug: player.godSlug,
           type: entry.type,
           value: finalValue,
@@ -465,7 +481,7 @@ export async function processNewMatchBuffs(): Promise<void> {
           day: matchDay,
           phase: phaseNum,
         },
-        '[match-buff] Point transaction created',
+        `[match-buff] Created ${entry.type} transaction of ${finalValue} from ${entry.source} for ${getPlayerLogLabel(player)} on match ${match.matchId}`,
       );
     }
 

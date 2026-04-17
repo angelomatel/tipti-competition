@@ -6,6 +6,7 @@ import { GOD_SCORE_TOP_N } from '@/constants';
 import { normalizeLP } from '@/lib/normalizeLP';
 import { dateToUTC8Str, getTodayUTC8 } from '@/lib/dateUtils';
 import { logger } from '@/lib/logger';
+import { getPlayerLogLabel } from '@/lib/playerLogLabel';
 import type { TournamentSettingsDocument } from '@/db/models/TournamentSettings';
 import type { PlayerDocument } from '@/types/Player';
 import type { PlayerScoreBreakdown, DailyPointEntry } from '@/types/God';
@@ -197,6 +198,7 @@ export async function createLpDeltaTransaction(
   }).sort({ playedAt: -1 });
 
   const matchId = nextUnlinkedMatch ? nextUnlinkedMatch.matchId : null;
+  const playerLabel = getPlayerLogLabel(player);
 
   await PointTransaction.create({
     playerId: player.discordId,
@@ -212,6 +214,7 @@ export async function createLpDeltaTransaction(
   logger.info(
     {
       discordId: player.discordId,
+      riotId: player.riotId ?? null,
       godSlug: player.godSlug,
       value: delta,
       source: 'lp_delta',
@@ -219,6 +222,6 @@ export async function createLpDeltaTransaction(
       day: today,
       phase: phase?.phase ?? settings.currentPhase,
     },
-    '[scoring] LP delta transaction created',
+    `[scoring] Created LP delta transaction of ${delta} for ${playerLabel}${matchId ? ` via match ${matchId}` : ''}`,
   );
 }
