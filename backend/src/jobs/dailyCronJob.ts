@@ -8,6 +8,7 @@ import { processEndOfPhase, processEndOfTournament } from '@/services/phaseServi
 import { normalizeLP } from '@/lib/normalizeLP';
 import { getDayBoundsUTC8, getTodayUTC8 } from '@/lib/dateUtils';
 import { logger } from '@/lib/logger';
+import { runScheduledDataFetchJob } from '@/lib/scheduledDataFetch';
 
 function getYesterdayUTC8(): string {
   const today = getTodayUTC8();
@@ -117,7 +118,7 @@ export async function runDailyProcessing(day?: string): Promise<void> {
 export function startDailyCronJob(): void {
   // Run at 16:00 UTC (midnight UTC+8)
   cron.schedule('0 16 * * *', () => {
-    void runDailyProcessing();
+    void runScheduledDataFetchJob('daily-cron', () => runDailyProcessing());
   });
   logger.info('[daily-cron] Daily processing job scheduled (0 16 * * *).');
 }

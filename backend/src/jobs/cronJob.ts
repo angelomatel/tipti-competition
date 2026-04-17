@@ -6,6 +6,7 @@ import { processNewMatchBuffs } from '@/services/matchBuffProcessor';
 import { getTournamentSettings } from '@/services/tournamentService';
 import { listActivePlayers } from '@/services/playerService';
 import { logger } from '@/lib/logger';
+import { runScheduledDataFetchJob } from '@/lib/scheduledDataFetch';
 import type { PlayerDocument } from '@/types/Player';
 
 const DEFAULT_PLAYER_CONCURRENCY = 4;
@@ -138,7 +139,7 @@ export async function runCronCycle(): Promise<void> {
 export function startCronJob(): void {
   // Run every 15 minutes
   cron.schedule('*/15 * * * *', () => {
-    void runCronCycle();
+    void runScheduledDataFetchJob('cron', runCronCycle);
   });
   logger.debug('[cron] 15-minute snapshot job scheduled.');
 }
