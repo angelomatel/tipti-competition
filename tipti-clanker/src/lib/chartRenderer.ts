@@ -102,11 +102,11 @@ interface ProcessedDataset {
 export async function renderLpGraph(players: PlayerSeries[], dateStr: string = new Date().toISOString().split('T')[0]): Promise<Buffer> {
   const bgImage = await loadImage(bgPath).catch(() => null);
 
-  // Parse date — treat dateStr as UTC midnight to avoid timezone shifts
+  // dateStr is already a PHT business day string; format it consistently in Asia/Manila.
   const [y, m, d] = dateStr.split('-').map(Number);
   const titleDateObj = new Date(Date.UTC(y, m - 1, d));
-  const weekday = titleDateObj.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
-  const monthDay = titleDateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const weekday = titleDateObj.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Manila' });
+  const monthDay = titleDateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' });
   const chartTitle = `Top Rankers for ${weekday}, ${monthDay}`;
 
   // Pre-load all rank images and avatars

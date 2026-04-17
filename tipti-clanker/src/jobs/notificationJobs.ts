@@ -4,15 +4,25 @@ import {
   getTournamentSettings,
   getNotificationFeed,
   ackNotificationFeed,
-  getDailySummary,
-  getDailyGraphData,
+  getDailySummaryForScheduledRecap,
+  getDailyGraphDataForScheduledRecap,
   updatePlayerProfile,
   getGodStandings,
 } from '@/lib/backendClient';
 import { renderLpGraph } from '@/lib/chartRenderer';
 import { logger } from '@/lib/logger';
 import { formatLpDelta, formatOrdinal } from '@/lib/format';
-import { EMBED_COLORS, GOD_COLORS, SOURCE_LABELS, CRON_SCHEDULES } from '@/lib/constants';
+import { sendSchedulerAuditWarning } from '@/lib/auditLog';
+import { getYesterdayPhtDay } from '@/lib/dateUtils';
+import {
+  EMBED_COLORS,
+  GOD_COLORS,
+  SOURCE_LABELS,
+  CRON_SCHEDULES,
+  PHT_TIMEZONE,
+  DAILY_RECAP_MAX_ATTEMPTS,
+  DAILY_RECAP_RETRY_DELAY_MS,
+} from '@/lib/constants';
 
 async function getTextChannel(client: Client, channelId: string): Promise<TextChannel | null> {
   try {
@@ -24,14 +34,85 @@ async function getTextChannel(client: Client, channelId: string): Promise<TextCh
   }
 }
 
-/** Returns yesterday's date string in UTC+8 as YYYY-MM-DD */
-function getYesterdayUTC8(): string {
-  const now = new Date();
-  const utc8 = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-  utc8.setUTCDate(utc8.getUTCDate() - 1);
-  return utc8.toISOString().slice(0, 10);
+async function warnScheduledJob(client: Client, jobName: string, details: string[], extra?: Record<string, unknown>): Promise<void> {
+  logger.warn({ jobName, ...extra }, `[${jobName}] ${details.join(' | ')}`);
+  await sendSchedulerAuditWarning(client, jobName, details);
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function postDailyRecapOnce(client: Client, date: string): Promise<void> {
+  const settingsRes = await getTournamentSettings();
+  const settings = settingsRes.settings;
+  const now = new Date();
+  if (now < new Date(settings.startDate) || now > new Date(settings.endDate) || !settings.dailyChannelId) return;
+
+  const channel = await getTextChannel(client, settings.dailyChannelId);
+  if (!channel) {
+    await warnScheduledJob(client, 'daily-job', [
+      `Daily recap for ${date} could not be posted because the configured channel was not found or is not text-based.`,
+    ], { date, channelId: settings.dailyChannelId, stage: 'resolve-channel' });
+    return;
+  }
+
+  const [summary, graphData] = await Promise.all([
+    getDailySummaryForScheduledRecap(date),
+    getDailyGraphDataForScheduledRecap(date),
+  ]);
+
+  const embed = new EmbedBuilder()
+    .setTitle(`📅 Daily Recap — ${date}`)
+    .setColor(EMBED_COLORS.PRIMARY)
+    .setTimestamp();
+
+  if (summary.climber) {
+    embed.addFields({
+      name: '📈 Climber of the Day',
+      value: `<@${summary.climber.discordId}> — **+${summary.climber.lpGain} LP**`,
+    });
+  } else {
+    embed.addFields({ name: '📈 Climber of the Day', value: 'No data' });
+  }
+
+  if (summary.slider) {
+    embed.addFields({
+      name: '📉 Slider of the Day',
+      value: `<@${summary.slider.discordId}> — **${summary.slider.lpGain} LP**`,
+    });
+  } else {
+    embed.addFields({ name: '📉 Slider of the Day', value: 'No data' });
+  }
+
+  const players: any[] = graphData.players ?? [];
+  if (players.length > 0) {
+    if (channel.guild) {
+      for (const p of players) {
+        if (!p.discordAvatarUrl && p.discordId) {
+          try {
+            const member = await channel.guild.members.fetch(p.discordId);
+            p.discordAvatarUrl = member.user.displayAvatarURL({ extension: 'png', size: 128 });
+            updatePlayerProfile(p.discordId, { discordAvatarUrl: p.discordAvatarUrl }).catch(() => {});
+          } catch {
+            // member not in guild
+          }
+        }
+      }
+    }
+
+    const chartBuffer = await renderLpGraph(players, date);
+    const attachment = new AttachmentBuilder(chartBuffer, { name: 'lp-graph.png' });
+    embed.setImage('attachment://lp-graph.png');
+    await channel.send({ embeds: [embed], files: [attachment] });
+  } else {
+    await channel.send({ embeds: [embed] });
+  }
+
+  logger.debug({ date, channelId: channel.id }, `[daily-job] Posted daily recap for ${date}`);
+}
 
 async function runFeedJob(client: Client): Promise<void> {
   try {
@@ -42,7 +123,9 @@ async function runFeedJob(client: Client): Promise<void> {
 
     const channel = await getTextChannel(client, settings.feedChannelId);
     if (!channel) {
-      logger.warn('[feed-job] feedChannelId is set but channel not found or not text-based');
+      await warnScheduledJob(client, 'feed-job', [
+        'feedChannelId is set but channel was not found or is not text-based.',
+      ], { channelId: settings.feedChannelId });
       return;
     }
 
@@ -51,19 +134,19 @@ async function runFeedJob(client: Client): Promise<void> {
     if (notifications.length === 0) return;
 
     for (const notif of notifications) {
-      // Refresh avatar URL when we have access to the guild
       if (channel.guild && notif.discordId) {
         try {
           const member = await channel.guild.members.fetch(notif.discordId);
           const currentAvatar = member.user.displayAvatarURL({ extension: 'png', size: 128 });
           updatePlayerProfile(notif.discordId, { discordAvatarUrl: currentAvatar }).catch(() => {});
-        } catch { /* member not in guild */ }
+        } catch {
+          // member not in guild
+        }
       }
 
       const lpStr = formatLpDelta(notif.lpDelta);
       const lpPart = lpStr ? ` (${lpStr})` : '';
 
-      // Build buff lines
       let buffLine = '';
       if (notif.godBuffs && notif.godBuffs.length > 0) {
         const buffStrings = notif.godBuffs.map((b: any) => {
@@ -73,12 +156,10 @@ async function runFeedJob(client: Client): Promise<void> {
         buffLine = '\n> ' + buffStrings.join('\n> ');
       }
 
-      // Build external match links (tactics.tools + metatft)
       const ttUrl = `https://tactics.tools/player/sg/${encodeURIComponent(notif.gameName)}/${encodeURIComponent(notif.tagLine)}/${notif.matchId}`;
       const metatftUrl = `https://www.metatft.com/player/SG2/${encodeURIComponent(notif.gameName)}-${encodeURIComponent(notif.tagLine)}?match=${notif.matchId}`;
       const linksLine = `\n-# [tactics.tools](${ttUrl}) | [metatft](${metatftUrl})`;
 
-      // Pick embed color: god color if assigned, else placement-based fallback
       const godColor: number | undefined = notif.godSlug ? GOD_COLORS[notif.godSlug] : undefined;
 
       const username = notif.discordUsername || notif.gameName;
@@ -93,13 +174,12 @@ async function runFeedJob(client: Client): Promise<void> {
       if (notif.placement === 1) {
         embed
           .setColor(godColor ?? EMBED_COLORS.GOLD)
-          .setDescription(`👑 **${username}** just secured a **1st Place**${lpPart}!${buffLine}${linksLine}`);
+          .setDescription(`🫅 **${username}** just secured a **1st Place**${lpPart}!${buffLine}${linksLine}`);
       } else if (notif.placement === 8) {
         embed
           .setColor(godColor ?? EMBED_COLORS.DANGER)
           .setDescription(`🚨 **${username}** just went **8th**${lpPart}! The tilt is real!${buffLine}${linksLine}`);
       } else {
-        // Placements 2–7
         const ordinal = formatOrdinal(notif.placement);
         const topHalf = notif.placement <= 4;
         const emoji = topHalf ? '🏅' : '📉';
@@ -116,80 +196,49 @@ async function runFeedJob(client: Client): Promise<void> {
         `[feed-job] Posted notification for match ${notif.matchId}`,
       );
     }
-  } catch (err) {
-    logger.error({ err }, '[feed-job] Error in feed job');
+  } catch (err: any) {
+    await warnScheduledJob(client, 'feed-job', [
+      'Scheduled feed job failed.',
+      err?.message ?? String(err),
+    ], { err });
   }
 }
 
 export async function runDailyJob(client: Client): Promise<void> {
-  try {
-    const settingsRes = await getTournamentSettings();
-    const settings = settingsRes.settings;
-    const now = new Date();
-    if (now < new Date(settings.startDate) || now > new Date(settings.endDate) || !settings.dailyChannelId) return;
+  const date = getYesterdayPhtDay();
 
-    const channel = await getTextChannel(client, settings.dailyChannelId);
-    if (!channel) {
-      logger.warn('[daily-job] dailyChannelId is set but channel not found or not text-based');
+  for (let attempt = 1; attempt <= DAILY_RECAP_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await postDailyRecapOnce(client, date);
       return;
-    }
+    } catch (err: any) {
+      const finalAttempt = attempt === DAILY_RECAP_MAX_ATTEMPTS;
+      const details = finalAttempt
+        ? [
+            `Daily recap for ${date} failed after ${attempt} attempts.`,
+            'Stage: fetch-render-post',
+            err?.message ?? String(err),
+          ]
+        : [
+            `Daily recap for ${date} attempt ${attempt} failed.`,
+            `Retrying in ${Math.round(DAILY_RECAP_RETRY_DELAY_MS / 1000)}s.`,
+            err?.message ?? String(err),
+          ];
 
-    const date = getYesterdayUTC8();
-    const [summary, graphData] = await Promise.all([
-      getDailySummary(date),
-      getDailyGraphData(date),
-    ]);
-
-    // Build recap embed
-    const embed = new EmbedBuilder()
-      .setTitle(`📅 Daily Recap — ${date}`)
-      .setColor(EMBED_COLORS.PRIMARY)
-      .setTimestamp();
-
-    if (summary.climber) {
-      embed.addFields({
-        name: '📈 Climber of the Day',
-        value: `<@${summary.climber.discordId}> — **+${summary.climber.lpGain} LP**`,
+      await warnScheduledJob(client, 'daily-job', details, {
+        date,
+        stage: 'fetch-render-post',
+        attempt,
+        maxAttempts: DAILY_RECAP_MAX_ATTEMPTS,
+        err,
       });
-    } else {
-      embed.addFields({ name: '📈 Climber of the Day', value: 'No data' });
-    }
 
-    if (summary.slider) {
-      embed.addFields({
-        name: '📉 Slider of the Day',
-        value: `<@${summary.slider.discordId}> — **${summary.slider.lpGain} LP**`,
-      });
-    } else {
-      embed.addFields({ name: '📉 Slider of the Day', value: 'No data' });
-    }
-
-    // Generate and attach LP graph if we have data
-    const players: any[] = graphData.players ?? [];
-    if (players.length > 0) {
-      if (channel.guild) {
-        for (const p of players) {
-          if (!p.discordAvatarUrl && p.discordId) {
-            try {
-              const member = await channel.guild.members.fetch(p.discordId);
-              p.discordAvatarUrl = member.user.displayAvatarURL({ extension: 'png', size: 128 });
-              updatePlayerProfile(p.discordId, { discordAvatarUrl: p.discordAvatarUrl }).catch(() => {});
-            } catch { /* member not in guild */ }
-          }
-        }
+      if (finalAttempt) {
+        return;
       }
 
-      const chartBuffer = await renderLpGraph(players, date);
-      const attachment = new AttachmentBuilder(chartBuffer, { name: 'lp-graph.png' });
-      embed.setImage('attachment://lp-graph.png');
-      await channel.send({ embeds: [embed], files: [attachment] });
-    } else {
-      await channel.send({ embeds: [embed] });
+      await sleep(DAILY_RECAP_RETRY_DELAY_MS);
     }
-
-    logger.debug({ date, channelId: channel.id }, `[daily-job] Posted daily recap for ${date}`);
-  } catch (err) {
-    logger.error({ err }, '[daily-job] Error in daily job');
   }
 }
 
@@ -202,7 +251,9 @@ export async function runGodStandingsJob(client: Client): Promise<void> {
 
     const channel = await getTextChannel(client, settings.godStandingsChannelId);
     if (!channel) {
-      logger.warn('[god-standings-job] godStandingsChannelId is set but channel not found');
+      await warnScheduledJob(client, 'god-standings-job', [
+        'godStandingsChannelId is set but channel was not found or is not text-based.',
+      ], { channelId: settings.godStandingsChannelId });
       return;
     }
 
@@ -224,8 +275,11 @@ export async function runGodStandingsJob(client: Client): Promise<void> {
 
     await channel.send({ embeds: [embed] });
     logger.debug({ channelId: channel.id, standingCount: standings.length }, `[god-standings-job] Posted god standings update with ${standings.length} entries`);
-  } catch (err) {
-    logger.error({ err }, '[god-standings-job] Error in god standings job');
+  } catch (err: any) {
+    await warnScheduledJob(client, 'god-standings-job', [
+      'Scheduled god standings job failed.',
+      err?.message ?? String(err),
+    ], { err });
   }
 }
 
@@ -236,11 +290,11 @@ export function startNotificationJobs(client: Client): void {
 
   cron.schedule(CRON_SCHEDULES.DAILY_JOB, () => {
     void runDailyJob(client);
-  }, { timezone: 'UTC' });
+  }, { timezone: PHT_TIMEZONE });
 
   cron.schedule(CRON_SCHEDULES.GOD_STANDINGS_JOB, () => {
     void runGodStandingsJob(client);
-  }, { timezone: 'UTC' });
+  }, { timezone: PHT_TIMEZONE });
 
-  logger.debug('[notifications] Feed (*/5 min), daily (16:05 UTC), and god standings (16:10 UTC) jobs scheduled');
+  logger.debug(`[notifications] Feed (*/5 min), daily (${CRON_SCHEDULES.DAILY_JOB}), and god standings (${CRON_SCHEDULES.GOD_STANDINGS_JOB}) jobs scheduled in timezone=${PHT_TIMEZONE}`);
 }

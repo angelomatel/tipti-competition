@@ -1,7 +1,11 @@
 import http from 'http';
 import https from 'https';
 import { URL } from 'url';
-import { BACKEND_ADMIN_PASSWORD_HEADER, BACKEND_REQUEST_TIMEOUT_MS } from '@/lib/constants';
+import {
+  BACKEND_ADMIN_PASSWORD_HEADER,
+  BACKEND_REQUEST_TIMEOUT_MS,
+  DAILY_RECAP_REQUEST_TIMEOUT_MS,
+} from '@/lib/constants';
 
 const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:5000';
 const BACKEND_ADMIN_PASSWORD = process.env.BACKEND_ADMIN_PASSWORD ?? '';
@@ -109,12 +113,20 @@ export function ackNotificationFeed(matchIds: string[]): Promise<any> {
   return request('POST', '/api/notifications/feed/ack', { matchIds });
 }
 
-export function getDailySummary(date: string): Promise<any> {
-  return request('GET', `/api/notifications/daily-summary?date=${encodeURIComponent(date)}`);
+export function getDailySummary(date: string, timeoutMs = BACKEND_REQUEST_TIMEOUT_MS): Promise<any> {
+  return request('GET', `/api/notifications/daily-summary?date=${encodeURIComponent(date)}`, undefined, timeoutMs);
 }
 
-export function getDailyGraphData(date: string): Promise<any> {
-  return request('GET', `/api/notifications/daily-graph?date=${encodeURIComponent(date)}`);
+export function getDailyGraphData(date: string, timeoutMs = BACKEND_REQUEST_TIMEOUT_MS): Promise<any> {
+  return request('GET', `/api/notifications/daily-graph?date=${encodeURIComponent(date)}`, undefined, timeoutMs);
+}
+
+export function getDailySummaryForScheduledRecap(date: string): Promise<any> {
+  return getDailySummary(date, DAILY_RECAP_REQUEST_TIMEOUT_MS);
+}
+
+export function getDailyGraphDataForScheduledRecap(date: string): Promise<any> {
+  return getDailyGraphData(date, DAILY_RECAP_REQUEST_TIMEOUT_MS);
 }
 
 // God system endpoints

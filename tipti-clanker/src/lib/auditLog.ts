@@ -58,3 +58,21 @@ export async function sendAuditLog(client: Client, payload: AuditLogPayload): Pr
     logger.warn({ err }, '[audit] Failed to send audit log');
   }
 }
+
+export async function sendSchedulerAuditWarning(
+  client: Client,
+  jobName: string,
+  details: string[],
+): Promise<void> {
+  const actorId = client.user?.id;
+  if (!actorId) {
+    logger.warn({ jobName }, '[audit] Cannot send scheduler audit warning because bot user is unavailable');
+    return;
+  }
+
+  await sendAuditLog(client, {
+    action: `Scheduler Warning: ${jobName}`,
+    actorId,
+    details,
+  });
+}

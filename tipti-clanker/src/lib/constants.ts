@@ -14,8 +14,8 @@ export const EMBED_COLORS = {
 /** Cron schedule expressions for notification jobs. */
 export const CRON_SCHEDULES = {
   FEED_JOB: '*/5 * * * *',   // Every 5 minutes
-  DAILY_JOB: '5 16 * * *',   // 16:05 UTC (5 min after daily processing)
-  GOD_STANDINGS_JOB: '10 16 * * *', // 16:10 UTC (after daily recap)
+  DAILY_JOB: '5 0 * * *',    // 00:05 PHT (after daily processing)
+  GOD_STANDINGS_JOB: '10 0 * * *', // 00:10 PHT (after daily recap)
 } as const;
 
 /** Maximum entries shown in the /leaderboard command. */
@@ -23,6 +23,11 @@ export const LEADERBOARD_TOP_N = 10;
 
 /** Timeout in milliseconds for outbound HTTP requests to the backend API. */
 export const BACKEND_REQUEST_TIMEOUT_MS = 10_000;
+export const DAILY_RECAP_REQUEST_TIMEOUT_MS = 120_000;
+export const DAILY_RECAP_MAX_ATTEMPTS = 3;
+export const DAILY_RECAP_RETRY_DELAY_MS = 30_000;
+export const PHT_TIMEZONE = 'Asia/Manila';
+export const PHT_UTC_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 /** Shared header name used for protected backend mutations. */
 export const BACKEND_ADMIN_PASSWORD_HEADER = 'x-admin-password';
