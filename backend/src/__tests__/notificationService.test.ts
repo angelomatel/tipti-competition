@@ -90,12 +90,14 @@ describe('notification service', () => {
         matchId: 'match-1',
         placement: 1,
         playedAt: new Date('2026-01-10T10:00:00Z'),
+        lpAttributionStatus: null,
       },
       {
         puuid: 'puuid-2',
         matchId: 'match-2',
         placement: 8,
         playedAt: new Date('2026-01-10T11:00:00Z'),
+        lpAttributionStatus: null,
       },
     ];
     const leanMatches = vi.fn().mockResolvedValue(matches);
@@ -142,7 +144,57 @@ describe('notification service', () => {
       matchId: 'match-1',
       discordId: 'user-1',
       lpDelta: 44,
+      lpStatus: 'known',
       godBuffs: [{ source: 'varus_flat', value: 7 }],
+    });
+  });
+
+  it('does not infer feed LP from current rank state when only a later snapshot exists', async () => {
+    const matches = [
+      {
+        puuid: 'puuid-1',
+        matchId: 'match-1',
+        placement: 8,
+        playedAt: new Date('2026-01-10T10:00:00Z'),
+        lpAttributionStatus: 'ambiguous',
+      },
+    ];
+    const leanMatches = vi.fn().mockResolvedValue(matches);
+    const limitMatches = vi.fn().mockReturnValue({ lean: leanMatches });
+    const sortMatches = vi.fn().mockReturnValue({ limit: limitMatches });
+    mockMatchFind.mockReturnValue({ sort: sortMatches } as any);
+
+    mockPlayerFind.mockReturnValue(mockFindLean([
+      {
+        puuid: 'puuid-1',
+        discordId: 'user-1',
+        gameName: 'One',
+        tagLine: 'TAG',
+        currentTier: 'GOLD',
+        currentRank: 'I',
+        currentLP: 99,
+        discordUsername: 'one',
+        discordAvatarUrl: '',
+        godSlug: 'zeus',
+      },
+    ]) as any);
+    mockPointTransactionFind
+      .mockReturnValueOnce(mockFindLean([]) as any)
+      .mockReturnValueOnce(mockFindLean([]) as any);
+    mockSnapshotFind.mockReturnValue({
+      sort: vi.fn().mockReturnValue(mockFindLean([
+        { puuid: 'puuid-1', capturedAt: new Date('2026-01-10T10:30:00Z'), tier: 'GOLD', rank: 'II', leaguePoints: 30 },
+      ])),
+    } as any);
+
+    const result = await getFeedNotifications();
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      matchId: 'match-1',
+      discordId: 'user-1',
+      lpDelta: null,
+      lpStatus: 'unknown',
     });
   });
 

@@ -9,6 +9,8 @@ const MatchRecordSchema = new Schema<MatchRecordDocument>({
   capturedAt:      { type: Date, default: () => new Date() },
   notifiedAt:      { type: Date, default: null },
   buffProcessed:   { type: Boolean, default: false },
+  lpAttributionStatus: { type: String, enum: ['linked', 'ambiguous'], default: null },
+  lpAttributionReason: { type: String, enum: ['multiple_matches_single_delta'], default: null },
 });
 
 MatchRecordSchema.index({ puuid: 1, matchId: 1 }, { unique: true });

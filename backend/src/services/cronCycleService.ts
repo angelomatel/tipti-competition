@@ -216,7 +216,7 @@ async function syncPlayerScoring(
     logger.debug(playerContext, `[cron] No competitive state change for ${playerLabel}; skipping scoring`);
   } else {
     logger.debug(playerContext, `[cron] Competitive state changed for ${playerLabel}; creating LP delta transaction`);
-    await createLpDeltaTransaction(updatedPlayer, settings);
+    await createLpDeltaTransaction(updatedPlayer, settings, { newMatches: matchResult.newMatches });
   }
 
   if (capturedMatchCount > 0) {

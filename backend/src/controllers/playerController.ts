@@ -89,6 +89,7 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
       matchId: m.matchId,
       placement: m.placement,
       playedAt: m.playedAt,
+      lpStatus: m.lpAttributionStatus === 'ambiguous' ? 'unknown' : 'none',
     }));
 
     // Build match-based LP points: for each match, find the nearest preceding snapshot

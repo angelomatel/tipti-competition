@@ -18,6 +18,9 @@ vi.mock('@/db/models/LpSnapshot', () => ({
 vi.mock('@/db/models/MatchRecord', () => ({
   MatchRecord: {
     findOne: vi.fn(),
+    find: vi.fn(),
+    updateMany: vi.fn(),
+    updateOne: vi.fn(),
   },
 }));
 
@@ -53,6 +56,9 @@ const mockDistinct = vi.mocked(PointTransaction.distinct);
 const mockFindOne = vi.mocked(PointTransaction.findOne);
 const mockSnapshotFindOne = vi.mocked(LpSnapshot.findOne);
 const mockMatchFindOne = vi.mocked(MatchRecord.findOne);
+const mockMatchFind = vi.mocked(MatchRecord.find);
+const mockMatchUpdateMany = vi.mocked(MatchRecord.updateMany);
+const mockMatchUpdateOne = vi.mocked(MatchRecord.updateOne);
 
 describe('createLpDeltaTransaction', () => {
   beforeEach(() => {
@@ -64,6 +70,13 @@ describe('createLpDeltaTransaction', () => {
     mockMatchFindOne.mockReturnValue({
       sort: vi.fn().mockResolvedValue(null),
     } as any);
+    mockMatchFind.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue([]),
+      }),
+    } as any);
+    mockMatchUpdateMany.mockResolvedValue({ modifiedCount: 0 } as any);
+    mockMatchUpdateOne.mockResolvedValue({ modifiedCount: 0 } as any);
     mockSnapshotFindOne.mockReturnValue({
       sort: vi.fn().mockResolvedValue(null),
     } as any);
@@ -142,11 +155,6 @@ describe('createLpDeltaTransaction', () => {
 
   it('skips creating a duplicate match-linked LP delta transaction', async () => {
     mockAggregate.mockResolvedValue([{ _id: null, total: 20 }] as any);
-    mockMatchFindOne.mockReturnValue({
-      sort: vi.fn().mockResolvedValue({
-        matchId: 'match-1',
-      }),
-    } as any);
     mockFindOne.mockReturnValue({
       lean: vi.fn().mockResolvedValue({
         matchId: 'match-1',
@@ -161,13 +169,17 @@ describe('createLpDeltaTransaction', () => {
       currentTier: 'GOLD',
       currentRank: 'II',
       currentLP: 20,
-      lpBaselineNorm: 1900,
+      lpBaselineNorm: 1820,
       lpBaselineOffset: 0,
     } as any, {
       currentPhase: 1,
       phases: [],
       startDate: new Date('2026-04-01T00:00:00.000Z'),
-    } as any);
+    } as any, {
+      newMatches: [
+        { matchId: 'match-1', placement: 4, playedAt: new Date('2026-04-03T10:00:00.000Z') },
+      ],
+    });
 
     expect(mockCreate).not.toHaveBeenCalled();
     expect(logger.warn).toHaveBeenCalledWith(
@@ -177,6 +189,44 @@ describe('createLpDeltaTransaction', () => {
         existingValue: 15,
       }),
       '[scoring] Skipped duplicate LP delta transaction for discord:user-3 via match match-1',
+    );
+  });
+
+  it('links the LP delta to the latest new match and marks earlier matches ambiguous', async () => {
+    mockAggregate.mockResolvedValue([{ _id: null, total: 0 }] as any);
+
+    await createLpDeltaTransaction({
+      discordId: 'user-4',
+      puuid: 'puuid-4',
+      godSlug: 'ahri',
+      currentTier: 'GOLD',
+      currentRank: 'II',
+      currentLP: 25,
+      lpBaselineNorm: 1800,
+      lpBaselineOffset: 0,
+    } as any, {
+      currentPhase: 1,
+      phases: [],
+      startDate: new Date('2026-04-01T00:00:00.000Z'),
+    } as any, {
+      newMatches: [
+        { matchId: 'match-older', placement: 4, playedAt: new Date('2026-04-03T10:00:00.000Z') },
+        { matchId: 'match-latest', placement: 6, playedAt: new Date('2026-04-03T10:30:00.000Z') },
+      ],
+    });
+
+    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+      playerId: 'user-4',
+      matchId: 'match-latest',
+      value: 25,
+    }));
+    expect(mockMatchUpdateMany).toHaveBeenCalledWith(
+      { puuid: 'puuid-4', matchId: { $in: ['match-older'] } },
+      { $set: { lpAttributionStatus: 'ambiguous', lpAttributionReason: 'multiple_matches_single_delta' } },
+    );
+    expect(mockMatchUpdateOne).toHaveBeenCalledWith(
+      { puuid: 'puuid-4', matchId: 'match-latest' },
+      { $set: { lpAttributionStatus: 'linked', lpAttributionReason: null } },
     );
   });
 });

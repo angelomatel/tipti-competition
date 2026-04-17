@@ -20,6 +20,7 @@ export interface FeedNotification {
   discordAvatarUrl: string;
   placement: number;
   lpDelta: number | null;
+  lpStatus: 'known' | 'unknown' | 'none';
   godSlug: string | null;
   godBuffs: Array<{ source: string; value: number }>;
   playedAt: Date;
@@ -73,7 +74,14 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
     const snapshotBefore = [...playerSnapshots].reverse().find((snapshot) => snapshot.capturedAt <= match.playedAt) ?? null;
     const snapshotAfter = playerSnapshots.find((snapshot) => snapshot.capturedAt > match.playedAt) ?? null;
     const lpDelta = lpDeltaByMatchId.get(match.matchId)
-      ?? resolveSnapshotLpDelta(player, snapshotBefore, snapshotAfter);
+      ?? resolveSnapshotLpDelta(snapshotBefore, snapshotAfter);
+    const lpStatus = lpDeltaByMatchId.has(match.matchId)
+      ? 'known'
+      : match.lpAttributionStatus === 'ambiguous'
+        ? 'unknown'
+        : lpDelta !== null
+          ? 'known'
+          : 'none';
 
     results.push({
       matchId: match.matchId,
@@ -85,6 +93,7 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
       discordAvatarUrl: player.discordAvatarUrl ?? '',
       placement: match.placement,
       lpDelta,
+      lpStatus,
       godSlug: player.godSlug ?? null,
       godBuffs: buffsByMatchId.get(match.matchId) ?? [],
       playedAt: match.playedAt,
@@ -95,11 +104,6 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
 }
 
 function resolveSnapshotLpDelta(
-  player: {
-    currentTier: string;
-    currentRank: string;
-    currentLP: number;
-  },
   snapshotBefore:
     | { tier: string; rank: string; leaguePoints: number; capturedAt: Date }
     | null,
@@ -107,19 +111,14 @@ function resolveSnapshotLpDelta(
     | { tier: string; rank: string; leaguePoints: number; capturedAt: Date }
     | null,
 ): number | null {
-  if (snapshotBefore && snapshotAfter) {
-    const normBefore = normalizeLP(snapshotBefore.tier, snapshotBefore.rank, snapshotBefore.leaguePoints);
-    const normAfter = normalizeLP(snapshotAfter.tier, snapshotAfter.rank, snapshotAfter.leaguePoints);
-    return normAfter - normBefore;
-  }
+  if (!snapshotBefore || !snapshotAfter) return null;
 
-  if (snapshotAfter) {
-    const normAfter = normalizeLP(snapshotAfter.tier, snapshotAfter.rank, snapshotAfter.leaguePoints);
-    const normCurrent = normalizeLP(player.currentTier, player.currentRank, player.currentLP);
-    return normCurrent - normAfter;
-  }
-
-  return null;
+  // Only derive LP deltas when the match is bounded by two snapshots.
+  // Falling back to current player state can leak a later match's LP swing
+  // into an earlier feed notification.
+  const normBefore = normalizeLP(snapshotBefore.tier, snapshotBefore.rank, snapshotBefore.leaguePoints);
+  const normAfter = normalizeLP(snapshotAfter.tier, snapshotAfter.rank, snapshotAfter.leaguePoints);
+  return normAfter - normBefore;
 }
 
 export async function ackFeedNotifications(matchIds: string[]): Promise<void> {

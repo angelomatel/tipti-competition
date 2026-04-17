@@ -9,7 +9,19 @@ import { logger } from '@/lib/logger';
 import { getPlayerLogLabel } from '@/lib/playerLogLabel';
 import type { TournamentSettingsDocument } from '@/db/models/TournamentSettings';
 import type { PlayerDocument } from '@/types/Player';
-import type { PlayerScoreBreakdown, DailyPointEntry } from '@/types/God';
+import type { PlayerScoreBreakdown, DailyPointEntry } from '@/types/Scoring';
+
+type LpStatus = 'known' | 'unknown' | 'none';
+
+export interface LpDeltaAttributionMatch {
+  matchId: string;
+  placement: number;
+  playedAt: Date;
+}
+
+export interface CreateLpDeltaTransactionOptions {
+  newMatches?: LpDeltaAttributionMatch[];
+}
 
 export async function computePlayerScore(discordId: string): Promise<number> {
   const result = await PointTransaction.aggregate([
@@ -81,7 +93,7 @@ export async function computePlayerDailyBreakdown(discordId: string): Promise<Da
   const matchById = new Map<string, { placement: number; playedAt: Date }>();
   if (player?.puuid) {
     const matches = await MatchRecord.find({ puuid: player.puuid })
-      .select({ matchId: 1, placement: 1, playedAt: 1 })
+      .select({ matchId: 1, placement: 1, playedAt: 1, lpAttributionStatus: 1 })
       .lean();
     for (const match of matches) {
       matchById.set(match.matchId, {
@@ -105,7 +117,53 @@ export async function computePlayerDailyBreakdown(discordId: string): Promise<Da
       matchId: tx.matchId,
       placement: tx.matchId ? matchById.get(tx.matchId)?.placement : undefined,
       playedAt: tx.matchId ? matchById.get(tx.matchId)?.playedAt : undefined,
+      lpStatus: resolveLpStatus(tx.source, tx.matchId ? 'known' : 'none'),
     });
+  }
+
+  if (player?.puuid) {
+    const ambiguousMatches = await MatchRecord.find({
+      puuid: player.puuid,
+      lpAttributionStatus: 'ambiguous',
+    })
+      .select({ matchId: 1, placement: 1, playedAt: 1 })
+      .lean();
+
+    const ambiguousByDay = new Map<string, typeof ambiguousMatches>();
+    for (const match of ambiguousMatches) {
+      const day = getCurrentPhtDayForDate(match.playedAt);
+      const entries = ambiguousByDay.get(day) ?? [];
+      entries.push(match);
+      ambiguousByDay.set(day, entries);
+    }
+
+    for (const [day, matches] of ambiguousByDay.entries()) {
+      let entry = dayMap.get(day);
+      if (!entry) {
+        entry = { day, transactions: [] };
+        dayMap.set(day, entry);
+      }
+
+      const existingMatchIds = new Set(entry.transactions.map((tx) => tx.matchId).filter(Boolean));
+      for (const match of matches) {
+        if (existingMatchIds.has(match.matchId)) continue;
+        entry.transactions.push({
+          type: 'match',
+          value: 0,
+          source: 'lp_delta',
+          matchId: match.matchId,
+          placement: match.placement,
+          playedAt: match.playedAt,
+          lpStatus: 'unknown',
+        });
+      }
+
+      entry.transactions.sort((a, b) => {
+        const aTime = a.playedAt ? new Date(a.playedAt).getTime() : 0;
+        const bTime = b.playedAt ? new Date(b.playedAt).getTime() : 0;
+        return aTime - bTime;
+      });
+    }
   }
 
   return Array.from(dayMap.values());
@@ -150,6 +208,7 @@ export async function computeGodScore(godSlug: string): Promise<number> {
 export async function createLpDeltaTransaction(
   player: PlayerDocument,
   settings: TournamentSettingsDocument,
+  options: CreateLpDeltaTransactionOptions = {},
 ): Promise<void> {
   if (!player.godSlug) return;
 
@@ -184,20 +243,9 @@ export async function createLpDeltaTransaction(
   const today = getCurrentPhtDay();
   const phase = settings.phases.find((p) => today >= p.startDay && today <= p.endDay);
 
-  const linkedMatchIds = await PointTransaction.distinct('matchId', {
-    playerId: player.discordId,
-    source: 'lp_delta',
-    type: 'match',
-    matchId: { $ne: null },
-  });
-
-  const nextUnlinkedMatch = await MatchRecord.findOne({
-    puuid: player.puuid,
-    matchId: { $nin: linkedMatchIds },
-    playedAt: { $lte: new Date() },
-  }).sort({ playedAt: -1 });
-
-  const matchId = nextUnlinkedMatch ? nextUnlinkedMatch.matchId : null;
+  const newMatches = [...(options.newMatches ?? [])].sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime());
+  const targetMatch = newMatches.length > 0 ? newMatches[newMatches.length - 1] : null;
+  const matchId = targetMatch?.matchId ?? null;
   const playerLabel = getPlayerLogLabel(player);
   const transaction = {
     playerId: player.discordId,
@@ -236,6 +284,7 @@ export async function createLpDeltaTransaction(
   }
 
   await PointTransaction.create(transaction);
+  await applyLpAttribution(player.puuid, newMatches, Boolean(matchId));
 
   logger.info(
     {
@@ -244,5 +293,42 @@ export async function createLpDeltaTransaction(
       ...transaction,
     },
     `[scoring] Created LP delta transaction of ${delta} for ${playerLabel}${matchId ? ` via match ${matchId}` : ''}`,
+  );
+}
+
+function resolveLpStatus(source: string, lpStatus: LpStatus): LpStatus {
+  if (source === 'lp_data' || source === 'lp_delta') {
+    return lpStatus;
+  }
+  return 'none';
+}
+
+function getCurrentPhtDayForDate(date: Date): string {
+  const phtDate = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+  return phtDate.toISOString().slice(0, 10);
+}
+
+async function applyLpAttribution(
+  puuid: string,
+  newMatches: LpDeltaAttributionMatch[],
+  hasLinkedMatch: boolean,
+): Promise<void> {
+  if (newMatches.length === 0) return;
+
+  const latestMatch = newMatches[newMatches.length - 1];
+  const olderMatchIds = newMatches.slice(0, -1).map((match) => match.matchId);
+
+  if (olderMatchIds.length > 0) {
+    await MatchRecord.updateMany(
+      { puuid, matchId: { $in: olderMatchIds } },
+      { $set: { lpAttributionStatus: 'ambiguous', lpAttributionReason: 'multiple_matches_single_delta' } },
+    );
+  }
+
+  if (!hasLinkedMatch || !latestMatch) return;
+
+  await MatchRecord.updateOne(
+    { puuid, matchId: latestMatch.matchId },
+    { $set: { lpAttributionStatus: 'linked', lpAttributionReason: null } },
   );
 }

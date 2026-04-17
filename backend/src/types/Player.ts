@@ -40,6 +40,8 @@ export interface IMatchRecord {
   capturedAt: Date;
   notifiedAt: Date | null;
   buffProcessed: boolean;
+  lpAttributionStatus: 'linked' | 'ambiguous' | null;
+  lpAttributionReason: 'multiple_matches_single_delta' | null;
 }
 
 export type PlayerDocument = IPlayer & Document;

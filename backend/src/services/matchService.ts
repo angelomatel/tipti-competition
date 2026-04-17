@@ -30,6 +30,7 @@ export interface CaptureMatchesResult {
   outOfWindowCount: number;
   missingParticipantCount: number;
   deferredMatchDetailCount: number;
+  newMatches: Array<{ matchId: string; placement: number; playedAt: Date }>;
 }
 
 export async function captureMatchesForPlayer(
@@ -49,6 +50,7 @@ export async function captureMatchesForPlayer(
   let missingParticipantCount = 0;
   let capturedCount = 0;
   let deferredMatchDetailCount = 0;
+  const newMatches: Array<{ matchId: string; placement: number; playedAt: Date }> = [];
   const playerLabel = getPlayerLogLabel(player);
   logger.debug(
     { discordId: player.discordId, riotId: player.riotId ?? null, puuid: player.puuid },
@@ -135,6 +137,11 @@ export async function captureMatchesForPlayer(
           upsert: true,
         },
       });
+      newMatches.push({
+        matchId,
+        placement: participant.placement,
+        playedAt: matchDate,
+      });
 
       logger.info(
         {
@@ -195,5 +202,6 @@ export async function captureMatchesForPlayer(
     outOfWindowCount,
     missingParticipantCount,
     deferredMatchDetailCount,
+    newMatches: newMatches.sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime()),
   };
 }
