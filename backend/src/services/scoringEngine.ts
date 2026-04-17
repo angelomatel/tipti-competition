@@ -259,27 +259,61 @@ export async function createLpDeltaTransaction(
   };
 
   if (matchId) {
-    const existing = await PointTransaction.findOne({
-      playerId: player.discordId,
-      source: 'lp_delta',
-      type: 'match',
-      matchId,
-    }).lean();
+    try {
+      const result = await PointTransaction.updateOne(
+        {
+          playerId: player.discordId,
+          source: 'lp_delta',
+          type: 'match',
+          matchId,
+        },
+        { $setOnInsert: transaction },
+        { upsert: true },
+      );
 
-    if (existing) {
-      logger.warn(
+      if (!result.upsertedCount) {
+        logger.warn(
+          {
+            discordId: player.discordId,
+            riotId: player.riotId ?? null,
+            godSlug: player.godSlug,
+            value: delta,
+            source: 'lp_delta',
+            matchId,
+          },
+          `[scoring] Skipped duplicate LP delta transaction for ${playerLabel} via match ${matchId}`,
+        );
+        return;
+      }
+
+      await applyLpAttribution(player.puuid, newMatches, true);
+
+      logger.info(
         {
           discordId: player.discordId,
           riotId: player.riotId ?? null,
-          godSlug: player.godSlug,
-          value: delta,
-          source: 'lp_delta',
-          matchId,
-          existingValue: existing.value,
+          ...transaction,
         },
-        `[scoring] Skipped duplicate LP delta transaction for ${playerLabel} via match ${matchId}`,
+        `[scoring] Created LP delta transaction of ${delta} for ${playerLabel} via match ${matchId}`,
       );
       return;
+    } catch (error) {
+      if (isDuplicateKeyError(error)) {
+        logger.warn(
+          {
+            discordId: player.discordId,
+            riotId: player.riotId ?? null,
+            godSlug: player.godSlug,
+            value: delta,
+            source: 'lp_delta',
+            matchId,
+          },
+          `[scoring] Skipped duplicate LP delta transaction for ${playerLabel} via match ${matchId}`,
+        );
+        return;
+      }
+
+      throw error;
     }
   }
 
@@ -294,6 +328,13 @@ export async function createLpDeltaTransaction(
     },
     `[scoring] Created LP delta transaction of ${delta} for ${playerLabel}${matchId ? ` via match ${matchId}` : ''}`,
   );
+}
+
+function isDuplicateKeyError(error: unknown): error is { code: number } {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && (error as { code?: unknown }).code === 11000;
 }
 
 function resolveLpStatus(source: string, lpStatus: LpStatus): LpStatus {

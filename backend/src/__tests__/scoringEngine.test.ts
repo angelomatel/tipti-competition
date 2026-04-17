@@ -5,7 +5,7 @@ vi.mock('@/db/models/PointTransaction', () => ({
     aggregate: vi.fn(),
     distinct: vi.fn(),
     create: vi.fn(),
-    findOne: vi.fn(),
+    updateOne: vi.fn(),
   },
 }));
 
@@ -53,7 +53,7 @@ import { logger } from '@/lib/logger';
 const mockAggregate = vi.mocked(PointTransaction.aggregate);
 const mockCreate = vi.mocked(PointTransaction.create);
 const mockDistinct = vi.mocked(PointTransaction.distinct);
-const mockFindOne = vi.mocked(PointTransaction.findOne);
+const mockUpdateOne = vi.mocked(PointTransaction.updateOne);
 const mockSnapshotFindOne = vi.mocked(LpSnapshot.findOne);
 const mockMatchFindOne = vi.mocked(MatchRecord.findOne);
 const mockMatchFind = vi.mocked(MatchRecord.find);
@@ -64,9 +64,7 @@ describe('createLpDeltaTransaction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockDistinct.mockResolvedValue([]);
-    mockFindOne.mockReturnValue({
-      lean: vi.fn().mockResolvedValue(null),
-    } as any);
+    mockUpdateOne.mockResolvedValue({ upsertedCount: 1 } as any);
     mockMatchFindOne.mockReturnValue({
       sort: vi.fn().mockResolvedValue(null),
     } as any);
@@ -155,12 +153,7 @@ describe('createLpDeltaTransaction', () => {
 
   it('skips creating a duplicate match-linked LP delta transaction', async () => {
     mockAggregate.mockResolvedValue([{ _id: null, total: 20 }] as any);
-    mockFindOne.mockReturnValue({
-      lean: vi.fn().mockResolvedValue({
-        matchId: 'match-1',
-        value: 15,
-      }),
-    } as any);
+    mockUpdateOne.mockResolvedValue({ upsertedCount: 0 } as any);
 
     await createLpDeltaTransaction({
       discordId: 'user-3',
@@ -186,7 +179,39 @@ describe('createLpDeltaTransaction', () => {
       expect.objectContaining({
         discordId: 'user-3',
         matchId: 'match-1',
-        existingValue: 15,
+      }),
+      '[scoring] Skipped duplicate LP delta transaction for discord:user-3 via match match-1',
+    );
+  });
+
+  it('treats duplicate-key errors as a safe concurrent race', async () => {
+    mockAggregate.mockResolvedValue([{ _id: null, total: 20 }] as any);
+    mockUpdateOne.mockRejectedValue({ code: 11000 });
+
+    await createLpDeltaTransaction({
+      discordId: 'user-3',
+      puuid: 'puuid-3',
+      godSlug: 'ahri',
+      currentTier: 'GOLD',
+      currentRank: 'II',
+      currentLP: 20,
+      lpBaselineNorm: 1820,
+      lpBaselineOffset: 0,
+    } as any, {
+      currentPhase: 1,
+      phases: [],
+      startDate: new Date('2026-04-01T00:00:00.000Z'),
+    } as any, {
+      newMatches: [
+        { matchId: 'match-1', placement: 4, playedAt: new Date('2026-04-03T10:00:00.000Z') },
+      ],
+    });
+
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        discordId: 'user-3',
+        matchId: 'match-1',
       }),
       '[scoring] Skipped duplicate LP delta transaction for discord:user-3 via match match-1',
     );
@@ -215,11 +240,22 @@ describe('createLpDeltaTransaction', () => {
       ],
     });
 
-    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
-      playerId: 'user-4',
-      matchId: 'match-latest',
-      value: 25,
-    }));
+    expect(mockUpdateOne).toHaveBeenCalledWith(
+      {
+        playerId: 'user-4',
+        source: 'lp_delta',
+        type: 'match',
+        matchId: 'match-latest',
+      },
+      {
+        $setOnInsert: expect.objectContaining({
+          playerId: 'user-4',
+          matchId: 'match-latest',
+          value: 25,
+        }),
+      },
+      { upsert: true },
+    );
     expect(mockMatchUpdateMany).toHaveBeenCalledWith(
       { puuid: 'puuid-4', matchId: { $in: ['match-older'] } },
       { $set: { lpAttributionStatus: 'ambiguous', lpAttributionReason: 'multiple_matches_single_delta' } },

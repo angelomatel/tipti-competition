@@ -18,6 +18,17 @@ PointTransactionSchema.index({ godSlug: 1, day: 1 });
 PointTransactionSchema.index({ playerId: 1, type: 1 });
 PointTransactionSchema.index({ playerId: 1, day: 1, type: 1 });
 PointTransactionSchema.index({ playerId: 1, source: 1, type: 1, matchId: 1 });
+PointTransactionSchema.index(
+  { playerId: 1, source: 1, type: 1, matchId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      source: 'lp_delta',
+      type: 'match',
+      matchId: { $type: 'string' },
+    },
+  },
+);
 PointTransactionSchema.index({ matchId: 1, type: 1 });
 
 export const PointTransaction = mongoose.model<PointTransactionDocument>(
