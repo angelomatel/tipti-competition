@@ -30,7 +30,7 @@ function formatDate(dateStr: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-const CustomTooltip = ({ active, payload }: TooltipContentProps<number, string>) => {
+const CustomTooltip = ({ active, payload }: TooltipContentProps) => {
   if (!active || !payload?.length) return null;
   const point = payload[0]?.payload as MatchPoint | undefined;
   if (!point) return null;
@@ -112,7 +112,7 @@ const LPGraph: React.FC<LPGraphProps> = ({ matchPoints }) => {
             tick={{ fontSize: 10, fill: COLORS.mutedText }}
             width={50}
           />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={CustomTooltip} />
           <Line
             type="monotone"
             dataKey="normalizedLP"
