@@ -1,234 +1,55 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/services/playerService', () => ({
-  listActivePlayers: vi.fn(),
-}));
+const mockSchedule = vi.fn();
+const mockDebug = vi.fn();
+const mockRunScheduledDataFetchJob = vi.fn();
+const mockRunCronCycle = vi.fn();
 
-vi.mock('@/services/snapshotService', () => ({
-  captureSnapshotForPlayer: vi.fn(),
-}));
-
-vi.mock('@/services/matchService', () => ({
-  captureMatchesForPlayer: vi.fn(),
-}));
-
-vi.mock('@/services/scoringEngine', () => ({
-  createLpDeltaTransaction: vi.fn(),
-}));
-
-vi.mock('@/services/matchBuffProcessor', () => ({
-  processNewMatchBuffs: vi.fn(),
-}));
-
-vi.mock('@/services/tournamentService', () => ({
-  getTournamentSettings: vi.fn(),
+vi.mock('node-cron', () => ({
+  default: {
+    schedule: mockSchedule,
+  },
 }));
 
 vi.mock('@/lib/logger', () => ({
   logger: {
-    info: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-    warn: vi.fn(),
+    debug: mockDebug,
   },
 }));
 
-import { runCronCycle } from '@/jobs/cronJob';
-import { listActivePlayers } from '@/services/playerService';
-import { captureSnapshotForPlayer } from '@/services/snapshotService';
-import { captureMatchesForPlayer } from '@/services/matchService';
-import { createLpDeltaTransaction } from '@/services/scoringEngine';
-import { processNewMatchBuffs } from '@/services/matchBuffProcessor';
-import { getTournamentSettings } from '@/services/tournamentService';
-import { logger } from '@/lib/logger';
+vi.mock('@/lib/scheduledDataFetch', () => ({
+  runScheduledDataFetchJob: mockRunScheduledDataFetchJob,
+}));
 
-const mockGetTournamentSettings = vi.mocked(getTournamentSettings);
-const mockListActivePlayers = vi.mocked(listActivePlayers);
-const mockCaptureSnapshot = vi.mocked(captureSnapshotForPlayer);
-const mockCaptureMatches = vi.mocked(captureMatchesForPlayer);
-const mockCreateLpDelta = vi.mocked(createLpDeltaTransaction);
-const mockProcessBuffs = vi.mocked(processNewMatchBuffs);
-const mockWarn = vi.mocked(logger.warn);
-const mockDebug = vi.mocked(logger.debug);
-const mockError = vi.mocked(logger.error);
+vi.mock('@/services/cronCycleService', () => ({
+  runCronCycle: mockRunCronCycle,
+}));
 
-function makeSettings(startOffset: number, endOffset: number) {
-  const now = Date.now();
-  return {
-    startDate: new Date(now + startOffset),
-    endDate: new Date(now + endOffset),
-  } as any;
-}
-
-describe('runCronCycle', () => {
+describe('startCronJob', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    delete process.env.CRON_PLAYER_CONCURRENCY;
+    vi.resetModules();
+    mockSchedule.mockReset();
+    mockDebug.mockReset();
+    mockRunScheduledDataFetchJob.mockReset();
+    mockRunCronCycle.mockReset();
   });
 
-  it('processes all active players successfully', async () => {
-    mockGetTournamentSettings.mockResolvedValue(makeSettings(-3600_000, 3600_000));
+  it('registers the cron schedule and delegates execution to cronCycleService', async () => {
+    const { startCronJob } = await import('@/jobs/cronJob');
 
-    const players = [
-      {
-        discordId: 'user1',
-        puuid: 'puuid1',
-        gameName: 'One',
-        tagLine: 'NA1',
-        currentTier: 'GOLD',
-        currentRank: 'II',
-        currentLP: 50,
-        currentWins: 10,
-        currentLosses: 5,
-      },
-      {
-        discordId: 'user2',
-        puuid: 'puuid2',
-        gameName: 'Two',
-        tagLine: 'NA1',
-        currentTier: 'PLATINUM',
-        currentRank: 'IV',
-        currentLP: 20,
-        currentWins: 20,
-        currentLosses: 20,
-      },
-    ];
-    mockListActivePlayers.mockResolvedValue(players as any);
-    mockCaptureSnapshot.mockImplementation(async (player) => ({ ...player, currentLP: player.currentLP + 10 } as any));
-    mockCaptureMatches.mockResolvedValue(undefined);
-    mockCreateLpDelta.mockResolvedValue(undefined);
-    mockProcessBuffs.mockResolvedValue(undefined);
+    startCronJob();
 
-    await runCronCycle();
+    expect(mockSchedule).toHaveBeenCalledWith('*/5 * * * *', expect.any(Function));
+    expect(mockDebug).toHaveBeenCalledWith('[cron] 5-minute snapshot job scheduled.');
 
-    expect(mockCaptureSnapshot).toHaveBeenCalledTimes(2);
-    expect(mockCaptureMatches).toHaveBeenCalledTimes(2);
-    expect(mockCreateLpDelta).toHaveBeenCalledTimes(2);
-    expect(mockProcessBuffs).toHaveBeenCalledTimes(1);
-    expect(mockCaptureSnapshot).toHaveBeenCalledWith(players[0]);
-    expect(mockCaptureSnapshot).toHaveBeenCalledWith(players[1]);
-    expect(mockDebug).toHaveBeenCalledWith(
-      expect.objectContaining({
-        discordId: 'user1',
-        riotId: 'One#NA1',
-        puuid: 'puuid1',
-      }),
-      '[cron] Processing player One#NA1',
-    );
-  });
+    const scheduledHandler = mockSchedule.mock.calls[0]?.[1] as (() => void) | undefined;
+    scheduledHandler?.();
 
-  it('continues processing when one player fails', async () => {
-    mockGetTournamentSettings.mockResolvedValue(makeSettings(-3600_000, 3600_000));
+    expect(mockRunScheduledDataFetchJob).toHaveBeenCalledWith('cron', expect.any(Function));
 
-    const players = [
-      {
-        discordId: 'user1', puuid: 'puuid1', gameName: 'One', tagLine: 'NA1',
-        currentTier: 'GOLD', currentRank: 'II', currentLP: 50, currentWins: 10, currentLosses: 5,
-      },
-      {
-        discordId: 'user2', puuid: 'puuid2', gameName: 'Two', tagLine: 'NA1',
-        currentTier: 'PLATINUM', currentRank: 'IV', currentLP: 20, currentWins: 20, currentLosses: 20,
-      },
-    ];
-    mockListActivePlayers.mockResolvedValue(players as any);
-    mockCaptureSnapshot
-      .mockRejectedValueOnce(new Error('Riot API timeout'))
-      .mockResolvedValueOnce({ ...players[1], currentLP: 30 } as any);
-    mockCaptureMatches.mockResolvedValue(undefined);
-    mockCreateLpDelta.mockResolvedValue(undefined);
-    mockProcessBuffs.mockResolvedValue(undefined);
+    const delegatedJob = mockRunScheduledDataFetchJob.mock.calls[0]?.[1] as (() => Promise<void>) | undefined;
+    await delegatedJob?.();
 
-    await runCronCycle();
-
-    expect(mockCaptureSnapshot).toHaveBeenCalledTimes(2);
-    expect(mockCaptureMatches).toHaveBeenCalledTimes(1);
-    expect(mockCreateLpDelta).toHaveBeenCalledTimes(1);
-    expect(mockError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        discordId: 'user1',
-        riotId: 'One#NA1',
-        puuid: 'puuid1',
-      }),
-      '[cron] Failed processing One#NA1',
-    );
-  });
-
-  it('skips scoring when competitive state does not change', async () => {
-    mockGetTournamentSettings.mockResolvedValue(makeSettings(-3600_000, 3600_000));
-    const players = [{
-      discordId: 'user1', puuid: 'puuid1', gameName: 'One', tagLine: 'NA1',
-      currentTier: 'GOLD', currentRank: 'II', currentLP: 50, currentWins: 10, currentLosses: 5,
-    }];
-    mockListActivePlayers.mockResolvedValue(players as any);
-    mockCaptureSnapshot.mockResolvedValue(players[0] as any);
-    mockCaptureMatches.mockResolvedValue(undefined);
-    mockProcessBuffs.mockResolvedValue(undefined);
-
-    await runCronCycle();
-
-    expect(mockCreateLpDelta).not.toHaveBeenCalled();
-  });
-
-  it('handles empty player list gracefully', async () => {
-    mockGetTournamentSettings.mockResolvedValue(makeSettings(-3600_000, 3600_000));
-    mockListActivePlayers.mockResolvedValue([] as any);
-    mockProcessBuffs.mockResolvedValue(undefined);
-
-    await runCronCycle();
-
-    expect(mockCaptureSnapshot).not.toHaveBeenCalled();
-    expect(mockCaptureMatches).not.toHaveBeenCalled();
-    expect(mockProcessBuffs).toHaveBeenCalledTimes(1);
-  });
-
-  it('skips cycle when tournament has not started yet', async () => {
-    mockGetTournamentSettings.mockResolvedValue(makeSettings(3600_000, 7200_000));
-
-    await runCronCycle();
-
-    expect(mockListActivePlayers).not.toHaveBeenCalled();
-    expect(mockCaptureSnapshot).not.toHaveBeenCalled();
-  });
-
-  it('skips cycle when tournament has ended', async () => {
-    mockGetTournamentSettings.mockResolvedValue(makeSettings(-7200_000, -3600_000));
-
-    await runCronCycle();
-
-    expect(mockListActivePlayers).not.toHaveBeenCalled();
-    expect(mockCaptureSnapshot).not.toHaveBeenCalled();
-  });
-
-  it('skips overlapping runs with isRunning guard', async () => {
-    mockGetTournamentSettings.mockResolvedValue(makeSettings(-3600_000, 3600_000));
-    mockListActivePlayers.mockResolvedValue([
-      {
-        discordId: 'user1', puuid: 'puuid1', gameName: 'One', tagLine: 'NA1',
-        currentTier: 'GOLD', currentRank: 'II', currentLP: 50, currentWins: 10, currentLosses: 5,
-      },
-    ] as any);
-
-    let release: (() => void) | undefined;
-    const blocker = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-
-    mockCaptureSnapshot.mockImplementation(async (player) => {
-      await blocker;
-      return { ...player, currentLP: player.currentLP + 5 } as any;
-    });
-    mockCaptureMatches.mockResolvedValue(undefined);
-    mockCreateLpDelta.mockResolvedValue(undefined);
-    mockProcessBuffs.mockResolvedValue(undefined);
-
-    const firstRun = runCronCycle();
-    await Promise.resolve();
-    const secondRun = runCronCycle();
-    release?.();
-
-    await Promise.all([firstRun, secondRun]);
-
-    expect(mockWarn).toHaveBeenCalledWith('[cron] Previous cycle is still running. Skipping overlapping cycle.');
-    expect(mockListActivePlayers).toHaveBeenCalledTimes(1);
+    expect(mockRunCronCycle).toHaveBeenCalledWith({ source: 'scheduled' });
   });
 });

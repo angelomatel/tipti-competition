@@ -1,10 +1,10 @@
 import type { Request, Response, NextFunction } from 'express';
-import { runCronCycle } from '@/jobs/cronJob';
-import { runDailyProcessing } from '@/jobs/dailyCronJob';
+import { runCronCycle } from '@/services/cronCycleService';
+import { runDailyProcessing } from '@/services/dailyProcessingService';
 
 export async function triggerCron(_req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    void runCronCycle();
+    void runCronCycle({ source: 'admin', catchUp: true });
     res.json({ message: 'Cron cycle triggered.' });
   } catch (err) { next(err); }
 }
