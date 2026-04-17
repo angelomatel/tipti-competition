@@ -135,6 +135,7 @@ async function processPlayerCycle(
       settings,
       state,
       cycleNumber,
+      matchResult.newMatches,
       matchResult.capturedCount,
       matchResult.deferredMatchDetailCount,
     );
@@ -205,6 +206,7 @@ async function syncPlayerScoring(
   settings: Awaited<ReturnType<typeof getTournamentSettings>>,
   state: ReturnType<typeof getPlayerPollState>,
   cycleNumber: number,
+  newMatches: Array<{ matchId: string; placement: number; playedAt: Date }>,
   capturedMatchCount: number,
   deferredMatchDetailCount: number,
 ): Promise<void> {
@@ -216,7 +218,7 @@ async function syncPlayerScoring(
     logger.debug(playerContext, `[cron] No competitive state change for ${playerLabel}; skipping scoring`);
   } else {
     logger.debug(playerContext, `[cron] Competitive state changed for ${playerLabel}; creating LP delta transaction`);
-    await createLpDeltaTransaction(updatedPlayer, settings, { newMatches: matchResult.newMatches });
+    await createLpDeltaTransaction(updatedPlayer, settings, { newMatches });
   }
 
   if (capturedMatchCount > 0) {
