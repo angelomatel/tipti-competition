@@ -244,7 +244,8 @@ export async function createLpDeltaTransaction(
   const phase = settings.phases.find((p) => today >= p.startDay && today <= p.endDay);
 
   const newMatches = [...(options.newMatches ?? [])].sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime());
-  const targetMatch = newMatches.length > 0 ? newMatches[newMatches.length - 1] : null;
+  const unresolvedMatches = await getUnresolvedMatches(player.puuid, newMatches);
+  const targetMatch = unresolvedMatches.length > 0 ? unresolvedMatches[unresolvedMatches.length - 1] : null;
   const matchId = targetMatch?.matchId ?? null;
   const playerLabel = getPlayerLogLabel(player);
   const transaction = {
@@ -286,7 +287,7 @@ export async function createLpDeltaTransaction(
         return;
       }
 
-      await applyLpAttribution(player.puuid, newMatches, true);
+      await applyLpAttribution(player.puuid, unresolvedMatches, true);
 
       logger.info(
         {
@@ -318,7 +319,7 @@ export async function createLpDeltaTransaction(
   }
 
   await PointTransaction.create(transaction);
-  await applyLpAttribution(player.puuid, newMatches, Boolean(matchId));
+  await applyLpAttribution(player.puuid, unresolvedMatches, Boolean(matchId));
 
   logger.info(
     {
@@ -372,4 +373,27 @@ async function applyLpAttribution(
     { puuid, matchId: latestMatch.matchId },
     { $set: { lpAttributionStatus: 'linked', lpAttributionReason: null } },
   );
+}
+
+async function getUnresolvedMatches(
+  puuid: string,
+  fallbackMatches: LpDeltaAttributionMatch[],
+): Promise<LpDeltaAttributionMatch[]> {
+  const unresolvedMatches = await MatchRecord.find({
+    puuid,
+    lpAttributionStatus: { $in: [null, 'pending', 'ambiguous'] },
+  })
+    .select({ matchId: 1, placement: 1, playedAt: 1, _id: 0 })
+    .sort({ playedAt: 1 })
+    .lean();
+
+  if (unresolvedMatches.length > 0) {
+    return unresolvedMatches.map((match) => ({
+      matchId: match.matchId,
+      placement: match.placement,
+      playedAt: match.playedAt,
+    }));
+  }
+
+  return fallbackMatches;
 }

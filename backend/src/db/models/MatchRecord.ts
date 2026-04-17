@@ -9,7 +9,7 @@ const MatchRecordSchema = new Schema<MatchRecordDocument>({
   capturedAt:      { type: Date, default: () => new Date() },
   notifiedAt:      { type: Date, default: null },
   buffProcessed:   { type: Boolean, default: false },
-  lpAttributionStatus: { type: String, enum: ['linked', 'ambiguous'], default: null },
+  lpAttributionStatus: { type: String, enum: ['pending', 'linked', 'ambiguous'], default: 'pending' },
   lpAttributionReason: { type: String, enum: ['multiple_matches_single_delta'], default: null },
 });
 

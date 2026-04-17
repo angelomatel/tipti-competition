@@ -11,31 +11,39 @@ import { getPhtDayBounds } from '@/lib/dateUtils';
 import { logger } from '@/lib/logger';
 
 export interface FeedNotification {
+  notificationType: 'single_match' | 'grouped_matches';
   matchId: string;
+  matchIds: string[];
   puuid: string;
   discordId: string;
   gameName: string;
   tagLine: string;
   discordUsername: string;
   discordAvatarUrl: string;
-  placement: number;
+  placement: number | null;
   lpDelta: number | null;
   lpStatus: 'known' | 'unknown' | 'none';
   godSlug: string | null;
   godBuffs: Array<{ source: string; value: number }>;
   playedAt: Date;
+  matches: Array<{
+    matchId: string;
+    placement: number;
+    playedAt: Date;
+    godBuffs: Array<{ source: string; value: number }>;
+  }>;
 }
 
 export async function getFeedNotifications(): Promise<FeedNotification[]> {
   const settings = await getTournamentSettings();
-  const matches = await MatchRecord.find({
+  const pendingMatches = await MatchRecord.find({
     notifiedAt: null,
     playedAt: { $gte: settings.startDate, $lte: settings.endDate },
-  }).sort({ playedAt: 1 }).limit(NOTIFICATION_FEED_LIMIT).lean();
+  }).sort({ playedAt: 1 }).limit(NOTIFICATION_FEED_LIMIT * 10).lean();
 
   const results: FeedNotification[] = [];
-  const puuids = [...new Set(matches.map((match) => match.puuid))];
-  const matchIds = matches.map((match) => match.matchId);
+  const puuids = [...new Set(pendingMatches.map((match) => match.puuid))];
+  const matchIds = pendingMatches.map((match) => match.matchId);
   const [players, buffTransactions, matchTransactions, snapshots] = await Promise.all([
     Player.find({ puuid: { $in: puuids }, isActive: true }).lean(),
     PointTransaction.find({ matchId: { $in: matchIds }, type: 'buff' }).lean(),
@@ -48,7 +56,7 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
   const playerByPuuid = new Map(players.map((player) => [player.puuid, player]));
   const buffsByMatchId = new Map<string, Array<{ source: string; value: number }>>();
   const trackedPlayersByMatchId = new Map<string, number>();
-  for (const match of matches) {
+  for (const match of pendingMatches) {
     trackedPlayersByMatchId.set(match.matchId, (trackedPlayersByMatchId.get(match.matchId) ?? 0) + 1);
   }
 
@@ -77,7 +85,7 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
 
   logger.debug(
     {
-      pendingMatchCount: matches.length,
+      pendingMatchCount: pendingMatches.length,
       uniquePuuidCount: puuids.length,
       uniqueMatchCount: new Set(matchIds).size,
       playerCount: players.length,
@@ -88,7 +96,25 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
     '[feed] Loaded pending notifications and attribution inputs',
   );
 
-  for (const match of matches) {
+  const resolvedMatchesByPuuid = new Map<string, Array<{
+    matchId: string;
+    puuid: string;
+    discordId: string;
+    gameName: string;
+    tagLine: string;
+    discordUsername: string;
+    discordAvatarUrl: string;
+    placement: number;
+    lpDelta: number | null;
+    lpStatus: 'known' | 'unknown' | 'none';
+    lpSource: 'transaction' | 'snapshot' | 'none';
+    godSlug: string | null;
+    godBuffs: Array<{ source: string; value: number }>;
+    playedAt: Date;
+    lpAttributionStatus: 'pending' | 'linked' | 'ambiguous' | null;
+  }>>();
+
+  for (const match of pendingMatches) {
     const player = playerByPuuid.get(match.puuid);
     if (!player) {
       logger.warn(
@@ -169,7 +195,8 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
       );
     }
 
-    results.push({
+    const resolvedMatches = resolvedMatchesByPuuid.get(match.puuid) ?? [];
+    resolvedMatches.push({
       matchId: match.matchId,
       puuid: match.puuid,
       discordId: player.discordId,
@@ -180,21 +207,72 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
       placement: match.placement,
       lpDelta,
       lpStatus,
+      lpSource,
       godSlug: player.godSlug ?? null,
       godBuffs: buffsByMatchId.get(match.matchId) ?? [],
       playedAt: match.playedAt,
+      lpAttributionStatus: match.lpAttributionStatus ?? null,
     });
+    resolvedMatchesByPuuid.set(match.puuid, resolvedMatches);
   }
+
+  for (const playerMatches of resolvedMatchesByPuuid.values()) {
+    const ambiguousGroup: typeof playerMatches = [];
+
+    for (const match of playerMatches) {
+      if (match.lpAttributionStatus === 'ambiguous') {
+        ambiguousGroup.push(match);
+        continue;
+      }
+
+      if (match.lpStatus !== 'known') {
+        ambiguousGroup.length = 0;
+        continue;
+      }
+
+      const groupedMatches = ambiguousGroup.length > 0
+        ? [...ambiguousGroup, match]
+        : [match];
+
+      results.push({
+        notificationType: groupedMatches.length > 1 ? 'grouped_matches' : 'single_match',
+        matchId: match.matchId,
+        matchIds: groupedMatches.map((item) => item.matchId),
+        puuid: match.puuid,
+        discordId: match.discordId,
+        gameName: match.gameName,
+        tagLine: match.tagLine,
+        discordUsername: match.discordUsername,
+        discordAvatarUrl: match.discordAvatarUrl,
+        placement: groupedMatches.length === 1 ? match.placement : null,
+        lpDelta: match.lpDelta,
+        lpStatus: match.lpStatus,
+        godSlug: match.godSlug,
+        godBuffs: match.godBuffs,
+        playedAt: match.playedAt,
+        matches: groupedMatches.map((item) => ({
+          matchId: item.matchId,
+          placement: item.placement,
+          playedAt: item.playedAt,
+          godBuffs: item.godBuffs,
+        })),
+      });
+      ambiguousGroup.length = 0;
+    }
+  }
+
+  results.sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime());
+  const limitedResults = results.slice(0, NOTIFICATION_FEED_LIMIT);
 
   logger.debug(
     {
-      notificationCount: results.length,
-      matchIds: results.map((result) => result.matchId),
+      notificationCount: limitedResults.length,
+      matchIds: limitedResults.flatMap((result) => result.matchIds),
     },
     '[feed] Prepared notifications for delivery',
   );
 
-  return results;
+  return limitedResults;
 }
 
 function resolveSnapshotLpDelta(

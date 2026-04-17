@@ -70,6 +70,9 @@ describe('createLpDeltaTransaction', () => {
     } as any);
     mockMatchFind.mockReturnValue({
       select: vi.fn().mockReturnValue({
+        sort: vi.fn().mockReturnValue({
+          lean: vi.fn().mockResolvedValue([]),
+        }),
         lean: vi.fn().mockResolvedValue([]),
       }),
     } as any);
@@ -219,6 +222,16 @@ describe('createLpDeltaTransaction', () => {
 
   it('links the LP delta to the latest new match and marks earlier matches ambiguous', async () => {
     mockAggregate.mockResolvedValue([{ _id: null, total: 0 }] as any);
+    mockMatchFind.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        sort: vi.fn().mockReturnValue({
+          lean: vi.fn().mockResolvedValue([
+            { matchId: 'match-older', placement: 4, playedAt: new Date('2026-04-03T10:00:00.000Z') },
+            { matchId: 'match-latest', placement: 6, playedAt: new Date('2026-04-03T10:30:00.000Z') },
+          ]),
+        }),
+      }),
+    } as any);
 
     await createLpDeltaTransaction({
       discordId: 'user-4',
@@ -263,6 +276,54 @@ describe('createLpDeltaTransaction', () => {
     expect(mockMatchUpdateOne).toHaveBeenCalledWith(
       { puuid: 'puuid-4', matchId: 'match-latest' },
       { $set: { lpAttributionStatus: 'linked', lpAttributionReason: null } },
+    );
+  });
+
+  it('uses previously unresolved matches when attributing a newly observed lp delta', async () => {
+    mockAggregate.mockResolvedValue([{ _id: null, total: 0 }] as any);
+    mockMatchFind.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        sort: vi.fn().mockReturnValue({
+          lean: vi.fn().mockResolvedValue([
+            { matchId: 'match-stale', placement: 6, playedAt: new Date('2026-04-03T10:00:00.000Z') },
+            { matchId: 'match-new', placement: 8, playedAt: new Date('2026-04-03T10:30:00.000Z') },
+          ]),
+        }),
+      }),
+    } as any);
+
+    await createLpDeltaTransaction({
+      discordId: 'user-5',
+      puuid: 'puuid-5',
+      godSlug: 'ahri',
+      currentTier: 'GOLD',
+      currentRank: 'II',
+      currentLP: 25,
+      lpBaselineNorm: 1800,
+      lpBaselineOffset: 0,
+    } as any, {
+      currentPhase: 1,
+      phases: [],
+      startDate: new Date('2026-04-01T00:00:00.000Z'),
+    } as any, {
+      newMatches: [
+        { matchId: 'match-new', placement: 8, playedAt: new Date('2026-04-03T10:30:00.000Z') },
+      ],
+    });
+
+    expect(mockUpdateOne).toHaveBeenCalledWith(
+      {
+        playerId: 'user-5',
+        source: 'lp_delta',
+        type: 'match',
+        matchId: 'match-new',
+      },
+      expect.any(Object),
+      { upsert: true },
+    );
+    expect(mockMatchUpdateMany).toHaveBeenCalledWith(
+      { puuid: 'puuid-5', matchId: { $in: ['match-stale'] } },
+      { $set: { lpAttributionStatus: 'ambiguous', lpAttributionReason: 'multiple_matches_single_delta' } },
     );
   });
 });
