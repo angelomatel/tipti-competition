@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { usePlayer } from '@/src/hooks/usePlayer';
 import { formatTier } from '@/src/types/Rank';
@@ -21,11 +21,6 @@ interface ProfileModalProps {
 
 const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose, hideGod }) => {
   const { data, error, isLoading } = usePlayer(discordId);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -56,9 +51,21 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose, hideGod
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-[20] text-xl leading-none transition-colors text-text-muted hover:text-text-primary bg-black/40 w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-sm"
+          aria-label="Close profile"
+          className="absolute top-4 right-4 z-[20] flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-text-muted transition-colors backdrop-blur-sm hover:text-text-primary"
         >
-          &times;
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          >
+            <path d="M5 5L15 15" />
+            <path d="M15 5L5 15" />
+          </svg>
         </button>
 
         {isLoading && (
@@ -105,9 +112,9 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose, hideGod
             )}
 
             {/* Avatar + name section */}
-            <div className={`px-6 ${!hideGod ? '-mt-9' : 'pt-6'}`}>
+            <div className={`relative z-[20] px-6 ${!hideGod ? '-mt-9' : 'pt-6'}`}>
               <div
-                className="inline-block rounded-full p-[3px]"
+                className="relative z-[20] inline-block rounded-full p-[3px]"
                 style={{ background: `linear-gradient(135deg, ${godColors.primary}, ${godColors.primary}60)` }}
               >
                 <div className="rounded-full overflow-hidden bg-[#0a0618]">
@@ -222,7 +229,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose, hideGod
     </div>
   );
 
-  return mounted && typeof document !== 'undefined'
+  return typeof document !== 'undefined'
     ? createPortal(modalContent, document.body)
     : null;
 };
