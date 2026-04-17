@@ -35,9 +35,10 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
   const results: FeedNotification[] = [];
   const puuids = [...new Set(matches.map((match) => match.puuid))];
   const matchIds = matches.map((match) => match.matchId);
-  const [players, buffTransactions, snapshots] = await Promise.all([
+  const [players, buffTransactions, matchTransactions, snapshots] = await Promise.all([
     Player.find({ puuid: { $in: puuids }, isActive: true }).lean(),
     PointTransaction.find({ matchId: { $in: matchIds }, type: 'buff' }).lean(),
+    PointTransaction.find({ matchId: { $in: matchIds }, type: 'match', source: 'lp_delta' }).lean(),
     LpSnapshot.find({
       puuid: { $in: puuids },
       capturedAt: { $gte: settings.startDate, $lte: settings.endDate },
@@ -50,6 +51,12 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
     const buffs = buffsByMatchId.get(txn.matchId) ?? [];
     buffs.push({ source: txn.source, value: txn.value });
     buffsByMatchId.set(txn.matchId, buffs);
+  }
+
+  const lpDeltaByMatchId = new Map<string, number>();
+  for (const txn of matchTransactions) {
+    if (!txn.matchId) continue;
+    lpDeltaByMatchId.set(txn.matchId, (lpDeltaByMatchId.get(txn.matchId) ?? 0) + txn.value);
   }
 
   const snapshotsByPuuid = new Map<string, typeof snapshots>();
@@ -65,18 +72,8 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
     const playerSnapshots = snapshotsByPuuid.get(match.puuid) ?? [];
     const snapshotBefore = [...playerSnapshots].reverse().find((snapshot) => snapshot.capturedAt <= match.playedAt) ?? null;
     const snapshotAfter = playerSnapshots.find((snapshot) => snapshot.capturedAt > match.playedAt) ?? null;
-
-    let lpDelta: number | null = null;
-    if (snapshotBefore && snapshotAfter) {
-      const normBefore = normalizeLP(snapshotBefore.tier, snapshotBefore.rank, snapshotBefore.leaguePoints);
-      const normAfter = normalizeLP(snapshotAfter.tier, snapshotAfter.rank, snapshotAfter.leaguePoints);
-      lpDelta = normAfter - normBefore;
-    } else if (snapshotAfter) {
-      // Only have post-match snapshot — compare to player's pre-registration baseline (rough)
-      const normAfter = normalizeLP(snapshotAfter.tier, snapshotAfter.rank, snapshotAfter.leaguePoints);
-      const normCurrent = normalizeLP(player.currentTier, player.currentRank, player.currentLP);
-      lpDelta = normCurrent - normAfter;
-    }
+    const lpDelta = lpDeltaByMatchId.get(match.matchId)
+      ?? resolveSnapshotLpDelta(player, snapshotBefore, snapshotAfter);
 
     results.push({
       matchId: match.matchId,
@@ -95,6 +92,34 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
   }
 
   return results;
+}
+
+function resolveSnapshotLpDelta(
+  player: {
+    currentTier: string;
+    currentRank: string;
+    currentLP: number;
+  },
+  snapshotBefore:
+    | { tier: string; rank: string; leaguePoints: number; capturedAt: Date }
+    | null,
+  snapshotAfter:
+    | { tier: string; rank: string; leaguePoints: number; capturedAt: Date }
+    | null,
+): number | null {
+  if (snapshotBefore && snapshotAfter) {
+    const normBefore = normalizeLP(snapshotBefore.tier, snapshotBefore.rank, snapshotBefore.leaguePoints);
+    const normAfter = normalizeLP(snapshotAfter.tier, snapshotAfter.rank, snapshotAfter.leaguePoints);
+    return normAfter - normBefore;
+  }
+
+  if (snapshotAfter) {
+    const normAfter = normalizeLP(snapshotAfter.tier, snapshotAfter.rank, snapshotAfter.leaguePoints);
+    const normCurrent = normalizeLP(player.currentTier, player.currentRank, player.currentLP);
+    return normCurrent - normAfter;
+  }
+
+  return null;
 }
 
 export async function ackFeedNotifications(matchIds: string[]): Promise<void> {
@@ -223,7 +248,6 @@ export async function getDailyGraphData(date: string): Promise<DailyGraphData> {
   const { dayStart, dayEnd } = getPhtDayBounds(date);
   const players = await listActivePlayers();
 
-  // Rank players by current normalized LP to pick top N
   const ranked = players
     .map((p) => ({ player: p, norm: normalizeLP(p.currentTier, p.currentRank, p.currentLP) }))
     .sort((a, b) => b.norm - a.norm)

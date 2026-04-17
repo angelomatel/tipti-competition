@@ -117,9 +117,13 @@ describe('notification service', () => {
         godSlug: 'zeus',
       },
     ]) as any);
-    mockPointTransactionFind.mockReturnValue(mockFindLean([
-      { matchId: 'match-1', source: 'varus_flat', value: 7 },
-    ]) as any);
+    mockPointTransactionFind
+      .mockReturnValueOnce(mockFindLean([
+        { matchId: 'match-1', source: 'varus_flat', value: 7 },
+      ]) as any)
+      .mockReturnValueOnce(mockFindLean([
+        { matchId: 'match-1', source: 'lp_delta', value: 44 },
+      ]) as any);
     mockSnapshotFind.mockReturnValue({
       sort: vi.fn().mockReturnValue(mockFindLean([
         { puuid: 'puuid-1', capturedAt: new Date('2026-01-10T09:00:00Z'), tier: 'GOLD', rank: 'III', leaguePoints: 80 },
@@ -131,13 +135,13 @@ describe('notification service', () => {
 
     expect(limitMatches).toHaveBeenCalledWith(NOTIFICATION_FEED_LIMIT);
     expect(mockPlayerFind).toHaveBeenCalledTimes(1);
-    expect(mockPointTransactionFind).toHaveBeenCalledTimes(1);
+    expect(mockPointTransactionFind).toHaveBeenCalledTimes(2);
     expect(mockSnapshotFind).toHaveBeenCalledTimes(1);
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       matchId: 'match-1',
       discordId: 'user-1',
-      lpDelta: 110,
+      lpDelta: 44,
       godBuffs: [{ source: 'varus_flat', value: 7 }],
     });
   });
