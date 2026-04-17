@@ -34,6 +34,8 @@ The backend is the single source of truth — the Discord bot and frontend both 
 
 Each component has its own `.env` file. See `CLAUDE.md` for the full list of environment variables.
 
+For repo-wide coding standards and lint commands, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ### Backend
 ```bash
 cd backend
@@ -56,6 +58,13 @@ cd tipti-clanker
 npm install
 npm run dev
 ```
+
+### Linting
+```bash
+npm run lint:all
+```
+
+You can also run `npm run lint` inside `frontend/`, `backend/`, or `tipti-clanker/`.
 
 ## API
 

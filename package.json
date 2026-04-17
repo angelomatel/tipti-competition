@@ -1,0 +1,11 @@
+{
+  "name": "tipti-competition",
+  "private": true,
+  "scripts": {
+    "lint": "npm run lint:all",
+    "lint:all": "npm run lint --prefix frontend && npm run lint --prefix backend && npm run lint --prefix tipti-clanker",
+    "lint:frontend": "npm run lint --prefix frontend",
+    "lint:backend": "npm run lint --prefix backend",
+    "lint:bot": "npm run lint --prefix tipti-clanker"
+  }
+}

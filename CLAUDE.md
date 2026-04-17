@@ -11,6 +11,8 @@ TFT (Teamfight Tactics) tournament management platform with a **God System** —
 
 ## Commands
 
+Shared conventions live in `CONTRIBUTING.md`.
+
 ### Frontend (`frontend/`)
 ```bash
 npm run dev      # Start dev server
@@ -36,7 +38,12 @@ npx vitest run src/__tests__/cronJob.test.ts
 npm run dev      # Run bot with tsx
 npm run watch    # Auto-reload with nodemon
 npm run build    # Compile TypeScript
-npm run test     # Run Vitest tests
+ npm run lint     # ESLint
+```
+
+### Repo Root
+```bash
+npm run lint:all  # Run lint in frontend, backend, and bot
 ```
 
 ### Repo PM2 Dev Helper (Windows)
