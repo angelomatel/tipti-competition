@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense } from 'react';
-import { usePathname, useSearchParams, useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTournament } from '@/src/hooks/useTournament';
 import PillToggle from '@/src/components/Shared/PillToggle';
@@ -44,20 +44,20 @@ function NavbarInner() {
       className="sticky top-0 z-50 h-16 backdrop-blur-xl border-b border-border-default"
       style={{ background: 'rgba(10, 6, 24, 0.82)' }}
     >
-      <div className="max-w-5xl mx-auto px-6 h-full flex items-center justify-between gap-4">
+      <div className="max-w-5xl mx-auto px-6 h-full grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4">
         {/* Left: nav links */}
-        <div className="flex items-center gap-6">
+        <div className="min-w-0 flex items-center gap-4 sm:gap-6">
           <Link href="/" className={navLinkClass('/')}>
             Home
           </Link>
-          <Link href="/rules" className={navLinkClass('/rules')}>
+          <Link href="/rules" className={`${navLinkClass('/rules')} whitespace-nowrap`}>
             How It Works
           </Link>
         </div>
 
         {/* Center: tab toggle (leaderboard only) */}
         {(pathname === '/leaderboard' || pathname.startsWith('/leaderboard/gods')) && (
-          <div className="flex-1 flex justify-center">
+          <div className="justify-self-end sm:justify-self-center">
             <PillToggle
               options={TAB_OPTIONS}
               activeValue={activeTab}
@@ -67,7 +67,7 @@ function NavbarInner() {
         )}
 
         {/* Right: phase badge + countdown or pre-event status */}
-        <div className="hidden sm:flex items-center gap-3 text-sm">
+        <div className="hidden sm:flex items-center justify-self-end gap-3 text-sm">
           {settings && started ? (
             <PhaseCountdown settings={settings} />
           ) : settings?.startDate ? (

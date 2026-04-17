@@ -20,6 +20,7 @@ const Leaderboard = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -31,6 +32,7 @@ const Leaderboard = () => {
   }, [searchTerm]);
 
   const isSearchActive = debouncedSearch.length > 0;
+  const hasSearchQuery = searchTerm.trim().length > 0 || isSearchActive;
 
   const { data, error, isLoading: isLeaderboardLoading } = useLeaderboard({ 
     page: currentPage, 
@@ -46,9 +48,65 @@ const Leaderboard = () => {
   const totalEntries = data?.totalEntries ?? 0;
   const totalPages = data?.totalPages ?? 1;
   const effectivePage = data?.page ?? currentPage;
+  const showLeaderboardContent = totalEntries > 0 || hasSearchQuery;
+  const showPagination = totalPages > 1 && !hasSearchQuery;
 
   // Backend only returns podium entries on page 1 when event has started.
-  const showPodium = started && !isSearchActive && podiumEntries.length >= 3;
+  const showPodium = started && !hasSearchQuery && podiumEntries.length >= 3;
+
+  const renderPaginationControls = () => {
+    if (!showPagination) {
+      return null;
+    }
+
+    return (
+      <>
+        {!isMobileSearchOpen && (
+          <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
+            <button
+              onClick={() => setCurrentPage(Math.max(1, effectivePage - 1))}
+              disabled={effectivePage === 1}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-1 text-sm text-text-secondary transition-all disabled:opacity-30"
+              aria-label="Previous page"
+            >
+              &larr;
+            </button>
+            <span className="min-w-[52px] text-center text-[11px] text-text-muted">
+              {effectivePage}/{totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(Math.min(totalPages, effectivePage + 1))}
+              disabled={effectivePage === totalPages}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-default bg-surface-1 text-sm text-text-secondary transition-all disabled:opacity-30"
+              aria-label="Next page"
+            >
+              &rarr;
+            </button>
+          </div>
+        )}
+
+        <div className="hidden shrink-0 items-center gap-3 sm:flex">
+          <button
+            onClick={() => setCurrentPage(Math.max(1, effectivePage - 1))}
+            disabled={effectivePage === 1}
+            className="px-4 py-2 rounded-full text-sm font-medium transition-all disabled:opacity-30 bg-surface-1 border border-border-default text-text-secondary"
+          >
+            &larr; Prev
+          </button>
+          <span className="min-w-[96px] text-center text-sm text-text-muted">
+            Page {effectivePage} of {totalPages}
+          </span>
+          <button
+            onClick={() => setCurrentPage(Math.min(totalPages, effectivePage + 1))}
+            disabled={effectivePage === totalPages}
+            className="px-4 py-2 rounded-full text-sm font-medium transition-all disabled:opacity-30 bg-surface-1 border border-border-default text-text-secondary"
+          >
+            Next &rarr;
+          </button>
+        </div>
+      </>
+    );
+  };
 
   return (
     <>
@@ -60,19 +118,13 @@ const Leaderboard = () => {
         </p>
       )}
 
-      {!isLoading && data && totalEntries === 0 && isSearchActive && (
-        <p className="text-center py-12 text-text-muted">
-          No players found for <span className="text-text-primary">{debouncedSearch}</span>.
-        </p>
-      )}
-
-      {!isLoading && data && totalEntries === 0 && !isSearchActive && (
+      {!isLoading && data && totalEntries === 0 && !hasSearchQuery && (
         <p className="text-center py-12 text-text-muted">
           No players registered yet. Use <code className="text-accent-cyan">/register</code> in Discord to join.
         </p>
       )}
 
-      {!isLoading && totalEntries > 0 && (
+      {!isLoading && data && showLeaderboardContent && (
         <div className="flex flex-col gap-1.5 sm:gap-3">
           {/* Podium: only when event started, page 1, desktop */}
           {showPodium && (
@@ -93,60 +145,47 @@ const Leaderboard = () => {
             </div>
           ))}
 
-          <div className="mb-1.5 flex items-start justify-between gap-3 sm:mb-2">
+          <div className="mb-1.5 flex items-start justify-between gap-2 sm:mb-2 sm:gap-3">
             <LeaderboardSearch
               className="min-w-0 flex-1"
               value={searchTerm}
               debouncedValue={debouncedSearch}
               onChange={setSearchTerm}
+              isMobileExpanded={isMobileSearchOpen}
+              onMobileExpandedChange={setIsMobileSearchOpen}
             />
 
-            {totalPages > 1 && !isSearchActive && (
-              <div className="flex shrink-0 items-center gap-3">
-                <button
-                  onClick={() => setCurrentPage(Math.max(1, effectivePage - 1))}
-                  disabled={effectivePage === 1}
-                  className="px-4 py-2 rounded-full text-sm font-medium transition-all disabled:opacity-30 bg-surface-1 border border-border-default text-text-secondary"
-                >
-                  &larr; Prev
-                </button>
-                <span className="min-w-[96px] text-center text-sm text-text-muted">
-                  Page {effectivePage} of {totalPages}
-                </span>
-                <button
-                  onClick={() => setCurrentPage(Math.min(totalPages, effectivePage + 1))}
-                  disabled={effectivePage === totalPages}
-                  className="px-4 py-2 rounded-full text-sm font-medium transition-all disabled:opacity-30 bg-surface-1 border border-border-default text-text-secondary"
-                >
-                  Next &rarr;
-                </button>
-              </div>
-            )}
+            {renderPaginationControls()}
           </div>
 
-          {entries.map((entry, i) => (
-            <UserBanner
-              key={entry.discordId}
-              entry={entry}
-              onClick={() => setSelectedDiscordId(entry.discordId)}
-              hideGod={!started}
-              style={{ animation: `fade-up 0.3s ease both`, animationDelay: `${i * 50}ms` }}
-            />
-          ))}
+          {totalEntries === 0 && isSearchActive ? (
+            <p className="text-center py-12 text-text-muted">
+              No players found for <span className="text-text-primary">{debouncedSearch}</span>.
+            </p>
+          ) : (
+            <>
+              {entries.map((entry, i) => (
+                <UserBanner
+                  key={entry.discordId}
+                  entry={entry}
+                  onClick={() => setSelectedDiscordId(entry.discordId)}
+                  hideGod={!started}
+                  style={{ animation: `fade-up 0.3s ease both`, animationDelay: `${i * 50}ms` }}
+                />
+              ))}
 
-          <p className="text-center text-xs pt-2 text-text-muted opacity-50">
-            Last updated: {new Date(data!.updatedAt).toLocaleTimeString()}
-          </p>
+              <p className="pt-2 text-center text-xs text-text-muted opacity-50">
+                Last updated: {new Date(data.updatedAt).toLocaleTimeString()}
+              </p>
+
+              {showPagination && (
+                <div className="flex items-center justify-center pt-2 sm:pt-3">
+                  {renderPaginationControls()}
+                </div>
+              )}
+            </>
+          )}
         </div>
-      )}
-
-      {!isLoading && data && totalEntries === 0 && isSearchActive && (
-        <LeaderboardSearch
-          className="mb-4 sm:mb-5"
-          value={searchTerm}
-          debouncedValue={debouncedSearch}
-          onChange={setSearchTerm}
-        />
       )}
 
       <ProfileModal
