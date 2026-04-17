@@ -39,6 +39,16 @@ npm run build    # Compile TypeScript
 npm run test     # Run Vitest tests
 ```
 
+### Repo PM2 Dev Helper (Windows)
+```powershell
+.\scripts\pm2-dev.ps1 start all
+.\scripts\pm2-dev.ps1 restart backend
+.\scripts\pm2-dev.ps1 logs frontend
+.\scripts\pm2-dev.ps1 stop all
+```
+
+Available targets are `frontend`, `backend`, `bot`, and `all`. The helper uses `ecosystem.dev.config.js` and sets `NODE_ENV=development` for each managed process.
+
 ### Docker (tipti-clanker only)
 ```bash
 docker-compose up --build
@@ -179,6 +189,8 @@ All three projects use `NODE_ENV` (`development` or `production`) to control log
 - `RIOT_API_KEY` — Riot Games API key
 - `TOURNAMENT_START_DATE` — Fallback tournament start (ISO 8601)
 - `TOURNAMENT_END_DATE` — Fallback tournament end (ISO 8601)
+
+- `ENABLE_DEV_DATA_FETCH_CRONS` - Set to `true` to allow scheduled Riot data fetches outside production
 
 **frontend** (`.env`):
 - `NODE_ENV` — `development` or `production`

@@ -99,6 +99,8 @@ Admins can also register players with `/add-player @user Name#TAG` (same two-ste
 ### 2. Automatic Tracking (Every 15 Minutes)
 The backend polls Riot's API for every registered player. It records LP snapshots (only when changed) and logs recent ranked matches within the tournament window.
 
+For local development, these scheduled fetches are off by default unless `ENABLE_DEV_DATA_FETCH_CRONS=true` is set in `backend/.env`. Manual admin triggers still work.
+
 ### 3. Daily Processing (Midnight PHT)
 At the end of each day:
 1. Each player's daily LP gain is calculated from snapshots
@@ -138,6 +140,11 @@ Final processing runs automatically: god placement bonuses are applied (1st: +10
 - Use `/god-standings` to check current rankings
 - Use `/eliminate-god` for manual elimination if needed
 - Use `/assign-god` to reassign a player's god (admin)
+
+### Local Dev Ops
+- On Windows, use `.\scripts\pm2-dev.ps1 start all` to run the frontend, backend, and bot under PM2 watch mode.
+- Use `.\scripts\pm2-dev.ps1 stop all` to remove those PM2 watchers completely when you are done.
+- Available PM2 helper targets are `frontend`, `backend`, `bot`, and `all`.
 
 ---
 

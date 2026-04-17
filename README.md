@@ -41,6 +41,8 @@ npm install
 npm run dev       # http://localhost:5000
 ```
 
+By default, the scheduled 15-minute and daily data-fetch jobs only auto-run in production. To allow them in local development, set `ENABLE_DEV_DATA_FETCH_CRONS=true` in `backend/.env`.
+
 ### Frontend
 ```bash
 cd frontend
@@ -66,3 +68,26 @@ npm run dev
 | GET | `/api/snapshots/:puuid` | LP history for a player |
 | GET/PUT | `/api/tournament/settings` | Read or update tournament dates |
 | POST | `/api/cron/run` | Manually trigger a cron cycle |
+
+## PM2 Dev Workflow
+
+For local development on Windows, use the repo helper instead of raw `pm2 start --watch` commands:
+
+```powershell
+.\scripts\pm2-dev.ps1 start all
+.\scripts\pm2-dev.ps1 stop all
+.\scripts\pm2-dev.ps1 restart backend
+.\scripts\pm2-dev.ps1 logs frontend
+.\scripts\pm2-dev.ps1 status all
+```
+
+Available targets are `frontend`, `backend`, `bot`, and `all`.
+
+The helper uses `ecosystem.dev.config.js`, which runs each package's `npm run dev` under PM2 with:
+
+- file watching enabled
+- a 5-second debounce before restart (`watch_delay: 5000`)
+- ignore rules for generated folders like `.next`, `dist`, `build`, `logs`, and `node_modules`
+- `NODE_ENV=development` for each managed process
+
+`stop` removes the PM2 process instead of only stopping it, so the watcher is actually off.
