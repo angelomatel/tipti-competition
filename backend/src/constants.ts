@@ -9,7 +9,18 @@ export const RIOT_API_KEY = process.env.RIOT_API_KEY ?? '';
 export const BACKEND_PORT = parsePositiveIntEnv(process.env.PORT, 5000);
 export const MONGODB_URI = process.env.MONGODB_URI ?? 'mongodb://localhost:27017';
 export const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME ?? 'tft-tournament';
-export const BACKEND_MODE: 'all' | 'cron' | 'http' = 'all';
+function parseBackendMode(value: string | undefined): 'all' | 'cron' | 'http' {
+  switch (value) {
+    case 'cron':
+    case 'http':
+    case 'all':
+      return value;
+    default:
+      return 'all';
+  }
+}
+
+export const BACKEND_MODE = parseBackendMode(process.env.BACKEND_MODE);
 export const FETCH_INTERVAL_MINUTES = 5;
 export const CRON_PLAYER_CONCURRENCY = 4;
 export const DATABASE_BACKUP_ENABLED = IS_PRODUCTION;

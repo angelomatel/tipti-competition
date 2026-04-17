@@ -5,6 +5,7 @@ vi.mock('@/db/models/PointTransaction', () => ({
     aggregate: vi.fn(),
     distinct: vi.fn(),
     create: vi.fn(),
+    findOne: vi.fn(),
   },
 }));
 
@@ -36,6 +37,7 @@ vi.mock('@/lib/logger', () => ({
   logger: {
     debug: vi.fn(),
     info: vi.fn(),
+    warn: vi.fn(),
   },
 }));
 
@@ -48,6 +50,7 @@ import { logger } from '@/lib/logger';
 const mockAggregate = vi.mocked(PointTransaction.aggregate);
 const mockCreate = vi.mocked(PointTransaction.create);
 const mockDistinct = vi.mocked(PointTransaction.distinct);
+const mockFindOne = vi.mocked(PointTransaction.findOne);
 const mockSnapshotFindOne = vi.mocked(LpSnapshot.findOne);
 const mockMatchFindOne = vi.mocked(MatchRecord.findOne);
 
@@ -55,6 +58,9 @@ describe('createLpDeltaTransaction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockDistinct.mockResolvedValue([]);
+    mockFindOne.mockReturnValue({
+      lean: vi.fn().mockResolvedValue(null),
+    } as any);
     mockMatchFindOne.mockReturnValue({
       sort: vi.fn().mockResolvedValue(null),
     } as any);
@@ -123,6 +129,7 @@ describe('createLpDeltaTransaction', () => {
       expect.objectContaining({
         discordId: 'user-2',
         riotId: null,
+        playerId: 'user-2',
         godSlug: 'ahri',
         value: 100,
         source: 'lp_delta',
@@ -130,6 +137,46 @@ describe('createLpDeltaTransaction', () => {
         phase: 1,
       }),
       '[scoring] Created LP delta transaction of 100 for discord:user-2',
+    );
+  });
+
+  it('skips creating a duplicate match-linked LP delta transaction', async () => {
+    mockAggregate.mockResolvedValue([{ _id: null, total: 20 }] as any);
+    mockMatchFindOne.mockReturnValue({
+      sort: vi.fn().mockResolvedValue({
+        matchId: 'match-1',
+      }),
+    } as any);
+    mockFindOne.mockReturnValue({
+      lean: vi.fn().mockResolvedValue({
+        matchId: 'match-1',
+        value: 15,
+      }),
+    } as any);
+
+    await createLpDeltaTransaction({
+      discordId: 'user-3',
+      puuid: 'puuid-3',
+      godSlug: 'ahri',
+      currentTier: 'GOLD',
+      currentRank: 'II',
+      currentLP: 20,
+      lpBaselineNorm: 1900,
+      lpBaselineOffset: 0,
+    } as any, {
+      currentPhase: 1,
+      phases: [],
+      startDate: new Date('2026-04-01T00:00:00.000Z'),
+    } as any);
+
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        discordId: 'user-3',
+        matchId: 'match-1',
+        existingValue: 15,
+      }),
+      '[scoring] Skipped duplicate LP delta transaction for discord:user-3 via match match-1',
     );
   });
 });

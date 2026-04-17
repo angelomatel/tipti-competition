@@ -199,28 +199,49 @@ export async function createLpDeltaTransaction(
 
   const matchId = nextUnlinkedMatch ? nextUnlinkedMatch.matchId : null;
   const playerLabel = getPlayerLogLabel(player);
-
-  await PointTransaction.create({
+  const transaction = {
     playerId: player.discordId,
     godSlug: player.godSlug,
-    type: 'match',
+    type: 'match' as const,
     value: delta,
     source: 'lp_delta',
     matchId,
     day: today,
     phase: phase?.phase ?? settings.currentPhase,
-  });
+  };
+
+  if (matchId) {
+    const existing = await PointTransaction.findOne({
+      playerId: player.discordId,
+      source: 'lp_delta',
+      type: 'match',
+      matchId,
+    }).lean();
+
+    if (existing) {
+      logger.warn(
+        {
+          discordId: player.discordId,
+          riotId: player.riotId ?? null,
+          godSlug: player.godSlug,
+          value: delta,
+          source: 'lp_delta',
+          matchId,
+          existingValue: existing.value,
+        },
+        `[scoring] Skipped duplicate LP delta transaction for ${playerLabel} via match ${matchId}`,
+      );
+      return;
+    }
+  }
+
+  await PointTransaction.create(transaction);
 
   logger.info(
     {
       discordId: player.discordId,
       riotId: player.riotId ?? null,
-      godSlug: player.godSlug,
-      value: delta,
-      source: 'lp_delta',
-      matchId,
-      day: today,
-      phase: phase?.phase ?? settings.currentPhase,
+      ...transaction,
     },
     `[scoring] Created LP delta transaction of ${delta} for ${playerLabel}${matchId ? ` via match ${matchId}` : ''}`,
   );
