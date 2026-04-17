@@ -70,7 +70,7 @@ export async function runCronCycle(options: RunCronCycleOptions = {}): Promise<v
     );
 
     await runWithConcurrency(selection.selectedPlayers, concurrency, async (player) => {
-      await processPlayerCycle(player, settings, cycleStartedAt, Boolean(options.catchUp));
+      await processPlayerCycle(player, settings, selection.cycleNumber, cycleStartedAt, Boolean(options.catchUp));
     });
 
     await processMatchBuffs();
@@ -98,6 +98,7 @@ export function resetCronCycleState(): void {
 async function processPlayerCycle(
   player: PlayerDocument,
   settings: Awaited<ReturnType<typeof getTournamentSettings>>,
+  cycleNumber: number,
   cycleStartedAt: number,
   cycleCatchUp: boolean,
 ): Promise<void> {
@@ -126,7 +127,17 @@ async function processPlayerCycle(
       state,
     );
 
-    await syncPlayerScoring(playerContext, playerLabel, beforeState, updatedPlayer, settings, state, matchResult.capturedCount);
+    await syncPlayerScoring(
+      playerContext,
+      playerLabel,
+      beforeState,
+      updatedPlayer,
+      settings,
+      state,
+      cycleNumber,
+      matchResult.capturedCount,
+      matchResult.deferredMatchDetailCount,
+    );
     logDeferredMatchDetails(playerContext, playerLabel, matchResult.deferredMatchDetailCount);
 
     state.lastProcessedAt = Date.now();
@@ -193,18 +204,58 @@ async function syncPlayerScoring(
   updatedPlayer: PlayerDocument,
   settings: Awaited<ReturnType<typeof getTournamentSettings>>,
   state: ReturnType<typeof getPlayerPollState>,
+  cycleNumber: number,
   capturedMatchCount: number,
+  deferredMatchDetailCount: number,
 ): Promise<void> {
-  if (!hasCompetitiveStateChanged(beforeState, getCompetitiveState(updatedPlayer))) {
+  const nowMs = Date.now();
+  const competitiveStateChanged = hasCompetitiveStateChanged(beforeState, getCompetitiveState(updatedPlayer));
+  state.hasDeferredMatchBacklog = deferredMatchDetailCount > 0;
+
+  if (!competitiveStateChanged) {
     logger.debug(playerContext, `[cron] No competitive state change for ${playerLabel}; skipping scoring`);
   } else {
     logger.debug(playerContext, `[cron] Competitive state changed for ${playerLabel}; creating LP delta transaction`);
     await createLpDeltaTransaction(updatedPlayer, settings);
-    state.lastActivityAt = Date.now();
   }
 
   if (capturedMatchCount > 0) {
-    state.lastActivityAt = Date.now();
+    state.lastActivityAt = nowMs;
+    state.lastSuccessfulMatchCaptureAt = nowMs;
+    state.consecutiveNoOpPolls = 0;
+    state.lastNoOpPollAt = undefined;
+    if (!state.hasDeferredMatchBacklog) {
+      state.skipMatchPollUntilCycle = cycleNumber + 3;
+    } else {
+      state.skipMatchPollUntilCycle = undefined;
+    }
+    return;
+  }
+
+  if (competitiveStateChanged) {
+    state.lastActivityAt = nowMs;
+    state.consecutiveNoOpPolls = 0;
+    state.lastNoOpPollAt = undefined;
+    if (!state.hasDeferredMatchBacklog) {
+      state.skipMatchPollUntilCycle = cycleNumber + 2;
+    } else {
+      state.skipMatchPollUntilCycle = undefined;
+    }
+    return;
+  }
+
+  state.lastNoOpPollAt = nowMs;
+  state.consecutiveNoOpPolls = (state.consecutiveNoOpPolls ?? 0) + 1;
+
+  if (state.hasDeferredMatchBacklog) {
+    state.skipMatchPollUntilCycle = undefined;
+    return;
+  }
+
+  if ((state.consecutiveNoOpPolls ?? 0) >= 2) {
+    state.skipMatchPollUntilCycle = cycleNumber + 2;
+  } else {
+    state.skipMatchPollUntilCycle = undefined;
   }
 }
 

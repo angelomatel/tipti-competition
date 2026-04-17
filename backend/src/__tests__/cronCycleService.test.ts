@@ -43,6 +43,7 @@ import { captureMatchesForPlayer } from '@/services/matchService';
 import { processNewMatchBuffs } from '@/services/matchBuffProcessor';
 import { listActivePlayers } from '@/services/playerService';
 import { getRiotClient } from '@/services/riotService';
+import { getPlayerPollState } from '@/services/cronSchedulerService';
 import { createLpDeltaTransaction } from '@/services/scoringEngine';
 import { captureSnapshotForPlayer } from '@/services/snapshotService';
 import { getTournamentSettings } from '@/services/tournamentService';
@@ -197,6 +198,78 @@ describe('runCronCycle', () => {
     await runCronCycle();
 
     expect(mockCreateLpDelta).not.toHaveBeenCalled();
+  });
+
+  it('applies a longer cooldown after capturing a fresh match without backlog', async () => {
+    mockGetTournamentSettings.mockResolvedValue(makeSettings(-3600_000, 3600_000));
+    const players = [{
+      discordId: 'user1', puuid: 'puuid1', gameName: 'One', tagLine: 'NA1',
+      currentTier: 'GOLD', currentRank: 'II', currentLP: 50, currentWins: 10, currentLosses: 5,
+    }];
+    mockListActivePlayers.mockResolvedValue(players as any);
+    mockCaptureSnapshot.mockResolvedValue(players[0] as any);
+    mockCaptureMatches.mockResolvedValue({
+      ...defaultMatchCaptureResult,
+      capturedCount: 1,
+    } as any);
+    mockProcessBuffs.mockResolvedValue(undefined);
+
+    await runCronCycle();
+
+    expect(getPlayerPollState('user1')).toEqual(expect.objectContaining({
+      consecutiveNoOpPolls: 0,
+      hasDeferredMatchBacklog: false,
+      lastSuccessfulMatchCaptureAt: expect.any(Number),
+      skipMatchPollUntilCycle: 4,
+    }));
+  });
+
+  it('does not apply a cooldown when deferred backlog exists', async () => {
+    mockGetTournamentSettings.mockResolvedValue(makeSettings(-3600_000, 3600_000));
+    const players = [{
+      discordId: 'user1', puuid: 'puuid1', gameName: 'One', tagLine: 'NA1',
+      currentTier: 'GOLD', currentRank: 'II', currentLP: 50, currentWins: 10, currentLosses: 5,
+    }];
+    mockListActivePlayers.mockResolvedValue(players as any);
+    mockCaptureSnapshot.mockResolvedValue(players[0] as any);
+    mockCaptureMatches.mockResolvedValue({
+      ...defaultMatchCaptureResult,
+      capturedCount: 1,
+      deferredMatchDetailCount: 2,
+    } as any);
+    mockProcessBuffs.mockResolvedValue(undefined);
+
+    await runCronCycle();
+
+    expect(getPlayerPollState('user1')).toEqual(expect.objectContaining({
+      hasDeferredMatchBacklog: true,
+      skipMatchPollUntilCycle: undefined,
+    }));
+  });
+
+  it('backs off after repeated no-op polls', async () => {
+    mockGetTournamentSettings.mockResolvedValue(makeSettings(-3600_000, 3600_000));
+    const players = [{
+      discordId: 'user1', puuid: 'puuid1', gameName: 'One', tagLine: 'NA1',
+      currentTier: 'GOLD', currentRank: 'II', currentLP: 50, currentWins: 10, currentLosses: 5,
+    }];
+    mockListActivePlayers.mockResolvedValue(players as any);
+    mockCaptureSnapshot.mockResolvedValue(players[0] as any);
+    mockCaptureMatches.mockResolvedValue(defaultMatchCaptureResult as any);
+    mockProcessBuffs.mockResolvedValue(undefined);
+
+    await runCronCycle();
+    expect(getPlayerPollState('user1')).toEqual(expect.objectContaining({
+      consecutiveNoOpPolls: 1,
+      skipMatchPollUntilCycle: undefined,
+    }));
+
+    await runCronCycle();
+    expect(getPlayerPollState('user1')).toEqual(expect.objectContaining({
+      consecutiveNoOpPolls: 2,
+      lastNoOpPollAt: expect.any(Number),
+      skipMatchPollUntilCycle: 4,
+    }));
   });
 
   it('handles empty player list gracefully', async () => {

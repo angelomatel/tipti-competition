@@ -34,6 +34,8 @@ describe('cronSchedulerService', () => {
     setPlayerPollState(players[1].discordId, {
       lastProcessedAt: nowMs - 60 * 60 * 1000,
       lastActivityAt: nowMs - 5 * 60 * 1000,
+      lastSuccessfulMatchCaptureAt: nowMs - 5 * 60 * 1000,
+      skipMatchPollUntilCycle: 3,
     });
 
     const selection = selectPlayersForCycle(players, nowMs);
@@ -42,6 +44,72 @@ describe('cronSchedulerService', () => {
     expect(selection.selectedPlayers[1]?.discordId).toBe(players[2].discordId);
     expect(selection.selectedPlayers[2]?.discordId).toBe(players[3].discordId);
     expect(selection.selectedPlayers[selection.selectedPlayers.length - 1]?.discordId).toBe(players[1].discordId);
+  });
+
+  it('prioritizes backlog players ahead of stale and normal round-robin players', () => {
+    const players = makePlayers(6);
+    const nowMs = Date.now();
+
+    for (let index = 0; index < players.length; index += 1) {
+      setPlayerPollState(players[index].discordId, {
+        lastProcessedAt: nowMs - 60 * 1000,
+      });
+    }
+
+    setPlayerPollState(players[4].discordId, {
+      lastProcessedAt: nowMs - 60 * 1000,
+      hasDeferredMatchBacklog: true,
+    });
+
+    const selection = selectPlayersForCycle(players, nowMs);
+
+    expect(selection.selectedPlayers[0]?.discordId).toBe(players[4].discordId);
+  });
+
+  it('keeps freshly serviced players in the tail bucket while cooldown is active', () => {
+    const players = makePlayers(8);
+    const nowMs = Date.now();
+
+    for (const player of players) {
+      setPlayerPollState(player.discordId, {
+        lastProcessedAt: nowMs - 60 * 1000,
+      });
+    }
+
+    setPlayerPollState(players[0].discordId, {
+      lastProcessedAt: nowMs - 60 * 1000,
+      lastSuccessfulMatchCaptureAt: nowMs - 60 * 1000,
+      skipMatchPollUntilCycle: 3,
+    });
+    setPlayerPollState(players[1].discordId, {
+      lastProcessedAt: nowMs - 10 * 60 * 1000,
+    });
+
+    const selection = selectPlayersForCycle(players, nowMs);
+
+    expect(selection.selectedPlayers[0]?.discordId).toBe(players[1].discordId);
+    expect(selection.selectedPlayers[selection.selectedPlayers.length - 1]?.discordId).toBe(players[0].discordId);
+  });
+
+  it('does not keep backlog players in the tail bucket even if they have an active cooldown', () => {
+    const players = makePlayers(5);
+    const nowMs = Date.now();
+
+    for (const player of players) {
+      setPlayerPollState(player.discordId, {
+        lastProcessedAt: nowMs - 60 * 1000,
+      });
+    }
+
+    setPlayerPollState(players[3].discordId, {
+      lastProcessedAt: nowMs - 60 * 1000,
+      skipMatchPollUntilCycle: 4,
+      hasDeferredMatchBacklog: true,
+    });
+
+    const selection = selectPlayersForCycle(players, nowMs);
+
+    expect(selection.selectedPlayers[0]?.discordId).toBe(players[3].discordId);
   });
 
   it('advances the round-robin cursor across non-priority players', () => {

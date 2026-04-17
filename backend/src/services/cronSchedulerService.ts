@@ -5,7 +5,7 @@ import {
 } from '@/constants';
 import type { PlayerDocument } from '@/types/Player';
 
-const RECENT_ACTIVITY_WINDOW_MS = 60 * 60 * 1000;
+const STALE_PLAYER_WINDOW_MS = FETCH_INTERVAL_MINUTES * 2 * 60 * 1000;
 
 export interface PlayerPollState {
   lastRankPollAt?: number;
@@ -13,15 +13,22 @@ export interface PlayerPollState {
   lastCatchupAt?: number;
   lastProcessedAt?: number;
   lastActivityAt?: number;
+  lastSuccessfulMatchCaptureAt?: number;
+  lastNoOpPollAt?: number;
+  consecutiveNoOpPolls?: number;
+  skipMatchPollUntilCycle?: number;
+  hasDeferredMatchBacklog?: boolean;
 }
 
 export interface CronCycleSelection {
+  cycleNumber: number;
   selectedPlayers: PlayerDocument[];
   deferredPlayers: number;
   oldestPlayerStalenessMs: number | null;
 }
 
 let roundRobinCursor = 0;
+let currentCycleNumber = 0;
 const playerPollState = new Map<string, PlayerPollState>();
 
 export function getPlayerProcessingConcurrency(): number {
@@ -40,6 +47,10 @@ export function getSchedulerCursor(): number {
   return roundRobinCursor;
 }
 
+export function getSchedulerCycleNumber(): number {
+  return currentCycleNumber;
+}
+
 export function shouldUseCatchUpMode(
   player: PlayerDocument,
   cycleCatchUp: boolean,
@@ -53,14 +64,16 @@ export function shouldUseCatchUpMode(
 }
 
 export function selectPlayersForCycle(players: PlayerDocument[], nowMs: number): CronCycleSelection {
+  currentCycleNumber += 1;
   const stablePlayers = getStableActivePlayers(players);
   syncPlayerPollState(stablePlayers);
 
-  const prioritizedGroups = getPrioritizedGroups(stablePlayers, nowMs);
+  const prioritizedGroups = getPrioritizedGroups(stablePlayers, nowMs, currentCycleNumber);
   const selectedPlayers = pickPlayersForCycle(prioritizedGroups, getMaxPlayersForCycle());
   advanceRoundRobinCursor(prioritizedGroups.roundRobinPool, selectedPlayers);
 
   return {
+    cycleNumber: currentCycleNumber,
     selectedPlayers,
     deferredPlayers: Math.max(0, stablePlayers.length - selectedPlayers.length),
     oldestPlayerStalenessMs: getOldestPlayerStalenessMs(stablePlayers, nowMs),
@@ -69,6 +82,7 @@ export function selectPlayersForCycle(players: PlayerDocument[], nowMs: number):
 
 export function resetCronSchedulerState(): void {
   roundRobinCursor = 0;
+  currentCycleNumber = 0;
   playerPollState.clear();
 }
 
@@ -106,56 +120,72 @@ function syncPlayerPollState(players: PlayerDocument[]): void {
   }
 }
 
-function getPrioritizedGroups(players: PlayerDocument[], nowMs: number): {
+function getPrioritizedGroups(players: PlayerDocument[], nowMs: number, cycleNumber: number): {
   neverPolled: PlayerDocument[];
+  backlogPlayers: PlayerDocument[];
   stalePlayers: PlayerDocument[];
-  recentActive: PlayerDocument[];
   roundRobinPool: PlayerDocument[];
+  freshlyServiced: PlayerDocument[];
 } {
   const neverPolled = players.filter((player) => !playerPollState.get(player.discordId)?.lastProcessedAt);
-  const recentActive = players.filter((player) => {
-    const lastActivityAt = playerPollState.get(player.discordId)?.lastActivityAt;
-    return Boolean(lastActivityAt && nowMs - lastActivityAt <= RECENT_ACTIVITY_WINDOW_MS);
-  });
+  const backlogPlayers = players.filter((player) => playerPollState.get(player.discordId)?.hasDeferredMatchBacklog);
+  const freshlyServiced = players.filter((player) => isFreshlyServicedPlayer(player, cycleNumber));
   const stalePlayers = players
-    .filter((player) => isStaleInactivePlayer(player, recentActive, nowMs))
+    .filter((player) => isStalePlayer(player, nowMs, cycleNumber))
     .sort((a, b) => getPlayerStalenessMs(b, nowMs) - getPlayerStalenessMs(a, nowMs));
 
   const prioritizedIds = new Set([
     ...neverPolled.map((player) => player.discordId),
+    ...backlogPlayers.map((player) => player.discordId),
     ...stalePlayers.map((player) => player.discordId),
-    ...recentActive.map((player) => player.discordId),
+    ...freshlyServiced.map((player) => player.discordId),
   ]);
 
   return {
     neverPolled,
+    backlogPlayers,
     stalePlayers,
-    recentActive,
     roundRobinPool: getRoundRobinPlayers(
       players.filter((player) => !prioritizedIds.has(player.discordId)),
     ),
+    freshlyServiced,
   };
 }
 
-function isStaleInactivePlayer(
-  player: PlayerDocument,
-  recentActive: PlayerDocument[],
-  nowMs: number,
-): boolean {
+function isStalePlayer(player: PlayerDocument, nowMs: number, cycleNumber: number): boolean {
   const state = playerPollState.get(player.discordId);
   if (!state?.lastProcessedAt) return false;
-  if (recentActive.some((candidate) => candidate.discordId === player.discordId)) return false;
-  return nowMs - state.lastProcessedAt > FETCH_INTERVAL_MINUTES * 2 * 60 * 1000;
+  if (state.hasDeferredMatchBacklog) return false;
+  if (isFreshlyServicedPlayer(player, cycleNumber)) return false;
+  return nowMs - state.lastProcessedAt > STALE_PLAYER_WINDOW_MS;
+}
+
+function isFreshlyServicedPlayer(player: PlayerDocument, cycleNumber: number): boolean {
+  const state = playerPollState.get(player.discordId);
+  if (state?.hasDeferredMatchBacklog) return false;
+  return Boolean(state?.skipMatchPollUntilCycle && state.skipMatchPollUntilCycle > cycleNumber);
 }
 
 function pickPlayersForCycle(
-  groups: { neverPolled: PlayerDocument[]; stalePlayers: PlayerDocument[]; recentActive: PlayerDocument[]; roundRobinPool: PlayerDocument[] },
+  groups: {
+    neverPolled: PlayerDocument[];
+    backlogPlayers: PlayerDocument[];
+    stalePlayers: PlayerDocument[];
+    roundRobinPool: PlayerDocument[];
+    freshlyServiced: PlayerDocument[];
+  },
   maxPlayersForCycle: number,
 ): PlayerDocument[] {
   const selectedPlayers: PlayerDocument[] = [];
   const selectedIds = new Set<string>();
 
-  for (const group of [groups.neverPolled, groups.stalePlayers, groups.recentActive, groups.roundRobinPool]) {
+  for (const group of [
+    groups.neverPolled,
+    groups.backlogPlayers,
+    groups.stalePlayers,
+    groups.roundRobinPool,
+    groups.freshlyServiced,
+  ]) {
     for (const player of group) {
       if (selectedPlayers.length >= maxPlayersForCycle) {
         return selectedPlayers;
