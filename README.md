@@ -1,102 +1,150 @@
-# Tipti Bootcamp — TFT Tournament Manager
+# Tipti Competition
 
-A full-stack platform for running Teamfight Tactics (TFT) tournaments. Players register via Discord, and the platform automatically tracks their ranked LP, records match history, and displays live standings on a web leaderboard.
+Full-stack TFT tournament platform for the Set 17 "God System" event. Players register through Discord, the backend tracks ranked activity through the Riot API, and the frontend publishes live player and god standings.
 
-## What it does
+## What It Does
 
-- Players link their Riot account to their Discord account via a bot command
-- Every 15 minutes, the backend polls the Riot API to capture LP snapshots and match records for all registered players
-- A web leaderboard shows current standings, auto-refreshing every 30 seconds
-- Admins can configure tournament start/end dates; only snapshots taken during the window count
-- Each player has a profile page with their LP progression graph and recent match history
+- Runs a faction-based tournament with 9 gods, per-match buffs, eliminations, and final god placement bonuses
+- Tracks ranked progress and match history for registered players every 5 minutes
+- Computes daily match points at midnight PHT and updates score-based leaderboards
+- Publishes player standings, god standings, profile modals, point breakdowns, and LP graphs on the web frontend
+- Posts Discord feed notifications, daily recaps, and god standings updates through the bot
 
 ## Architecture
 
+```text
+Discord Bot --> Backend API --> MongoDB
+                    |
+                    +--> Riot API
+
+Browser --> Next.js frontend --> Backend API
 ```
-Discord Bot ──HTTP──► Backend API ──► MongoDB
-                           │
-                           └──► Riot API (every 15 min)
 
-Browser ──► Frontend (Next.js) ──/api proxy──► Backend API
-```
+The backend is the system of record. The frontend and Discord bot both use the backend over HTTP.
 
-Three components share a single MongoDB database (`tft-tournament`):
+## Repo Layout
 
-| Component | Tech | Role |
-|-----------|------|------|
-| `backend/` | Express.js + TypeScript | REST API, cron job, Riot API integration |
-| `frontend/` | Next.js + Tailwind + Recharts | Leaderboard UI, player profiles, LP graph |
-| `tipti-clanker/` | Discord.js + discordx | Player registration, admin commands |
+| Path | Stack | Responsibility |
+|------|-------|----------------|
+| `backend/` | Express 5 + TypeScript + Mongoose | API, scoring, cron jobs, Riot integration, tournament state |
+| `frontend/` | Next.js 16 + React 19 + SWR | Public leaderboard UI and player/god views |
+| `tipti-clanker/` | discordx + discord.js | Registration flow, admin commands, scheduled Discord posts |
 
-The backend is the single source of truth — the Discord bot and frontend both talk to it via HTTP. Neither touches MongoDB directly.
+Shared repo-level lint commands live in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Getting Started
 
-Each component has its own `.env` file. See `CLAUDE.md` for the full list of environment variables.
+Each package has its own `.env`. Current examples are in:
 
-For repo-wide coding standards and lint commands, see [CONTRIBUTING.md](CONTRIBUTING.md).
+- `backend/.env.example`
+- `tipti-clanker/.env.example`
+- `frontend/.env`
 
 ### Backend
+
 ```bash
 cd backend
 npm install
-npm run dev       # http://localhost:5000
+npm run dev
 ```
 
-By default, the scheduled 15-minute and daily data-fetch jobs only auto-run in production. To allow them in local development, set `ENABLE_DEV_DATA_FETCH_CRONS=true` in `backend/.env`.
+Defaults to `http://localhost:5000`.
+
+Scheduled Riot fetch jobs are disabled outside production unless `ENABLE_DEV_DATA_FETCH_CRONS=true` is set.
 
 ### Frontend
+
 ```bash
 cd frontend
 npm install
-npm run dev       # http://localhost:3000
+npm run dev
 ```
 
+Defaults to `http://localhost:3000`.
+
 ### Discord Bot
+
 ```bash
 cd tipti-clanker
 npm install
 npm run dev
 ```
 
-### Linting
+## Common Commands
+
 ```bash
 npm run lint:all
 ```
 
-You can also run `npm run lint` inside `frontend/`, `backend/`, or `tipti-clanker/`.
+Per-package commands:
 
-## API
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/health` | Health check |
-| GET | `/api/leaderboard` | Standings sorted by tier/division/LP |
-| GET/POST | `/api/players` | List or register players |
-| GET/DELETE | `/api/players/:discordId` | Player profile or removal |
-| GET | `/api/snapshots/:puuid` | LP history for a player |
-| GET/PUT | `/api/tournament/settings` | Read or update tournament dates |
-| POST | `/api/cron/run` | Manually trigger a cron cycle |
+- `frontend`: `npm run dev`, `npm run build`, `npm run start`, `npm run lint`
+- `backend`: `npm run dev`, `npm run build`, `npm run start`, `npm run test`, `npm run lint`
+- `tipti-clanker`: `npm run dev`, `npm run watch`, `npm run build`, `npm run start`, `npm run lint`
 
 ## PM2 Dev Workflow
 
-For local development on Windows, use the repo helper instead of raw `pm2 start --watch` commands:
+On Windows, the repo helper starts all three services under PM2 watch mode:
 
 ```powershell
 .\scripts\pm2-dev.ps1 start all
-.\scripts\pm2-dev.ps1 stop all
 .\scripts\pm2-dev.ps1 restart backend
 .\scripts\pm2-dev.ps1 logs frontend
-.\scripts\pm2-dev.ps1 status all
+.\scripts\pm2-dev.ps1 stop all
 ```
 
-Available targets are `frontend`, `backend`, `bot`, and `all`.
+Targets: `frontend`, `backend`, `bot`, `all`.
 
-The helper uses `ecosystem.dev.config.js`, which runs each package's `npm run dev` under PM2 with:
+## Runtime Behavior
 
-- file watching enabled
-- a 5-second debounce before restart (`watch_delay: 5000`)
-- ignore rules for generated folders like `.next`, `dist`, `build`, `logs`, and `node_modules`
-- `NODE_ENV=development` for each managed process
+- Backend data fetch cron: every 5 minutes
+- Backend daily processing cron: `00:00` Asia/Manila
+- Bot feed notifications: every 5 minutes
+- Bot daily recap: `00:05` Asia/Manila
+- Bot god standings post: `00:10` Asia/Manila
+- Frontend SWR refresh: 30 seconds
+- Backend production backup job: every 12 hours, retaining 14 compressed backups in `backend/backups/`
 
-`stop` removes the PM2 process instead of only stopping it, so the watcher is actually off.
+## API Surface
+
+Main read endpoints:
+
+- `GET /api/health`
+- `GET /api/leaderboard`
+- `GET /api/players`
+- `GET /api/players/:discordId`
+- `GET /api/snapshots/:puuid`
+- `GET /api/tournament/settings`
+- `GET /api/riot/account/:gameName/:tagLine`
+- `GET /api/gods`
+- `GET /api/gods/standings`
+- `GET /api/gods/:slug`
+- `GET /api/points/:discordId`
+- `GET /api/points/:discordId/daily`
+- `GET /api/notifications/feed`
+- `GET /api/notifications/daily-summary`
+- `GET /api/notifications/daily-graph`
+
+Protected mutation endpoints require the `x-admin-password` header:
+
+- `POST /api/players`
+- `PATCH /api/players/:discordId`
+- `DELETE /api/players/:discordId`
+- `PUT /api/tournament/settings`
+- `POST /api/cron/run`
+- `POST /api/cron/run-daily`
+- `POST /api/gods/seed`
+- `POST /api/gods/:slug/assign`
+- `POST /api/admin/wipe-data`
+- `POST /api/admin/reset-player-ranks`
+- `POST /api/notifications/feed/ack`
+
+## Tournament Model
+
+- 9 gods: Varus, Ekko, Evelynn, Thresh, Yasuo, Soraka, Kayle, Ahri, Aurelion Sol
+- Score points are built from daily match points, god buffs, penalties, and god placement bonuses
+- God scores are based on the average of the top `clamp(floor(playerCount / 3), 2, 5)` eligible players
+- Tournament phases eliminate gods across a 14-day event
+- Buffs are enabled after Phase 1
+
+For deeper implementation notes, command references, and environment details, see [CLAUDE.md](CLAUDE.md) and [overview.md](overview.md).

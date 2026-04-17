@@ -1,52 +1,73 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file gives coding agents the current repo-specific context for `tipti-competition`.
 
 ## Project Overview
 
-TFT (Teamfight Tactics) tournament management platform with a **God System** — a faction-based competitive event themed around Set 17: Space Gods. Three components:
-- **frontend/** — Next.js web app (leaderboard with tabs for Players/Gods, player profile modals with point breakdowns, LP graph, match links)
-- **backend/** — Express.js REST API (business logic, cron jobs, Riot API integration, god/buff/scoring systems)
-- **tipti-clanker/** — Discord bot (Discordx + TypeScript) for player registration, god commands, and admin tools
+TFT tournament platform for the Set 17 "God System" event.
+
+Main packages:
+
+- `frontend/`: Next.js 16 + React 19 web UI
+- `backend/`: Express 5 + TypeScript API, scoring engine, cron jobs, Riot integration
+- `tipti-clanker/`: discordx bot for registration, admin commands, and scheduled Discord posts
+
+The backend is the source of truth. The frontend and bot both talk to it over HTTP.
 
 ## Commands
 
 Shared conventions live in `CONTRIBUTING.md`.
 
-### Frontend (`frontend/`)
+### Root
+
 ```bash
-npm run dev      # Start dev server
-npm run build    # Production build
-npm run lint     # ESLint
+npm run lint
+npm run lint:all
+npm run lint:frontend
+npm run lint:backend
+npm run lint:bot
 ```
 
-### Backend (`backend/`)
+### Frontend
+
 ```bash
-npm run dev      # Run with tsx (development)
-npm run build    # Compile TypeScript to dist/
-npm run start    # Run compiled output
-npm run test     # Run Vitest tests
+cd frontend
+npm run dev
+npm run build
+npm run start
+npm run lint
 ```
 
-Run a single test:
+### Backend
+
+```bash
+cd backend
+npm run dev
+npm run build
+npm run start
+npm run test
+npm run lint
+```
+
+Single-test example:
+
 ```bash
 npx vitest run src/__tests__/cronJob.test.ts
 ```
 
-### Discord Bot (`tipti-clanker/`)
+### Discord Bot
+
 ```bash
-npm run dev      # Run bot with tsx
-npm run watch    # Auto-reload with nodemon
-npm run build    # Compile TypeScript
- npm run lint     # ESLint
+cd tipti-clanker
+npm run dev
+npm run watch
+npm run build
+npm run start
+npm run lint
 ```
 
-### Repo Root
-```bash
-npm run lint:all  # Run lint in frontend, backend, and bot
-```
+### PM2 Dev Helper
 
-### Repo PM2 Dev Helper (Windows)
 ```powershell
 .\scripts\pm2-dev.ps1 start all
 .\scripts\pm2-dev.ps1 restart backend
@@ -54,171 +75,213 @@ npm run lint:all  # Run lint in frontend, backend, and bot
 .\scripts\pm2-dev.ps1 stop all
 ```
 
-Available targets are `frontend`, `backend`, `bot`, and `all`. The helper uses `ecosystem.dev.config.js` and sets `NODE_ENV=development` for each managed process.
+Targets: `frontend`, `backend`, `bot`, `all`.
 
-### Docker (tipti-clanker only)
-```bash
-docker-compose up --build
+## High-Level Architecture
+
+```text
+Discord bot --> Backend API --> MongoDB
+                    |
+                    +--> Riot API
+
+Frontend --> Next.js API routes --> Backend API
 ```
 
-## Architecture
+Key ownership:
 
-### Data Flow
-```
-Discord Bot ──HTTP──► Backend API ──► MongoDB (shared DB)
-                           │                 ▲
-                           └── Riot API      │
-                           (15-min cron)     │
-                           (daily cron)      │
-Frontend ──/api proxy──► Backend API
-```
+- Bot handles Discord interactions and scheduled Discord posts
+- Backend owns scoring, tournament state, Riot access, and persistence
+- Frontend renders read-only public views from backend data
 
-- Bot calls backend REST API for all data ops (does NOT hit MongoDB directly)
-- Backend owns all business logic, Riot API calls, cron jobs, and god/buff/scoring systems
-- Frontend uses SWR for 30-second client-side polling via Next.js API route proxies
-- Shared MongoDB database: `tft-tournament`
+## Current Runtime Behavior
 
-### God System
-- **9 Gods**: Varus (Love), Ekko (Time), Evelynn (Temptation), Thresh (Pacts), Yasuo (Abyss), Soraka (Stars), Kayle (Order), Ahri (Opulence), Aurelion Sol (Wonders)
-- Players choose a god at registration (two-step flow: enter Riot ID, then select god from dropdown)
-- Each god has unique per-match buff mechanics (computed in real-time during 15-min cron, per-player daily cap)
-- **Elimination phases**: Phase 1 (Day 1-5, bottom 3 eliminated), Phase 2 (Day 6-10, bottom 3), Phase 3 (Day 11-14, finals)
-- Buffs activate Day 6+ (after Phase 1 elimination)
-- God score = average of top N players' scores, where N = clamp(floor(playerCount/3), 2, 5)
-- **10 leaderboards**: 1 global (by scorePoints) + 9 god leaderboards
-- Final scoring: TotalPoints + GodPlacementBonus (1st: +100, 2nd: +75, 3rd: +50)
+### Backend jobs
 
-### Scoring System
-- LP → Points (1:1 mapping for daily LP gain as "match" points)
-- `scorePoints = matchPoints + buffs - penalties + godPlacementBonus`
-- All point changes stored as `PointTransaction` records (event sourcing)
-- `DailyPlayerScore` caches each player's daily LP gain, match count, and placements for stats
-- `MatchRecord` has `buffProcessed` flag to track which matches have had buffs computed
+- Data fetch job: every 5 minutes
+- Daily processing job: `0 0 * * *` in `Asia/Manila`
+- Database backup job: every 12 hours in production only
 
-### Discord Bot (tipti-clanker)
-- Uses **discordx** (decorator-based command registration on top of discord.js 14)
-- **Singleton clients**: `src/lib/riot/` and `src/lib/mongodb/` — initialized once in `main.ts`, reused across commands
-- `RiotClient` wraps Riot API with methods: `getPuuidByRiotId()`, `getAccountByPuuid()`, `getTftLeagueByPuuid()`
-- Region mapping handled in `RiotClient` (Asia, SEA, PH, NA, etc.)
-- Commands: `/register` (two-step with god selection), `/profile`, `/leaderboard`, `/add-player`, `/remove-player`, `/tournament-settings`, `/get-user-by-account`, `/raw-message`, `/god-standings`, `/god-leaderboard`, `/assign-god`, `/eliminate-god`, `/seed-gods` (guild-locked), `/wipe-data` (guild-locked)
-- Riot API response types defined in `src/types/RiotAPI/`
-- God definitions and constants in `src/lib/constants.ts`
+### Bot jobs
+
+- Feed job: every 5 minutes
+- Daily recap job: `00:05` Asia/Manila
+- God standings job: `00:10` Asia/Manila
 
 ### Frontend
-- Next.js App Router (`app/` directory)
-- Path alias `@/*` maps to project root
-- Tailwind CSS 4 via PostCSS
-- Components: `Leaderboard` (client, SWR polling, Players/Gods tabs), `Navbar`, `UserBanner` (Discord avatar + rank + god badge), `ProfileModal` (stats + point breakdown + match links), `LPGraph` (Recharts), `RankImage`, `GodBadge`, `GodStandings`, `PointBreakdown`
-- API route proxies: `/api/leaderboard` (strips puuid), `/api/players/[discordId]`, `/api/gods/standings`
-- Hooks: `useLeaderboard` (30s refresh), `usePlayer`, `useGods` (30s refresh)
-- Match links: tactics.tools and metatft URLs generated from gameName/tagLine/matchId
 
-### Backend
-- Express.js 5 on port 5000
-- CORS enabled, JSON middleware
-- Mongoose models: `Player` (with `godSlug`, `isEliminatedFromGod`), `LpSnapshot`, `MatchRecord`, `TournamentSettings` (with `phases`, `currentPhase`, `buffsEnabled`), `God`, `PointTransaction`, `DailyPlayerScore`
-- **15-min cron** (`*/15 * * * *`): captures LP snapshots + match records for active players, then runs real-time per-match buff processing
-- **Daily cron** (`0 16 * * *` = midnight UTC+8): computes daily LP gains → creates match PointTransactions → checks phase/tournament end
-- Services: `playerService`, `snapshotService`, `matchService`, `leaderboardService`, `tournamentService`, `notificationService`, `godService`, `scoringEngine`, `matchBuffProcessor`, `phaseService`
-- `godService`: seed gods, assign players, eliminate gods, get standings
-- `scoringEngine`: compute player/god scores, breakdowns, daily point gains
-- `matchBuffProcessor`: real-time per-match buff processing for all 9 gods, per-player daily cap enforcement
-- `phaseService`: end-of-phase (elimination), end-of-tournament (god placement bonuses)
-- Match capture uses Riot API `startTime` param to prevent gaps during outages
-- Snapshot deduplication: skips unchanged snapshots
-- Leaderboard sorted by **scorePoints** (sum of PointTransactions), with normalizedLP as tiebreaker
-- `normalizeLP()` utility in `src/lib/normalizeLP.ts`
-- `getDayBoundsUTC8()` / `getTodayUTC8()` in `src/lib/dateUtils.ts` — UTC+8 date helpers
-- Rate-limit queue (`src/lib/riotQueue.ts`) handles Riot API 429s
-- God and buff constants in `src/constants.ts`
+- SWR polling interval: 30 seconds
+- Uses Next.js App Router and backend proxy routes under `app/api/`
 
-### Logging
-- **Backend + Bot**: `pino` with `pino-pretty` (dev). Logger in `src/lib/logger.ts`. Debug logs in development, warn/error only in production.
-- **Frontend**: Simple console wrapper in `src/lib/logger.ts`. Same level behavior.
-- Bot also uses `debug` package for Riot/MongoDB client trace logging (`DEBUG=riot:client`)
+## Backend Notes
 
-## API Endpoints
+### Routes
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/health` | Health check |
-| GET | `/api/leaderboard` | Leaderboard sorted by scorePoints |
-| GET | `/api/players` | List all active players |
-| POST | `/api/players` | Register player (requires godSlug) |
-| GET | `/api/players/:discordId` | Player + snapshots + matches + god info + point breakdown |
-| PATCH | `/api/players/:discordId` | Update player profile (avatar URL, username) |
-| DELETE | `/api/players/:discordId` | Soft-delete player |
-| GET | `/api/snapshots/:puuid` | LP history snapshots |
-| GET | `/api/tournament/settings` | Current tournament settings (includes phases) |
-| PUT | `/api/tournament/settings` | Update tournament settings |
-| GET | `/api/riot/account/:gameName/:tagLine` | Look up Riot account |
-| POST | `/api/cron/run` | Manually trigger 15-min cron cycle |
-| POST | `/api/cron/run-daily` | Manually trigger daily processing (optional `day` in body) |
-| GET | `/api/gods` | List all gods with scores and player counts |
-| GET | `/api/gods/standings` | God leaderboard sorted by score |
-| GET | `/api/gods/:slug` | Single god details + players |
-| POST | `/api/gods/seed` | Admin: seed all 9 gods |
-| POST | `/api/gods/:slug/assign` | Assign player to god (`{ discordId }`) |
-| POST | `/api/gods/:slug/eliminate` | Eliminate a god (`{ phase }`) |
-| POST | `/api/admin/wipe-data` | Admin: wipe all players, matches, snapshots, points |
-| GET | `/api/points/:discordId` | Player point breakdown by type |
-| GET | `/api/points/:discordId/daily` | Day-by-day point transactions |
-| GET | `/api/notifications/feed` | Unnotified 1st/8th placements |
-| POST | `/api/notifications/feed/ack` | Mark notifications as sent |
-| GET | `/api/notifications/daily-summary` | Daily climber/slider |
-| GET | `/api/notifications/daily-graph` | Top 5 LP timeseries |
+Read routes:
 
-## Buff System Summary
+- `GET /api/health`
+- `GET /api/leaderboard`
+- `GET /api/players`
+- `GET /api/players/:discordId`
+- `GET /api/snapshots/:puuid`
+- `GET /api/tournament/settings`
+- `GET /api/riot/account/:gameName/:tagLine`
+- `GET /api/gods`
+- `GET /api/gods/standings`
+- `GET /api/gods/:slug`
+- `GET /api/points/:discordId`
+- `GET /api/points/:discordId/daily`
+- `GET /api/notifications/feed`
+- `GET /api/notifications/daily-summary`
+- `GET /api/notifications/daily-graph`
 
-Buffs are calculated **per match in real-time** during the 15-min cron cycle. Each match generates buff points immediately based on placement and god mechanics. Daily cap is **per player** (default 75, with god-specific overrides). Penalties are uncapped.
+Protected write routes require `x-admin-password`:
 
-| God | Buff Mechanic | Daily Cap |
-|-----|---------------|-----------|
-| Varus (Love) | +7/match. Top 10 in god leaderboard: +8/match | 75 |
-| Ekko (Time) | +2/match. +20 if same placement as previous match | 75 |
-| Evelynn (Temptation) | +1/match, or +25/match if LP gain exceeds rank threshold (Unranked-Plat: 300, Emerald: 200, Diamond: 150, Master+: 100) | 75 |
-| Thresh (Pacts) | +2/match. +13 if matching Top 1's latest placement. Top 1: +13/match | 75 |
-| Yasuo (Abyss) | Top 5-7 → +10/match. Top 8 → +35/match | 140 |
-| Soraka (Stars) | +5/-2 per streak match (cap 15 streak length) | 100 |
-| Kayle (Order) | +2/match. +15 bonus if ≥4 matches played that day | 75 |
-| Ahri (Opulence) | +17 per 1st place match | 75 |
-| Aurelion Sol (Wonders) | Random per match based on placement (1st: 0-10, 8th: -6 to 4) | 90 |
+- `POST /api/players`
+- `PATCH /api/players/:discordId`
+- `DELETE /api/players/:discordId`
+- `PUT /api/tournament/settings`
+- `POST /api/cron/run`
+- `POST /api/cron/run-daily`
+- `POST /api/gods/seed`
+- `POST /api/gods/:slug/assign`
+- `POST /api/admin/wipe-data`
+- `POST /api/admin/reset-player-ranks`
+- `POST /api/notifications/feed/ack`
+
+### Important backend modules
+
+- `playerService`: player lifecycle and profile updates
+- `matchService`: match capture and reconciliation
+- `snapshotService`: LP snapshot persistence
+- `leaderboardService`: global standings and player ranking views
+- `tournamentService`: tournament settings and state
+- `godService`: god seeding, assignment, standings
+- `scoringEngine`: score calculations and breakdowns
+- `matchBuffProcessor`: per-match god buff handling
+- `dailyProcessingService`: daily LP gain conversion into point transactions
+- `phaseService`: phase progression and elimination logic
+
+### Data model highlights
+
+- `Player`: includes `godSlug`, elimination flags, Riot identity, Discord metadata
+- `MatchRecord`: tracked match history with buff processing metadata
+- `PointTransaction`: event-sourced score ledger
+- `DailyPlayerScore`: cached daily LP gain and aggregate stats
+- `TournamentSettings`: stores dates, channels, phases, current phase, `buffsEnabled`
+- `God`: god standings and elimination state
+
+### Scoring model
+
+- Daily LP gain becomes match points during daily processing
+- Buffs are processed per match during the 5-minute cron cycle
+- `scorePoints = match points + buffs - penalties + god placement bonus`
+- God score averages the top `clamp(floor(playerCount / 3), 2, 5)` eligible players
+
+Current god caps:
+
+- Default cap: 75
+- Yasuo: 120
+- Soraka: 100
+- Aurelion Sol: 90
+
+## Frontend Notes
+
+Current major views/components:
+
+- `app/leaderboard/page.tsx`: main global leaderboard page
+- `app/leaderboard/gods/page.tsx`: god standings page
+- `app/leaderboard/gods/[slug]/*`: per-god leaderboard page
+- `src/components/Leaderboard/*`: podium, leaderboard rows, player modal, LP graph, point breakdown
+- `src/components/Gods/*`: god standings and god leaderboard UI
+
+Hooks:
+
+- `useLeaderboard`
+- `useGods`
+- `useGod`
+- `usePlayer`
+- `useTournament`
+
+Backend proxy routes live in `frontend/app/api/...`.
+
+## Discord Bot Notes
+
+Slash commands currently present:
+
+- `/register`
+- `/leaderboard`
+- `/profile`
+- `/god-standings`
+- `/god-leaderboard`
+- `/get-user-by-account`
+
+Admin slash group:
+
+- `/admin add-player`
+- `/admin remove-player`
+- `/admin assign-god`
+- `/admin refresh-data`
+- `/admin settings`
+- `/admin trigger-daily-jobs`
+- `/admin reset-player-ranks`
+- `/admin raw-message`
+- `/admin edit-raw-message`
+- `/admin wipe-data`
+
+Bot specifics:
+
+- Uses `discordx` decorators
+- Starts notification jobs from `src/jobs/notificationJobs.ts` on ready
+- Uses backend HTTP calls rather than direct MongoDB writes for tournament operations
+- Uses `BACKEND_ADMIN_PASSWORD` for protected backend mutations
 
 ## Environment Variables
 
-All three projects use `NODE_ENV` (`development` or `production`) to control log levels.
+### Root
 
-**backend** (`.env`):
-- `NODE_ENV` — `development` or `production`
-- `PORT` — Server port (default: 5000)
-- `MONGODB_URI` — MongoDB connection string
-- `MONGODB_DB_NAME` — Database name (default: `tft-tournament`)
-- `RIOT_API_KEY` — Riot Games API key
-- `TOURNAMENT_START_DATE` — Fallback tournament start (ISO 8601)
-- `TOURNAMENT_END_DATE` — Fallback tournament end (ISO 8601)
+No shared root `.env`.
 
-- `ENABLE_DEV_DATA_FETCH_CRONS` - Set to `true` to allow scheduled Riot data fetches outside production
+### Backend
 
-**frontend** (`.env`):
-- `NODE_ENV` — `development` or `production`
-- `NEXT_PUBLIC_BACKEND_URL` — Backend base URL (default: `http://localhost:5000`)
+Documented and currently used:
 
-**tipti-clanker** (`.env`):
-- `NODE_ENV` — `development` or `production`
-- `BOT_TOKEN` — Discord bot token
-- `RIOT_API_KEY` — Riot Games API key
-- `MONGODB_URI` — MongoDB connection string
-- `MONGODB_DB_NAME` — Database name
-- `BACKEND_URL` — Backend API URL (default: `http://localhost:5000`)
+- `NODE_ENV`
+- `PORT`
+- `MONGODB_URI`
+- `MONGODB_DB_NAME`
+- `RIOT_API_KEY`
+- `ADMIN_API_PASSWORD`
+- `ENABLE_DEV_DATA_FETCH_CRONS`
 
-## Key Dependencies
+Notes:
 
-- **Backend**: express, mongoose, node-cron, pino, pino-pretty (dev), vitest (dev)
-- **Frontend**: next, react, swr, recharts, tailwindcss
-- **Bot**: discord.js, discordx, mongodb, pino, pino-pretty (dev), vitest (dev)
+- `TOURNAMENT_START_DATE` and `TOURNAMENT_END_DATE` are not env-driven today; defaults are hard-coded in `backend/src/constants.ts`
+- Scheduled data fetches are skipped outside production unless `ENABLE_DEV_DATA_FETCH_CRONS=true`
 
-## TypeScript Configuration Notes
-- `tipti-clanker` requires `experimentalDecorators` (discordx uses decorators) — already in `tsconfig.json`
-- Frontend uses `tsconfig.json` path aliases (`@/*`)
-- Backend uses `@/*` → `src/*` path alias
-- All three components target ESNext/modern Node
+### Frontend
+
+- `NODE_ENV`
+- `NEXT_PUBLIC_BACKEND_URL`
+
+### Discord Bot
+
+- `NODE_ENV`
+- `BOT_TOKEN`
+- `BACKEND_URL`
+- `BACKEND_ADMIN_PASSWORD`
+- `LOG_LEVEL`
+- `LOG_FILE_PATH`
+- `NO_COLOR`
+
+## Logging
+
+- Backend: `pino`; pretty console logging in development, structured file logging in production
+- Frontend: lightweight console wrapper
+- Bot: `pino`; same general production/dev split as backend
+
+## Working Notes For Agents
+
+- Prefer updating backend-facing docs when routes, cron timing, or admin auth changes
+- Do not describe old 15-minute polling behavior; the current fetch cadence is 5 minutes
+- Do not document `/tournament-settings` as a Discord slash command; the bot uses `/admin settings`
+- Do not claim the bot writes directly to MongoDB for tournament data flow; the current integration path is backend HTTP

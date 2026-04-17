@@ -1,206 +1,170 @@
-# Tipti Set 17 Bootcamp Tournament — Platform Overview
-*TFT Set 17: Space Gods — God System Tournament*
-This document is intended for tournament admins. It covers what the platform does, how everything fits together, and what to watch out for.
+# Tipti Set 17 Bootcamp Tournament - Platform Overview
 
----
+This document is for tournament admins. It describes how the current platform behaves in production and what controls exist today.
 
-## What This Platform Does
+## What The Platform Runs
 
-The Tipti Set 17 Bootcamp Tournament platform is a faction-based competitive event system for TFT. Players choose one of 9 gods at registration, earn points through matches and god-specific buffs, and compete across 10 leaderboards. Gods are eliminated in phases, creating strategic depth and engagement beyond simple LP tracking.
+The tournament is built around the Set 17 "God System":
 
-Once set up, it runs almost entirely on its own — no manual data entry required.
+- Players register through Discord and choose one of 9 gods
+- The backend pulls ranked data and match history from Riot every 5 minutes
+- The backend computes score points from daily LP gains, god buffs, penalties, and final god bonuses
+- The website shows player standings, god standings, and player drill-downs
+- The bot posts scheduled updates to Discord during the tournament window
 
----
+Once the tournament is configured, day-to-day operation is mostly automated.
 
-## The Three Components
+## Components
 
-| Component | What It Is | What It Does |
-|-----------|------------|--------------|
-| **Website** | Public leaderboard | Shows player standings (by score points), god standings, point breakdowns, and match history with external links. Refreshes every 30 seconds. |
-| **Discord Bot** | Admin & player interface | Players register with god selection. Admins manage the tournament, gods, and settings. |
-| **Backend** | The engine | Connects everything — pulls data from Riot, computes scores and buffs, powers both the website and bot. |
+| Component | Role |
+|-----------|------|
+| Website | Public leaderboard, god views, player profile modal, point breakdowns, LP graph |
+| Discord bot | Registration flow, admin commands, scheduled posts |
+| Backend | Riot polling, scoring, tournament state, REST API, persistence |
 
----
+All three components share the same MongoDB database through the backend.
 
-## How Everything Connects
+## Operational Flow
 
-```
-Players register via Discord (/register)
-         │
-         ▼
-   Choose a God → Backend stores player + god assignment
-         │
-         ▼
-Every 15 minutes: Backend pulls rank data from Riot API
-         │
-         ▼
-Database updated with latest LP, rank, and match history
-         │
-         ├──► Per-match buff points computed in real-time (if buffs enabled, Day 6+)
-         │
-         ├──► Website + Discord /leaderboard show updated standings (by score points)
-         │
-         ├──► Every 5 min: Bot checks for new 1st/8th placements → posts to Feed Channel
-         │
-         ├──► Midnight (PHT): Daily processing runs:
-         │      1. Compute daily LP gains → create match point transactions
-         │      2. Check for phase end → eliminate bottom 3 gods
-         │      3. Check for tournament end → apply god placement bonuses
-         │
-         ├──► 5 min after midnight: Bot posts daily recap + god standings
-         │
-         └──► God standings update posted to God Standings Channel
+```text
+/register in Discord
+  -> player selects a god
+  -> backend stores player + god assignment
+
+Every 5 minutes
+  -> backend fetches updated ranked state and recent matches
+  -> backend records snapshots and match records
+  -> per-match god buffs are processed for eligible matches
+
+At 00:00 Asia/Manila
+  -> backend computes daily LP gains
+  -> backend writes point transactions
+  -> backend evaluates phase changes and tournament end state
+
+At 00:05 Asia/Manila
+  -> bot posts the daily recap
+
+At 00:10 Asia/Manila
+  -> bot posts god standings
 ```
 
----
+The bot also checks the notification feed every 5 minutes and posts match updates while the tournament is active.
 
-## The God System
+## God System
 
-### The 9 Gods
+### Gods
 
-| God | Title | Buff Mechanic | Daily Cap |
-|-----|-------|---------------|-----------|
-| Varus | Love | +7/match. Top 10 in god leaderboard: +8/match | 75 |
-| Ekko | Time | +2/match. +20 if same placement as previous match | 75 |
-| Evelynn | Temptation | +1/match, or +25/match if LP gain exceeds rank threshold (300/200/150/100) | 75 |
-| Thresh | Pacts | +2/match. +13 if matching Top 1's latest placement. Top 1: +13/match | 75 |
-| Yasuo | Abyss | Top 5-7 → +10/match. Top 8 → +35/match | 140 |
-| Soraka | Stars | +5/-2 per streak match (cap 15 streak) | 100 |
-| Kayle | Order | +2/match. +15 bonus if ≥4 matches played that day | 75 |
-| Ahri | Opulence | +17 per 1st place match | 75 |
-| Aurelion Sol | Wonders | Random per match based on placement (1st: 0-10, 8th: -6 to 4) | 90 |
+| God | Title | Buff Summary | Daily Cap |
+|-----|-------|--------------|-----------|
+| Varus | Love | `+7` per match, or `+8` for top 10 within the god leaderboard | 75 |
+| Ekko | Time | `+2` per match, plus `+20` when placement repeats the previous match | 75 |
+| Evelynn | Temptation | `+1` per match, or `+25` when daily LP gain beats the rank threshold | 75 |
+| Thresh | Pacts | `+2` per match, or `+13` if matching the top player's latest placement | 75 |
+| Yasuo | Abyss | 5th `+7`, 6th `+15`, 7th `+25`, 8th `+33` | 120 |
+| Soraka | Stars | `+5` win streak match, `-2` loss streak match, capped at 15 streak length | 100 |
+| Kayle | Order | `+2` per match, plus `+15` after 4 matches in a day | 75 |
+| Ahri | Opulence | `+17` for each 1st place match | 75 |
+| Aurelion Sol | Wonders | Random roll based on placement | 90 |
 
-Buffs are calculated **per match in real-time** during each 15-minute cron cycle. Daily cap is **per player** (penalties are uncapped).
+Buffs are processed per match during the 5-minute data fetch cycle. Penalties are not capped.
 
-### Elimination Phases (2-week tournament)
+### Phases
 
-| Phase | Days | Gods | Eliminations |
-|-------|------|------|-------------|
-| Phase 1 | 1-5 | 9 gods | Bottom 3 eliminated |
-| Phase 2 | 6-10 | 6 gods | Bottom 3 eliminated. **Buffs activate after Phase 1 ends.** |
-| Phase 3 | 11-14 | 3 gods (finals) | No elimination |
+The current tournament model supports three phases:
 
-Eliminated players stay in the individual leaderboard but are removed from god scoring and don't receive buffs.
+- Phase 1: 9 gods active, bottom 3 eliminated
+- Phase 2: 6 gods active, bottom 3 eliminated
+- Phase 3: 3 gods active, finals
+
+Buffs are intended to activate after Phase 1 ends. Eliminated players remain visible in individual standings but stop contributing to god scoring.
 
 ### Scoring
-- **Score Points** = match points + buff points - penalties + god placement bonus
-- **God Score** = average of top N players' scores (N = clamp(floor(playerCount/3), 2, 5))
-- **Final Bonuses**: 1st place god → +100, 2nd → +75, 3rd → +50 (applied to all players in that god)
 
----
+- `scorePoints = match points + buffs - penalties + god placement bonus`
+- God scores use the top `clamp(floor(playerCount / 3), 2, 5)` eligible players
+- End-of-tournament bonuses are `+100`, `+75`, and `+50` for 1st, 2nd, and 3rd gods
 
-## The Player Journey
+## Player And Admin Flows
 
-### 1. Registration
-A player uses `/register PlayerName#TAG` in Discord. The bot validates their Riot account, then shows an ephemeral dropdown to **choose their god**. After selecting, the player is registered with their chosen god faction.
+### Player registration
 
-Admins can also register players with `/add-player @user Name#TAG` (same two-step god selection flow).
+Players use `/register` with their Riot ID. The bot validates the account and then asks them to choose a god before creating the record.
 
-### 2. Automatic Tracking (Every 15 Minutes)
-The backend polls Riot's API for every registered player. It records LP snapshots (only when changed) and logs recent ranked matches within the tournament window.
+### Admin commands
 
-For local development, these scheduled fetches are off by default unless `ENABLE_DEV_DATA_FETCH_CRONS=true` is set in `backend/.env`. Manual admin triggers still work.
+The bot currently exposes these main commands:
 
-### 3. Daily Processing (Midnight PHT)
-At the end of each day:
-1. Each player's daily LP gain is calculated from snapshots
-2. Match point transactions are created
-3. Phase/tournament end checks run automatically
+- Player-facing: `/register`, `/leaderboard`, `/profile`, `/god-standings`, `/god-leaderboard`, `/get-user-by-account`
+- Admin group: `/admin add-player`, `/admin remove-player`, `/admin assign-god`, `/admin refresh-data`, `/admin settings`, `/admin trigger-daily-jobs`, `/admin reset-player-ranks`, `/admin raw-message`, `/admin edit-raw-message`, `/admin wipe-data`
 
-God buffs are applied in real-time during each 15-minute cron cycle (if enabled, Day 6+).
+### Tournament settings
 
-### 4. Discord Notifications
-- **Feed Channel (every 5 min):** Posts 1st and 8th place finishes
-- **Daily Channel (midnight PHT):** Posts daily recap with climber/slider + LP graph
-- **God Standings Channel (5 min after midnight):** Posts current god rankings
+The backend stores:
 
-### 5. Leaderboards
-**10 leaderboards total:**
-1. **Global** — All players sorted by score points (with normalized LP as tiebreaker)
-2-10. **God leaderboards** — One per god, showing that god's players sorted by score points
+- Tournament name, start date, end date
+- Feed channel
+- Daily recap channel
+- God standings channel
+- Audit channel
+- Bootcamp chat channel
+- Phase configuration
+- Current phase
+- Whether buffs are enabled
 
-The website has "Players" and "Gods" tabs. The player modal shows score breakdown, point history, and match links to tactics.tools and metatft.
+`/admin settings` currently updates and displays start/end dates plus the feed, daily, audit, and bootcamp chat channels. The backend API can also store `godStandingsChannelId`.
 
-### 6. End of Tournament
-Final processing runs automatically: god placement bonuses are applied (1st: +100, 2nd: +75, 3rd: +50). Final standings are frozen.
+## Website Behavior
 
----
+The frontend uses Next.js App Router with 30-second SWR refreshes.
 
-## Tournament Controls
+Current user-visible views include:
 
-### Setup (Before Tournament)
-1. **Seed gods**: `POST /api/gods/seed` (or via admin script)
-2. **Configure phases**: Use `/tournament-settings` or `PUT /api/tournament/settings` with phases array
-3. **Set channels**: `/tournament-settings feed_channel:#channel daily_channel:#channel`
-4. **Set dates**: `/tournament-settings start:2026-04-01T00:00:00+08:00 end:2026-04-14T23:59:59+08:00`
+- Global leaderboard with podium, search, and pagination
+- Dedicated god standings page
+- Per-god leaderboard page
+- Player profile modal with LP graph and point breakdown
 
-### During Tournament
-- Gods are automatically eliminated at end of each phase
-- Buffs activate automatically after Phase 1 ends
-- Use `/god-standings` to check current rankings
-- Use `/eliminate-god` for manual elimination if needed
-- Use `/assign-god` to reassign a player's god (admin)
+The frontend reads data through Next.js API routes that proxy the backend.
 
-### Local Dev Ops
-- On Windows, use `.\scripts\pm2-dev.ps1 start all` to run the frontend, backend, and bot under PM2 watch mode.
-- Use `.\scripts\pm2-dev.ps1 stop all` to remove those PM2 watchers completely when you are done.
-- Available PM2 helper targets are `frontend`, `backend`, `bot`, and `all`.
+## Backend Behavior
 
----
+Important backend facts that affect operations:
 
-## Admin Commands (Quick Reference)
+- Data fetch cron runs every 5 minutes
+- Daily processing runs at midnight in `Asia/Manila`
+- Protected write routes require the `x-admin-password` header
+- A production-only backup job runs every 12 hours and keeps the latest 14 backups
+- Scheduled Riot fetch jobs are disabled in non-production unless `ENABLE_DEV_DATA_FETCH_CRONS=true`
 
-| Command | What It Does |
-|---------|-------------|
-| `/add-player @user Name#TAG` | Register a player (with god selection) |
-| `/remove-player @user` | Remove a player from the tournament |
-| `/tournament-settings` | View or update dates, channels, phases |
-| `/leaderboard` | Show current standings in Discord |
-| `/profile` or `/profile @user` | View player rank, god, and score points |
-| `/refresh-data` | Manually trigger a data update cycle |
-| `/god-standings` | Show current god rankings |
-| `/god-leaderboard god:Name` | Show leaderboard for a specific god |
-| `/assign-god @user god:Name` | Reassign a player to a different god |
-| `/eliminate-god god:Name phase:N` | Manually eliminate a god |
+## Troubleshooting
 
----
+### Data stops moving
 
-## What Could Go Wrong
+If standings or profiles stop updating:
 
-### Data Stops Updating
-**Symptom:** The leaderboard hasn't changed in over 15 minutes.
-**Likely causes:** Riot API key expired, backend down, or tournament end date passed.
-**What to do:** Check backend status. If end date passed, update it and run `/refresh-data`.
+- Check the backend process first
+- Check whether the Riot API key is still valid
+- Check whether the tournament window has already ended
+- In local development, confirm `ENABLE_DEV_DATA_FETCH_CRONS=true` if you expect automatic scheduled fetches
 
-### A Player's Score Looks Wrong
-**Symptom:** Score points seem incorrect or missing.
-**Likely cause:** Daily processing hasn't run yet, or tournament phases aren't configured.
-**What to do:** Check tournament settings have phases configured. Manually trigger daily processing via `POST /api/cron/run-daily` if needed.
+### Scores look wrong
 
-### God Buffs Not Applying
-**Symptom:** No buff transactions appearing for players.
-**Likely cause:** Buffs only activate Day 6+ (after Phase 1 ends). Check `buffsEnabled` in tournament settings.
+If score points seem too low or missing:
 
-### A Player Can't Re-Register After Being Removed
-**Symptom:** Player tries to `/register` and gets an error.
-**Cause:** Removal is a soft delete. An admin must use `/add-player` to re-register them.
+- Confirm daily processing ran at `00:00` Asia/Manila
+- Confirm tournament phases are configured correctly
+- Confirm buffs are enabled if you expect post-Phase-1 buff scoring
+- Manually trigger backend jobs through `/admin refresh-data` or `/admin trigger-daily-jobs` when needed
 
-### Feed/Daily Notifications Not Posting
-**Likely causes:** Channels not configured, tournament inactive, bot lacks permissions, or bot is down.
-**What to do:** Verify config with `/tournament-settings`. Check bot permissions.
+### Discord scheduled posts are missing
 
----
+Likely causes:
 
-## Normal vs. Abnormal Behavior
+- Missing or incorrect channel IDs in tournament settings
+- Bot process is down
+- Bot lacks permission to post in the configured channels
+- God standings channel is not configured in backend settings
 
-| Situation | Normal? |
-|-----------|---------|
-| Leaderboard refreshes every 30 sec on website | Yes |
-| Cron runs every 15 min even with no games played | Yes |
-| Player shows 0 score points | Yes — daily processing hasn't run yet |
-| Buffs not appearing in Days 1-5 | Yes — buffs activate Day 6+ |
-| Daily processing at midnight PHT (16:00 UTC) | Yes |
-| Gods eliminated automatically at end of Phase 1/2 | Yes |
-| Score points increase even without playing (buffs) | Yes — some buffs reward top performers |
-| Data completely frozen for 30+ minutes | No — investigate |
-| Bot not responding to any commands | No — check backend |
+### A removed player cannot register again
+
+Player removal is a soft delete. Use `/admin add-player` to restore or recreate the player record.
