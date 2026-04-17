@@ -65,18 +65,27 @@ export class AdminSettingsCommand {
       channelTypes: [ChannelType.GuildText],
     })
     auditChannel: TextChannel | undefined,
+    @SlashOption({
+      name: 'bootcamp_chat_channel',
+      description: 'Bootcamp chat channel for retry notices and related messages',
+      required: false,
+      type: ApplicationCommandOptionType.Channel,
+      channelTypes: [ChannelType.GuildText],
+    })
+    bootcampChatChannel: TextChannel | undefined,
     interaction: CommandInteraction,
   ): Promise<void> {
     await interaction.deferReply({ ephemeral: true });
 
     try {
-      if (start || end || feedChannel || dailyChannel || auditChannel) {
+      if (start || end || feedChannel || dailyChannel || auditChannel || bootcampChatChannel) {
         const updates: Record<string, unknown> = {};
         if (start) updates.startDate = start;
         if (end) updates.endDate = end;
         if (feedChannel) updates.feedChannelId = feedChannel.id;
         if (dailyChannel) updates.dailyChannelId = dailyChannel.id;
         if (auditChannel) updates.auditChannelId = auditChannel.id;
+        if (bootcampChatChannel) updates.bootcampChatChannelId = bootcampChatChannel.id;
         await updateTournamentSettings(updates);
       }
 
@@ -99,11 +108,18 @@ export class AdminSettingsCommand {
           { name: 'Feed Channel', value: settings.feedChannelId ? `<#${settings.feedChannelId}>` : 'Not set', inline: true },
           { name: 'Daily Channel', value: settings.dailyChannelId ? `<#${settings.dailyChannelId}>` : 'Not set', inline: true },
           { name: 'Audit Channel', value: settings.auditChannelId ? `<#${settings.auditChannelId}>` : 'Not set', inline: true },
+          {
+            name: 'Bootcamp Chat Channel',
+            value: settings.bootcampChatChannelId ? `<#${settings.bootcampChatChannelId}>` : 'Not set',
+            inline: true,
+          },
         )
         .setColor(EMBED_COLORS.PRIMARY)
         .setTimestamp();
 
-      const msg = start || end || feedChannel || dailyChannel || auditChannel ? 'Tournament settings updated.' : undefined;
+      const msg = start || end || feedChannel || dailyChannel || auditChannel || bootcampChatChannel
+        ? 'Tournament settings updated.'
+        : undefined;
       await interaction.editReply({ content: msg, embeds: [embed] });
 
       if (msg) {
@@ -116,6 +132,9 @@ export class AdminSettingsCommand {
             ...(feedChannel ? [`Feed Channel: <#${feedChannel.id}>`] : []),
             ...(dailyChannel ? [`Daily Channel: <#${dailyChannel.id}>`] : []),
             ...(auditChannel ? [`Audit Channel: <#${auditChannel.id}>`] : []),
+            ...(bootcampChatChannel
+              ? [`Bootcamp Chat Channel: <#${bootcampChatChannel.id}>`]
+              : []),
           ],
         });
       }

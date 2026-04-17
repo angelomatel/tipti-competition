@@ -30,6 +30,7 @@ export class AdminWipeDataCommand {
         dailyChannelId: '1487935514899124294',
         godStandingsChannelId: '1487935550387261581',
         auditChannelId: '1488146762828091502',
+        bootcampChatChannelId: '1487949806021247016',
       });
 
       const lines = [
@@ -40,6 +41,7 @@ export class AdminWipeDataCommand {
         `Daily Scores: ${result.dailyPlayerScores ?? 0}`,
         `Gods Seeded: ${seededGodCount}`,
         'Audit Channel: <#1488146762828091502>',
+        'Bootcamp Chat Channel: <#1487949806021247016>',
       ];
 
       await interaction.editReply({

@@ -16,6 +16,7 @@ export interface ITournamentSettings {
   dailyChannelId: string;
   godStandingsChannelId: string;
   auditChannelId: string;
+  bootcampChatChannelId: string;
   phases: IPhase[];
   currentPhase: number;
   buffsEnabled: boolean;
@@ -39,6 +40,7 @@ const TournamentSettingsSchema = new Schema<TournamentSettingsDocument>({
   dailyChannelId:        { type: String,   default: '' },
   godStandingsChannelId: { type: String,   default: '' },
   auditChannelId:        { type: String,   default: '' },
+  bootcampChatChannelId: { type: String, default: '' },
   phases:                { type: [PhaseSchema], default: [] },
   currentPhase:          { type: Number,   default: 1 },
   buffsEnabled:          { type: Boolean,  default: false },
