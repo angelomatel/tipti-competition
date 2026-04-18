@@ -3,7 +3,7 @@ import type { PlayerPollStateDocument } from '@/types/PlayerPollState';
 
 const PlayerPollStateSchema = new Schema<PlayerPollStateDocument>({
   playerId: { type: String, required: true, unique: true },
-  puuid: { type: String, required: true, index: true },
+  puuid: { type: String, required: true },
   mode: { type: String, enum: ['baseline', 'hot'], default: 'baseline' },
   lastProcessedAt: { type: Date, default: null },
   lastRankPollAt: { type: Date, default: null },
