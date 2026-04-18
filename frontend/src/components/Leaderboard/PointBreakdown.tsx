@@ -111,6 +111,8 @@ const PointBreakdown: React.FC<PointBreakdownProps> = ({ dailyPoints, gameName, 
                     <span className="shrink-0" style={{ color: tx.value >= 0 ? 'var(--accent-cyan)' : '#f87171' }}>
                       {tx.lpStatus === 'unknown'
                         ? 'LP unknown'
+                        : tx.lpStatus === 'resolving'
+                          ? 'LP resolving'
                         : (
                           <>
                             {tx.value >= 0 ? '+' : ''}{tx.value}

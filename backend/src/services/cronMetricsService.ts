@@ -1,8 +1,12 @@
-import type { RiotClientRequestMetrics } from '@/lib/riotClient';
+import type { RiotClient, RiotClientQueueSnapshot, RiotClientRequestMetrics } from '@/lib/riotClient';
 
 export interface QueueWaitStats {
   p50QueueWaitMs: number;
   p95QueueWaitMs: number;
+}
+
+export interface RiotQueueBackpressureSnapshot extends RiotClientQueueSnapshot, QueueWaitStats {
+  recentRequestCount: number;
 }
 
 export function getQueueWaitStats(metrics: RiotClientRequestMetrics[]): QueueWaitStats {
@@ -25,6 +29,22 @@ export function summarizeRequestsByEndpoint(metrics: RiotClientRequestMetrics[])
     acc[metric.endpoint] = (acc[metric.endpoint] ?? 0) + 1;
     return acc;
   }, {});
+}
+
+export function getQueueBackpressureSnapshot(
+  riotClient: RiotClient,
+  nowMs: number,
+  lookbackMs = 5 * 60 * 1000,
+): RiotQueueBackpressureSnapshot {
+  const metrics = riotClient.getRequestMetricsSince(nowMs - lookbackMs);
+  const queueStats = getQueueWaitStats(metrics);
+  const queueSnapshot = riotClient.getQueueSnapshot();
+
+  return {
+    ...queueSnapshot,
+    ...queueStats,
+    recentRequestCount: metrics.length,
+  };
 }
 
 function getPercentile(values: number[], percentile: number): number {

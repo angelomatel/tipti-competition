@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import { performance } from 'node:perf_hooks';
 import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { MatchRecord } from '@/db/models/MatchRecord';
 import { God } from '@/db/models/God';
@@ -13,6 +14,20 @@ import {
 } from '@/services/playerService';
 import { getTournamentSettings } from '@/services/tournamentService';
 import { computePlayerScoreBreakdown, computePlayerDailyBreakdown } from '@/services/scoringEngine';
+import { logger } from '@/lib/logger';
+
+async function measureAsyncStep<T>(
+  timings: Record<string, number>,
+  step: string,
+  action: () => Promise<T> | PromiseLike<T> | T,
+): Promise<T> {
+  const startedAt = performance.now();
+  try {
+    return await action();
+  } finally {
+    timings[step] = Math.round((performance.now() - startedAt) * 100) / 100;
+  }
+}
 
 export async function listPlayers(_req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -58,14 +73,35 @@ export async function patchPlayer(req: Request, res: Response, next: NextFunctio
 
 export async function getPlayer(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const player = await getPlayerByDiscordId(req.params['discordId'] as string);
+    const discordId = req.params['discordId'] as string;
+    const timings: Record<string, number> = {};
+    const requestStartedAt = performance.now();
+
+    const player = await measureAsyncStep(timings, 'playerLookupMs', () => getPlayerByDiscordId(discordId));
     if (!player) { res.status(404).json({ error: 'Player not found.' }); return; }
 
-    // Snapshots in ascending order (oldest first)
-    const rawSnapshots = await LpSnapshot.find({ puuid: player.puuid })
-      .sort({ capturedAt: -1 })
-      .limit(QUERY_LIMITS.SNAPSHOTS)
-      .lean();
+    const [
+      rawSnapshots,
+      rawMatches,
+      god,
+      scoreBreakdown,
+      dailyPoints,
+      settings,
+    ] = await Promise.all([
+      measureAsyncStep(timings, 'snapshotsQueryMs', () => LpSnapshot.find({ puuid: player.puuid })
+        .sort({ capturedAt: -1 })
+        .limit(QUERY_LIMITS.SNAPSHOTS)
+        .lean()),
+      measureAsyncStep(timings, 'matchesQueryMs', () => MatchRecord.find({ puuid: player.puuid })
+        .sort({ playedAt: -1 })
+        .limit(QUERY_LIMITS.MATCHES)
+        .lean()),
+      measureAsyncStep(timings, 'godQueryMs', () => (player.godSlug ? God.findOne({ slug: player.godSlug }).lean() : Promise.resolve(null))),
+      measureAsyncStep(timings, 'scoreBreakdownMs', () => computePlayerScoreBreakdown(player.discordId)),
+      measureAsyncStep(timings, 'dailyBreakdownMs', () => computePlayerDailyBreakdown(player.discordId)),
+      measureAsyncStep(timings, 'settingsQueryMs', () => getTournamentSettings()),
+    ]);
+
     rawSnapshots.reverse();
 
     const snapshots = rawSnapshots.map((s) => ({
@@ -78,18 +114,17 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
       losses: s.losses,
     }));
 
-    // Match records in ascending order
-    const rawMatches = await MatchRecord.find({ puuid: player.puuid })
-      .sort({ playedAt: -1 })
-      .limit(QUERY_LIMITS.MATCHES)
-      .lean();
     rawMatches.reverse();
 
     const matches = rawMatches.map((m) => ({
       matchId: m.matchId,
       placement: m.placement,
       playedAt: m.playedAt,
-      lpStatus: m.lpAttributionStatus === 'ambiguous' ? 'unknown' : 'none',
+      lpStatus: m.lpAttributionStatus === 'ambiguous'
+        ? 'unknown'
+        : m.lpAttributionStatus === 'pending'
+          ? 'resolving'
+          : 'none',
     }));
 
     // Build match-based LP points: for each match, find the nearest preceding snapshot
@@ -116,12 +151,22 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
       };
     }).filter(Boolean);
 
-    const god = player.godSlug ? await God.findOne({ slug: player.godSlug }).lean() : null;
-    const scoreBreakdown = await computePlayerScoreBreakdown(player.discordId);
-    const dailyPoints = await computePlayerDailyBreakdown(player.discordId);
-
-    const settings = await getTournamentSettings();
     const hideGods = new Date() < settings.startDate;
+    timings.totalMs = Math.round((performance.now() - requestStartedAt) * 100) / 100;
+
+    logger.debug(
+      {
+        discordId,
+        timings,
+        counts: {
+          snapshots: snapshots.length,
+          matches: matches.length,
+          matchPoints: matchPoints.length,
+          dailyPointDays: dailyPoints.length,
+        },
+      },
+      '[player] Profile query timings',
+    );
 
     res.json({
       player,

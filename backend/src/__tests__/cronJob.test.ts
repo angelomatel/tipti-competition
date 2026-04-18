@@ -39,17 +39,28 @@ describe('startCronJob', () => {
 
     startCronJob();
 
-    expect(mockSchedule).toHaveBeenCalledWith('*/5 * * * *', expect.any(Function));
-    expect(mockDebug).toHaveBeenCalledWith('[cron] 5-minute snapshot job scheduled.');
+    expect(mockSchedule).toHaveBeenNthCalledWith(1, '*/1 * * * *', expect.any(Function));
+    expect(mockSchedule).toHaveBeenNthCalledWith(2, '*/5 * * * *', expect.any(Function));
+    expect(mockDebug).toHaveBeenCalledWith('[cron] 60-second hot job and 5-minute baseline job scheduled.');
 
     const scheduledHandler = mockSchedule.mock.calls[0]?.[1] as (() => void) | undefined;
     scheduledHandler?.();
 
-    expect(mockRunScheduledDataFetchJob).toHaveBeenCalledWith('cron', expect.any(Function));
+    expect(mockRunScheduledDataFetchJob).toHaveBeenCalledWith('cron-hot', expect.any(Function));
 
     const delegatedJob = mockRunScheduledDataFetchJob.mock.calls[0]?.[1] as (() => Promise<void>) | undefined;
     await delegatedJob?.();
 
-    expect(mockRunCronCycle).toHaveBeenCalledWith({ source: 'scheduled' });
+    expect(mockRunCronCycle).toHaveBeenCalledWith({ source: 'scheduled', cycleType: 'hot' });
+
+    const baselineHandler = mockSchedule.mock.calls[1]?.[1] as (() => void) | undefined;
+    baselineHandler?.();
+
+    expect(mockRunScheduledDataFetchJob).toHaveBeenNthCalledWith(2, 'cron-baseline', expect.any(Function));
+
+    const delegatedBaselineJob = mockRunScheduledDataFetchJob.mock.calls[1]?.[1] as (() => Promise<void>) | undefined;
+    await delegatedBaselineJob?.();
+
+    expect(mockRunCronCycle).toHaveBeenNthCalledWith(2, { source: 'scheduled', cycleType: 'baseline' });
   });
 });

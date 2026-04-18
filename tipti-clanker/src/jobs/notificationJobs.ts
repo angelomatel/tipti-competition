@@ -173,7 +173,11 @@ async function runFeedJob(client: Client): Promise<void> {
         }
       }
 
-      const lpStr = notif.lpStatus === 'unknown' ? 'LP unknown' : formatLpDelta(notif.lpDelta);
+      const lpStr = notif.lpStatus === 'unknown'
+        ? 'LP unknown'
+        : notif.lpStatus === 'resolving'
+          ? 'LP resolving'
+          : formatLpDelta(notif.lpDelta);
       const lpPart = lpStr ? ` (${lpStr})` : '';
       const primaryLinksLine = `\n-# ${buildMatchLinks(notif.gameName, notif.tagLine, notif.matchId)}`;
 

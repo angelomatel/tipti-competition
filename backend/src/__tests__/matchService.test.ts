@@ -88,6 +88,23 @@ describe('captureMatchesForPlayer', () => {
     });
 
     expect(mockBulkWrite).toHaveBeenCalledTimes(1);
+    expect(mockBulkWrite).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          updateOne: expect.objectContaining({
+            update: {
+              $setOnInsert: expect.objectContaining({
+                matchId: 'SEA_123',
+                placement: 2,
+                lpAttributionStatus: 'pending',
+                lpAttributionReason: null,
+              }),
+            },
+          }),
+        }),
+      ]),
+      { ordered: false },
+    );
     expect(mockInfo).toHaveBeenCalledWith(
       expect.objectContaining({
         discordId: 'discord-1',

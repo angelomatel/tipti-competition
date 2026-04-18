@@ -1,4 +1,4 @@
-import { RiotRequestQueue } from '@/lib/riotQueue';
+import { RiotRequestQueue, type RiotQueueSnapshot } from '@/lib/riotQueue';
 import { Tier, Division } from '@/types/Rank';
 
 export enum TftQueueType {
@@ -73,6 +73,8 @@ export interface RiotClientRequestMetrics {
   status: 'fulfilled' | 'rejected';
 }
 
+export interface RiotClientQueueSnapshot extends RiotQueueSnapshot {}
+
 export class RiotClient {
   private apiKey: string;
   private queue = new RiotRequestQueue();
@@ -106,6 +108,10 @@ export class RiotClient {
 
   getRequestMetricsSince(since: number): RiotClientRequestMetrics[] {
     return this.queue.getCompletedMetricsSince(since);
+  }
+
+  getQueueSnapshot(): RiotClientQueueSnapshot {
+    return this.queue.getSnapshot();
   }
 
   private request(path: string, region: string, endpoint: string): Promise<any> {

@@ -13,7 +13,7 @@ export interface DailyPointTransaction {
   matchId?: string | null;
   placement?: number;
   playedAt?: Date;
-  lpStatus?: 'known' | 'unknown' | 'none';
+  lpStatus?: 'known' | 'resolving' | 'unknown' | 'none';
 }
 
 export interface DailyPointEntry {

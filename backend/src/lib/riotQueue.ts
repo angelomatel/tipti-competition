@@ -30,12 +30,23 @@ export interface RiotRequestMetric {
   status: 'fulfilled' | 'rejected';
 }
 
+export interface RiotQueueSnapshot {
+  queuedRequests: number;
+  activeRequests: number;
+  blockedUntil: number | null;
+  blockedForMs: number;
+  requestsLastSecond: number;
+  requestsLastMinute: number;
+  requestsLast120Seconds: number;
+}
+
 export class RiotRequestQueue {
   private queue: QueuedRequest[] = [];
   private processing = false;
   private activeRequests = 0;
   private blockedUntil = 0;
   private secondWindow: number[] = [];
+  private minuteWindow: number[] = [];
   private twoMinuteWindow: number[] = [];
   private completedMetrics: RiotRequestMetric[] = [];
   private drainTimer: NodeJS.Timeout | null = null;
@@ -59,6 +70,20 @@ export class RiotRequestQueue {
 
   getCompletedMetricsSince(since: number): RiotRequestMetric[] {
     return this.completedMetrics.filter((metric) => metric.finishedAt >= since);
+  }
+
+  getSnapshot(): RiotQueueSnapshot {
+    const now = Date.now();
+    this.pruneWindows(now);
+    return {
+      queuedRequests: this.queue.length,
+      activeRequests: this.activeRequests,
+      blockedUntil: this.blockedUntil > now ? this.blockedUntil : null,
+      blockedForMs: this.blockedUntil > now ? this.blockedUntil - now : 0,
+      requestsLastSecond: this.secondWindow.length,
+      requestsLastMinute: this.minuteWindow.length,
+      requestsLast120Seconds: this.twoMinuteWindow.length,
+    };
   }
 
   private scheduleDrain(delayMs: number): void {
@@ -184,6 +209,9 @@ export class RiotRequestQueue {
     while (this.secondWindow.length > 0 && now - this.secondWindow[0]! >= 1_000) {
       this.secondWindow.shift();
     }
+    while (this.minuteWindow.length > 0 && now - this.minuteWindow[0]! >= 60_000) {
+      this.minuteWindow.shift();
+    }
     while (this.twoMinuteWindow.length > 0 && now - this.twoMinuteWindow[0]! >= 120_000) {
       this.twoMinuteWindow.shift();
     }
@@ -210,6 +238,7 @@ export class RiotRequestQueue {
 
   private recordDispatch(timestamp: number): void {
     this.secondWindow.push(timestamp);
+    this.minuteWindow.push(timestamp);
     this.twoMinuteWindow.push(timestamp);
   }
 

@@ -22,7 +22,7 @@ export interface FeedNotification {
   discordAvatarUrl: string;
   placement: number | null;
   lpDelta: number | null;
-  lpStatus: 'known' | 'unknown' | 'none';
+  lpStatus: 'known' | 'resolving' | 'unknown' | 'none';
   godSlug: string | null;
   godBuffs: Array<{ source: string; value: number }>;
   playedAt: Date;
@@ -106,7 +106,7 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
     discordAvatarUrl: string;
     placement: number;
     lpDelta: number | null;
-    lpStatus: 'known' | 'unknown' | 'none';
+    lpStatus: 'known' | 'resolving' | 'unknown' | 'none';
     lpSource: 'transaction' | 'snapshot' | 'none';
     godSlug: string | null;
     godBuffs: Array<{ source: string; value: number }>;
@@ -141,6 +141,8 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
       ? 'known'
       : match.lpAttributionStatus === 'ambiguous'
         ? 'unknown'
+        : match.lpAttributionStatus === 'pending'
+          ? 'resolving'
         : lpDelta !== null
           ? 'known'
           : 'none';

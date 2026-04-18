@@ -11,7 +11,7 @@ import type { TournamentSettingsDocument } from '@/db/models/TournamentSettings'
 import type { PlayerDocument } from '@/types/Player';
 import type { PlayerScoreBreakdown, DailyPointEntry } from '@/types/Scoring';
 
-type LpStatus = 'known' | 'unknown' | 'none';
+type LpStatus = 'known' | 'resolving' | 'unknown' | 'none';
 
 export interface LpDeltaAttributionMatch {
   matchId: string;
@@ -122,22 +122,22 @@ export async function computePlayerDailyBreakdown(discordId: string): Promise<Da
   }
 
   if (player?.puuid) {
-    const ambiguousMatches = await MatchRecord.find({
+    const unresolvedMatches = await MatchRecord.find({
       puuid: player.puuid,
-      lpAttributionStatus: 'ambiguous',
+      lpAttributionStatus: { $in: ['pending', 'ambiguous'] },
     })
-      .select({ matchId: 1, placement: 1, playedAt: 1 })
+      .select({ matchId: 1, placement: 1, playedAt: 1, lpAttributionStatus: 1 })
       .lean();
 
-    const ambiguousByDay = new Map<string, typeof ambiguousMatches>();
-    for (const match of ambiguousMatches) {
+    const unresolvedByDay = new Map<string, typeof unresolvedMatches>();
+    for (const match of unresolvedMatches) {
       const day = getCurrentPhtDayForDate(match.playedAt);
-      const entries = ambiguousByDay.get(day) ?? [];
+      const entries = unresolvedByDay.get(day) ?? [];
       entries.push(match);
-      ambiguousByDay.set(day, entries);
+      unresolvedByDay.set(day, entries);
     }
 
-    for (const [day, matches] of ambiguousByDay.entries()) {
+    for (const [day, matches] of unresolvedByDay.entries()) {
       let entry = dayMap.get(day);
       if (!entry) {
         entry = { day, transactions: [] };
@@ -154,7 +154,7 @@ export async function computePlayerDailyBreakdown(discordId: string): Promise<Da
           matchId: match.matchId,
           placement: match.placement,
           playedAt: match.playedAt,
-          lpStatus: 'unknown',
+          lpStatus: match.lpAttributionStatus === 'pending' ? 'resolving' : 'unknown',
         });
       }
 

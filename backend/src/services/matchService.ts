@@ -5,8 +5,12 @@ import { logger } from '@/lib/logger';
 import { getPlayerLogLabel } from '@/lib/playerLogLabel';
 import { withRetry } from '@/lib/withRetry';
 import {
+  MATCH_DETAIL_FETCH_CAP_BASELINE,
+  MATCH_DETAIL_FETCH_CAP_HOT,
   MATCH_DETAIL_FETCH_CAP_CATCHUP,
   MATCH_DETAIL_FETCH_CAP_NORMAL,
+  MATCH_ID_FETCH_COUNT_BASELINE,
+  MATCH_ID_FETCH_COUNT_HOT,
   MATCH_ID_FETCH_COUNT_CATCHUP,
   MATCH_ID_FETCH_COUNT_NORMAL,
 } from '@/constants';
@@ -15,7 +19,7 @@ import type { TournamentSettingsDocument } from '@/db/models/TournamentSettings'
 
 export interface CaptureMatchesOptions {
   settings: Pick<TournamentSettingsDocument, 'startDate' | 'endDate'>;
-  mode?: 'normal' | 'catch-up';
+  mode?: 'normal' | 'baseline' | 'hot' | 'catch-up';
   requestedMatchIdCount?: number;
   maxMatchDetails?: number;
 }
@@ -23,6 +27,7 @@ export interface CaptureMatchesOptions {
 export interface CaptureMatchesResult {
   requestedMatchIdCount: number;
   fetchedMatchIdCount: number;
+  uncapturedMatchCount: number;
   matchDetailRequestCount: number;
   capturedCount: number;
   duplicateCount: number;
@@ -41,9 +46,9 @@ export async function captureMatchesForPlayer(
   const mode = options.mode ?? 'normal';
   const settings = options.settings;
   const requestedMatchIdCount = options.requestedMatchIdCount
-    ?? (mode === 'catch-up' ? MATCH_ID_FETCH_COUNT_CATCHUP : MATCH_ID_FETCH_COUNT_NORMAL);
+    ?? getRequestedMatchIdCount(mode);
   const maxMatchDetails = options.maxMatchDetails
-    ?? (mode === 'catch-up' ? MATCH_DETAIL_FETCH_CAP_CATCHUP : MATCH_DETAIL_FETCH_CAP_NORMAL);
+    ?? getMatchDetailFetchCap(mode, requestedMatchIdCount);
   let duplicateCount = 0;
   let nonRankedCount = 0;
   let outOfWindowCount = 0;
@@ -94,7 +99,16 @@ export async function captureMatchesForPlayer(
   const bulkOperations: Array<{
     updateOne: {
       filter: { puuid: string; matchId: string };
-      update: { $setOnInsert: { puuid: string; matchId: string; placement: number; playedAt: Date } };
+      update: {
+        $setOnInsert: {
+          puuid: string;
+          matchId: string;
+          placement: number;
+          playedAt: Date;
+          lpAttributionStatus: 'pending';
+          lpAttributionReason: null;
+        };
+      };
       upsert: true;
     };
   }> = [];
@@ -132,6 +146,8 @@ export async function captureMatchesForPlayer(
               matchId,
               placement: participant.placement,
               playedAt: matchDate,
+              lpAttributionStatus: 'pending',
+              lpAttributionReason: null,
             },
           },
           upsert: true,
@@ -195,6 +211,7 @@ export async function captureMatchesForPlayer(
   return {
     requestedMatchIdCount,
     fetchedMatchIdCount: matchIds.length,
+    uncapturedMatchCount: uncapturedMatchIds.length,
     matchDetailRequestCount: matchIdsToFetch.length,
     capturedCount,
     duplicateCount,
@@ -204,4 +221,35 @@ export async function captureMatchesForPlayer(
     deferredMatchDetailCount,
     newMatches: newMatches.sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime()),
   };
+}
+
+function getRequestedMatchIdCount(mode: NonNullable<CaptureMatchesOptions['mode']>): number {
+  switch (mode) {
+    case 'baseline':
+      return MATCH_ID_FETCH_COUNT_BASELINE;
+    case 'hot':
+      return MATCH_ID_FETCH_COUNT_HOT;
+    case 'catch-up':
+      return MATCH_ID_FETCH_COUNT_CATCHUP;
+    case 'normal':
+    default:
+      return MATCH_ID_FETCH_COUNT_NORMAL;
+  }
+}
+
+function getMatchDetailFetchCap(
+  mode: NonNullable<CaptureMatchesOptions['mode']>,
+  requestedMatchIdCount: number,
+): number {
+  switch (mode) {
+    case 'baseline':
+      return MATCH_DETAIL_FETCH_CAP_BASELINE;
+    case 'hot':
+      return Math.max(MATCH_DETAIL_FETCH_CAP_HOT, requestedMatchIdCount);
+    case 'catch-up':
+      return MATCH_DETAIL_FETCH_CAP_CATCHUP;
+    case 'normal':
+    default:
+      return MATCH_DETAIL_FETCH_CAP_NORMAL;
+  }
 }

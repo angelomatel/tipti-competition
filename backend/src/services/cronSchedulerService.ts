@@ -1,231 +1,252 @@
-import {
-  CRON_PLAYER_CONCURRENCY,
-  FETCH_INTERVAL_MINUTES,
-  RIOT_APP_RATE_PER_120_SECONDS,
-} from '@/constants';
+import { CRON_PLAYER_CONCURRENCY } from '@/constants';
+import { PlayerPollState } from '@/db/models/PlayerPollState';
 import type { PlayerDocument } from '@/types/Player';
+import type { IPlayerPollState } from '@/types/PlayerPollState';
 
-const STALE_PLAYER_WINDOW_MS = FETCH_INTERVAL_MINUTES * 2 * 60 * 1000;
+export interface PersistedPlayerPollState extends IPlayerPollState {}
 
-export interface PlayerPollState {
-  lastRankPollAt?: number;
-  lastMatchPollAt?: number;
-  lastCatchupAt?: number;
-  lastProcessedAt?: number;
-  lastActivityAt?: number;
-  lastSuccessfulMatchCaptureAt?: number;
-  lastNoOpPollAt?: number;
-  consecutiveNoOpPolls?: number;
-  skipMatchPollUntilCycle?: number;
-  hasDeferredMatchBacklog?: boolean;
+export interface CronSchedulerSelection {
+  hotCandidates: PlayerDocument[];
+  baselineCandidates: PlayerDocument[];
+  eligibleHotCount: number;
+  eligibleBaselineCount: number;
 }
-
-export interface CronCycleSelection {
-  cycleNumber: number;
-  selectedPlayers: PlayerDocument[];
-  deferredPlayers: number;
-  oldestPlayerStalenessMs: number | null;
-}
-
-let roundRobinCursor = 0;
-let currentCycleNumber = 0;
-const playerPollState = new Map<string, PlayerPollState>();
 
 export function getPlayerProcessingConcurrency(): number {
   return CRON_PLAYER_CONCURRENCY;
 }
 
-export function getPlayerPollState(discordId: string): PlayerPollState {
-  return { ...(playerPollState.get(discordId) ?? {}) };
-}
+export async function syncActivePollStates(
+  players: PlayerDocument[],
+): Promise<Map<string, PersistedPlayerPollState>> {
+  if (players.length === 0) {
+    return new Map();
+  }
 
-export function setPlayerPollState(discordId: string, state: PlayerPollState): void {
-  playerPollState.set(discordId, state);
-}
-
-export function getSchedulerCursor(): number {
-  return roundRobinCursor;
-}
-
-export function getSchedulerCycleNumber(): number {
-  return currentCycleNumber;
-}
-
-export function shouldUseCatchUpMode(
-  player: PlayerDocument,
-  cycleCatchUp: boolean,
-  nowMs: number,
-): boolean {
-  if (cycleCatchUp) return true;
-
-  const state = playerPollState.get(player.discordId);
-  if (!state?.lastProcessedAt) return true;
-  return nowMs - state.lastProcessedAt > FETCH_INTERVAL_MINUTES * 2 * 60 * 1000;
-}
-
-export function selectPlayersForCycle(players: PlayerDocument[], nowMs: number): CronCycleSelection {
-  currentCycleNumber += 1;
-  const stablePlayers = getStableActivePlayers(players);
-  syncPlayerPollState(stablePlayers);
-
-  const prioritizedGroups = getPrioritizedGroups(stablePlayers, nowMs, currentCycleNumber);
-  const selectedPlayers = pickPlayersForCycle(prioritizedGroups, getMaxPlayersForCycle());
-  advanceRoundRobinCursor(prioritizedGroups.roundRobinPool, selectedPlayers);
-
-  return {
-    cycleNumber: currentCycleNumber,
-    selectedPlayers,
-    deferredPlayers: Math.max(0, stablePlayers.length - selectedPlayers.length),
-    oldestPlayerStalenessMs: getOldestPlayerStalenessMs(stablePlayers, nowMs),
-  };
-}
-
-export function resetCronSchedulerState(): void {
-  roundRobinCursor = 0;
-  currentCycleNumber = 0;
-  playerPollState.clear();
-}
-
-function getMaxPlayersForCycle(): number {
-  const estimatedBaseCostPerPlayer = 2;
-  const cycleRequestBudget = Math.max(
-    20,
-    Math.floor(RIOT_APP_RATE_PER_120_SECONDS * (FETCH_INTERVAL_MINUTES / 2) * 0.8),
+  const playerIds = players.map((player) => player.discordId);
+  const existingStates = await PlayerPollState.find({ playerId: { $in: playerIds } }).lean();
+  const stateByPlayerId = new Map<string, PersistedPlayerPollState>(
+    existingStates.map((state) => [state.playerId, normalizePollState(state)]),
   );
-  return Math.max(1, Math.floor(cycleRequestBudget / estimatedBaseCostPerPlayer));
-}
 
-function getStableActivePlayers(players: PlayerDocument[]): PlayerDocument[] {
-  return [...players].sort((a, b) => {
-    const aRegisteredAt = a.registeredAt instanceof Date ? a.registeredAt.getTime() : 0;
-    const bRegisteredAt = b.registeredAt instanceof Date ? b.registeredAt.getTime() : 0;
-    if (aRegisteredAt !== bRegisteredAt) return aRegisteredAt - bRegisteredAt;
-    return a.discordId.localeCompare(b.discordId);
-  });
-}
-
-function syncPlayerPollState(players: PlayerDocument[]): void {
-  const activeIds = new Set(players.map((player) => player.discordId));
+  const bulkOperations: Array<{
+    updateOne: {
+      filter: { playerId: string };
+      update: Record<string, unknown>;
+      upsert: true;
+    };
+  }> = [];
 
   for (const player of players) {
-    if (!playerPollState.has(player.discordId)) {
-      playerPollState.set(player.discordId, {});
+    const existingState = stateByPlayerId.get(player.discordId);
+    if (!existingState) {
+      const nextState = buildDefaultPollState(player);
+      stateByPlayerId.set(player.discordId, nextState);
+      bulkOperations.push({
+        updateOne: {
+          filter: { playerId: player.discordId },
+          update: { $setOnInsert: serializePollState(nextState) },
+          upsert: true,
+        },
+      });
+      continue;
+    }
+
+    if (existingState.puuid !== player.puuid) {
+      const nextState = {
+        ...existingState,
+        puuid: player.puuid,
+      };
+      stateByPlayerId.set(player.discordId, nextState);
+      bulkOperations.push({
+        updateOne: {
+          filter: { playerId: player.discordId },
+          update: { $set: { puuid: player.puuid } },
+          upsert: true,
+        },
+      });
     }
   }
 
-  for (const discordId of [...playerPollState.keys()]) {
-    if (!activeIds.has(discordId)) {
-      playerPollState.delete(discordId);
-    }
+  if (bulkOperations.length > 0) {
+    await PlayerPollState.bulkWrite(bulkOperations, { ordered: false });
   }
+
+  return stateByPlayerId;
 }
 
-function getPrioritizedGroups(players: PlayerDocument[], nowMs: number, cycleNumber: number): {
-  neverPolled: PlayerDocument[];
-  backlogPlayers: PlayerDocument[];
-  stalePlayers: PlayerDocument[];
-  roundRobinPool: PlayerDocument[];
-  freshlyServiced: PlayerDocument[];
-} {
-  const neverPolled = players.filter((player) => !playerPollState.get(player.discordId)?.lastProcessedAt);
-  const backlogPlayers = players.filter((player) => playerPollState.get(player.discordId)?.hasDeferredMatchBacklog);
-  const freshlyServiced = players.filter((player) => isFreshlyServicedPlayer(player, cycleNumber));
-  const stalePlayers = players
-    .filter((player) => isStalePlayer(player, nowMs, cycleNumber))
-    .sort((a, b) => getPlayerStalenessMs(b, nowMs) - getPlayerStalenessMs(a, nowMs));
+export async function persistPlayerPollState(
+  player: PlayerDocument,
+  state: PersistedPlayerPollState,
+): Promise<void> {
+  await PlayerPollState.updateOne(
+    { playerId: player.discordId },
+    { $set: serializePollState({ ...state, playerId: player.discordId, puuid: player.puuid }) },
+    { upsert: true },
+  );
+}
 
-  const prioritizedIds = new Set([
-    ...neverPolled.map((player) => player.discordId),
-    ...backlogPlayers.map((player) => player.discordId),
-    ...stalePlayers.map((player) => player.discordId),
-    ...freshlyServiced.map((player) => player.discordId),
-  ]);
+export function selectPlayersForCycles(
+  players: PlayerDocument[],
+  states: Map<string, PersistedPlayerPollState>,
+  nowMs: number,
+): CronSchedulerSelection {
+  const stablePlayers = [...players].sort(comparePlayersStable);
+  const hotCandidates = stablePlayers
+    .filter((player) => {
+      const state = states.get(player.discordId);
+      return state?.mode === 'hot' && isStateEligible(state, nowMs);
+    })
+    .sort((left, right) => compareHotPlayers(left, right, states, nowMs));
+  const baselineCandidates = stablePlayers
+    .filter((player) => {
+      const state = states.get(player.discordId);
+      return (state?.mode ?? 'baseline') === 'baseline' && isStateEligible(state, nowMs);
+    })
+    .sort((left, right) => compareBaselinePlayers(left, right, states, nowMs));
 
   return {
-    neverPolled,
-    backlogPlayers,
-    stalePlayers,
-    roundRobinPool: getRoundRobinPlayers(
-      players.filter((player) => !prioritizedIds.has(player.discordId)),
-    ),
-    freshlyServiced,
+    hotCandidates,
+    baselineCandidates,
+    eligibleHotCount: hotCandidates.length,
+    eligibleBaselineCount: baselineCandidates.length,
   };
 }
 
-function isStalePlayer(player: PlayerDocument, nowMs: number, cycleNumber: number): boolean {
-  const state = playerPollState.get(player.discordId);
-  if (!state?.lastProcessedAt) return false;
-  if (state.hasDeferredMatchBacklog) return false;
-  if (isFreshlyServicedPlayer(player, cycleNumber)) return false;
-  return nowMs - state.lastProcessedAt > STALE_PLAYER_WINDOW_MS;
+export function buildDefaultPollState(player: Pick<PlayerDocument, 'discordId' | 'puuid'>): PersistedPlayerPollState {
+  return {
+    playerId: player.discordId,
+    puuid: player.puuid,
+    mode: 'baseline',
+    lastProcessedAt: null,
+    lastRankPollAt: null,
+    lastMatchPollAt: null,
+    lastObservedActivityAt: null,
+    enteredHotAt: null,
+    consecutiveIdleHotPolls: 0,
+    unresolvedMatchCount: 0,
+    deferredMatchDetailCount: 0,
+    nextEligibleAt: null,
+  };
 }
 
-function isFreshlyServicedPlayer(player: PlayerDocument, cycleNumber: number): boolean {
-  const state = playerPollState.get(player.discordId);
-  if (state?.hasDeferredMatchBacklog) return false;
-  return Boolean(state?.skipMatchPollUntilCycle && state.skipMatchPollUntilCycle > cycleNumber);
+export function hasOutstandingHotWork(state: PersistedPlayerPollState | undefined): boolean {
+  return (state?.unresolvedMatchCount ?? 0) > 0 || (state?.deferredMatchDetailCount ?? 0) > 0;
 }
 
-function pickPlayersForCycle(
-  groups: {
-    neverPolled: PlayerDocument[];
-    backlogPlayers: PlayerDocument[];
-    stalePlayers: PlayerDocument[];
-    roundRobinPool: PlayerDocument[];
-    freshlyServiced: PlayerDocument[];
-  },
-  maxPlayersForCycle: number,
-): PlayerDocument[] {
-  const selectedPlayers: PlayerDocument[] = [];
-  const selectedIds = new Set<string>();
+function normalizePollState(
+  state: Partial<PersistedPlayerPollState> & Pick<PersistedPlayerPollState, 'playerId' | 'puuid'>,
+): PersistedPlayerPollState {
+  return {
+    playerId: state.playerId,
+    puuid: state.puuid,
+    mode: state.mode ?? 'baseline',
+    lastProcessedAt: state.lastProcessedAt ? new Date(state.lastProcessedAt) : null,
+    lastRankPollAt: state.lastRankPollAt ? new Date(state.lastRankPollAt) : null,
+    lastMatchPollAt: state.lastMatchPollAt ? new Date(state.lastMatchPollAt) : null,
+    lastObservedActivityAt: state.lastObservedActivityAt ? new Date(state.lastObservedActivityAt) : null,
+    enteredHotAt: state.enteredHotAt ? new Date(state.enteredHotAt) : null,
+    consecutiveIdleHotPolls: state.consecutiveIdleHotPolls ?? 0,
+    unresolvedMatchCount: state.unresolvedMatchCount ?? 0,
+    deferredMatchDetailCount: state.deferredMatchDetailCount ?? 0,
+    nextEligibleAt: state.nextEligibleAt ? new Date(state.nextEligibleAt) : null,
+  };
+}
 
-  for (const group of [
-    groups.neverPolled,
-    groups.backlogPlayers,
-    groups.stalePlayers,
-    groups.roundRobinPool,
-    groups.freshlyServiced,
-  ]) {
-    for (const player of group) {
-      if (selectedPlayers.length >= maxPlayersForCycle) {
-        return selectedPlayers;
-      }
-      if (selectedIds.has(player.discordId)) continue;
+function serializePollState(state: PersistedPlayerPollState): Record<string, unknown> {
+  return {
+    playerId: state.playerId,
+    puuid: state.puuid,
+    mode: state.mode,
+    lastProcessedAt: state.lastProcessedAt,
+    lastRankPollAt: state.lastRankPollAt,
+    lastMatchPollAt: state.lastMatchPollAt,
+    lastObservedActivityAt: state.lastObservedActivityAt,
+    enteredHotAt: state.enteredHotAt,
+    consecutiveIdleHotPolls: state.consecutiveIdleHotPolls,
+    unresolvedMatchCount: state.unresolvedMatchCount,
+    deferredMatchDetailCount: state.deferredMatchDetailCount,
+    nextEligibleAt: state.nextEligibleAt,
+  };
+}
 
-      selectedPlayers.push(player);
-      selectedIds.add(player.discordId);
-    }
+function comparePlayersStable(left: PlayerDocument, right: PlayerDocument): number {
+  const leftRegisteredAt = left.registeredAt instanceof Date ? left.registeredAt.getTime() : 0;
+  const rightRegisteredAt = right.registeredAt instanceof Date ? right.registeredAt.getTime() : 0;
+  if (leftRegisteredAt !== rightRegisteredAt) {
+    return leftRegisteredAt - rightRegisteredAt;
+  }
+  return left.discordId.localeCompare(right.discordId);
+}
+
+function compareHotPlayers(
+  left: PlayerDocument,
+  right: PlayerDocument,
+  states: Map<string, PersistedPlayerPollState>,
+  nowMs: number,
+): number {
+  const leftState = states.get(left.discordId);
+  const rightState = states.get(right.discordId);
+  const leftOutstanding = getOutstandingWeight(leftState);
+  const rightOutstanding = getOutstandingWeight(rightState);
+  if (leftOutstanding !== rightOutstanding) {
+    return rightOutstanding - leftOutstanding;
   }
 
-  return selectedPlayers;
-}
-
-function advanceRoundRobinCursor(roundRobinPool: PlayerDocument[], selectedPlayers: PlayerDocument[]): void {
-  if (roundRobinPool.length === 0) return;
-
-  const roundRobinIds = new Set(roundRobinPool.map((player) => player.discordId));
-  const selectedRoundRobinCount = selectedPlayers.filter((player) => roundRobinIds.has(player.discordId)).length;
-  roundRobinCursor = (roundRobinCursor + selectedRoundRobinCount) % roundRobinPool.length;
-}
-
-function getRoundRobinPlayers(players: PlayerDocument[]): PlayerDocument[] {
-  if (players.length === 0) return [];
-  const offset = roundRobinCursor % players.length;
-  return players.slice(offset).concat(players.slice(0, offset));
-}
-
-function getPlayerStalenessMs(player: PlayerDocument, nowMs: number): number {
-  const state = playerPollState.get(player.discordId);
-  if (state?.lastProcessedAt) {
-    return nowMs - state.lastProcessedAt;
+  const leftActivityAt = getComparableTime(leftState?.lastObservedActivityAt, nowMs);
+  const rightActivityAt = getComparableTime(rightState?.lastObservedActivityAt, nowMs);
+  if (leftActivityAt !== rightActivityAt) {
+    return rightActivityAt - leftActivityAt;
   }
-  if (player.registeredAt instanceof Date) {
-    return nowMs - player.registeredAt.getTime();
+
+  const leftEligibleAt = getComparableTime(leftState?.nextEligibleAt, 0);
+  const rightEligibleAt = getComparableTime(rightState?.nextEligibleAt, 0);
+  if (leftEligibleAt !== rightEligibleAt) {
+    return leftEligibleAt - rightEligibleAt;
   }
-  return Number.MAX_SAFE_INTEGER;
+
+  return comparePlayersStable(left, right);
 }
 
-function getOldestPlayerStalenessMs(players: PlayerDocument[], nowMs: number): number | null {
-  if (players.length === 0) return null;
-  return Math.max(...players.map((player) => getPlayerStalenessMs(player, nowMs)));
+function compareBaselinePlayers(
+  left: PlayerDocument,
+  right: PlayerDocument,
+  states: Map<string, PersistedPlayerPollState>,
+  nowMs: number,
+): number {
+  const leftState = states.get(left.discordId);
+  const rightState = states.get(right.discordId);
+  const leftNeverPolled = leftState?.lastProcessedAt ? 0 : 1;
+  const rightNeverPolled = rightState?.lastProcessedAt ? 0 : 1;
+  if (leftNeverPolled !== rightNeverPolled) {
+    return rightNeverPolled - leftNeverPolled;
+  }
+
+  const leftProcessedAt = getComparableTime(leftState?.lastProcessedAt, 0);
+  const rightProcessedAt = getComparableTime(rightState?.lastProcessedAt, 0);
+  if (leftProcessedAt !== rightProcessedAt) {
+    return leftProcessedAt - rightProcessedAt;
+  }
+
+  const leftEligibleAt = getComparableTime(leftState?.nextEligibleAt, 0);
+  const rightEligibleAt = getComparableTime(rightState?.nextEligibleAt, 0);
+  if (leftEligibleAt !== rightEligibleAt) {
+    return leftEligibleAt - rightEligibleAt;
+  }
+
+  return comparePlayersStable(left, right);
+}
+
+function getOutstandingWeight(state: PersistedPlayerPollState | undefined): number {
+  if (!state) return 0;
+  return state.deferredMatchDetailCount + state.unresolvedMatchCount;
+}
+
+function getComparableTime(date: Date | null | undefined, fallback: number): number {
+  return date instanceof Date ? date.getTime() : fallback;
+}
+
+function isStateEligible(state: PersistedPlayerPollState | undefined, nowMs: number): boolean {
+  if (!state?.nextEligibleAt) return true;
+  return state.nextEligibleAt.getTime() <= nowMs;
 }
