@@ -51,6 +51,8 @@ type DailyBreakdownSummary = {
   lines: string[];
 };
 
+const DISCORD_EMBED_FIELD_VALUE_LIMIT = 1024;
+
 function buildTacticsToolsProfileUrl(gameName: string, tagLine: string): string {
   return `https://tactics.tools/player/sg/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`;
 }
@@ -144,6 +146,25 @@ function buildDailyBreakdownSummary(day: DailyPointEntry): DailyBreakdownSummary
   return lines.length > 0 ? { day: day.day, lines } : null;
 }
 
+function fitBlocksToFieldLimit(blocks: string[], maxLength = DISCORD_EMBED_FIELD_VALUE_LIMIT): string {
+  if (blocks.length === 0) return 'No data.';
+
+  const accepted: string[] = [];
+  for (const block of blocks) {
+    const candidate = accepted.length === 0 ? block : `${accepted.join('\n\n')}\n\n${block}`;
+    if (candidate.length > maxLength) {
+      break;
+    }
+    accepted.push(block);
+  }
+
+  if (accepted.length === 0) {
+    return `${blocks[0]?.slice(0, Math.max(0, maxLength - 3)) ?? ''}...`;
+  }
+
+  return accepted.join('\n');
+}
+
 @Discord()
 export class Profile {
   @Slash({
@@ -215,19 +236,20 @@ export class Profile {
       const matchLpMap = buildMatchLpMap(profileData.dailyPoints as DailyPointEntry[] | undefined);
 
       const recentMatches = [...matches].slice(-5).reverse();
-      const recentMatchLinks = recentMatches.length > 0
-        ? recentMatches.map((match) => {
+      const recentMatchBlocks = recentMatches.map((match) => {
           const lpInfo = formatLpInfo(matchLpMap.get(match.matchId) ?? (match.lpStatus ? { lpStatus: match.lpStatus } : undefined));
           const placementTone = match.placement <= 4 ? '🟢' : '🔴';
-          const lpPart = lpInfo ? ` \`${lpInfo}\`` : '';
+          const lpPart = lpInfo ? `${lpInfo}` : '';
           const tacticsUrl = buildTacticsToolsMatchUrl(player.gameName, player.tagLine, match.matchId);
           const metaTftUrl = `${metatftProfileUrl}?match=${encodeURIComponent(match.matchId)}`;
 
           return [
             `${placementTone} **${formatOrdinal(match.placement)}**`,
-            `${formatMatchTimestamp(match.playedAt)}${lpPart} — [tactics.tools](${tacticsUrl}) | [MetaTFT](${metaTftUrl})`,
+            `\`${formatMatchTimestamp(match.playedAt)}\` ${lpPart} — [tactics.tools](${tacticsUrl}) | [MetaTFT](${metaTftUrl})`,
           ].join('\n');
-        }).join('\n\n')
+        });
+      const recentMatchLinks = recentMatchBlocks.length > 0
+        ? fitBlocksToFieldLimit(recentMatchBlocks)
         : 'No recent matches.';
 
       const fields: APIEmbedField[] = [
@@ -291,7 +313,7 @@ export class Profile {
 
         for (const day of dailyBreakdowns.slice(0, maxBreakdownDays)) {
           fields.push({
-            name: `Point Breakdown - ${day.day}`,
+            name: `${day.day}`,
             value: day.lines.join('\n'),
             inline: false,
           });
@@ -317,8 +339,29 @@ export class Profile {
         .setColor(embedColor)
         .setTimestamp();
 
+      logger.debug(
+        {
+          targetDiscordId: targetId,
+          fieldCount: fields.length,
+          fieldLengths: fields.map((field) => ({
+            name: field.name,
+            valueLength: field.value.length,
+          })),
+        },
+        '[profile] Rendering profile embed',
+      );
+
       await interaction.editReply({ embeds: [embed] });
     } catch (err: any) {
+      logger.error(
+        {
+          requesterId: interaction.user.id,
+          targetDiscordId: targetId,
+          error: err,
+        },
+        '[profile] Failed to render profile command',
+      );
+
       const userMessage = getPublicErrorMessage(err, {
         notFoundMessage: PUBLIC_ERROR_MESSAGES.playerNotFound,
         fallbackPrefix: 'Failed to fetch profile',
