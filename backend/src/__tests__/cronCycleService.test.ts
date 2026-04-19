@@ -218,6 +218,25 @@ describe('runCronCycle', () => {
     );
   });
 
+  it('does not treat a short queue wait as scheduler backpressure', async () => {
+    mockGetRiotClient.mockReturnValue({
+      getRequestMetricsSince: vi.fn().mockReturnValue([]),
+      getQueueSnapshot: vi.fn().mockReturnValue({
+        queuedRequests: 0,
+        activeRequests: 0,
+        blockedUntil: null,
+        blockedForMs: 999,
+        requestsLastSecond: 0,
+        requestsLastMinute: 0,
+        requestsLast120Seconds: 0,
+      }),
+    });
+
+    await runCronCycle({ cycleType: 'baseline', source: 'scheduled' });
+
+    expect(mockCaptureMatchesForPlayer).toHaveBeenCalledTimes(1);
+  });
+
   it('skips overlapping cycles of the same type', async () => {
     let release: (() => void) | undefined;
     const blocker = new Promise<void>((resolve) => {

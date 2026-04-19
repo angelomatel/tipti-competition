@@ -66,11 +66,34 @@ export const UTC8_OFFSET_MS = PHT_UTC_OFFSET_MS;
 
 /** Timeout in milliseconds for outbound Riot API requests. */
 export const RIOT_REQUEST_TIMEOUT_MS = 15_000;
-export const RIOT_APP_RATE_PER_SECOND = 18;
-export const RIOT_APP_RATE_PER_120_SECONDS = 90;
-export const RIOT_QUEUE_MAX_IN_FLIGHT = 3;
-export const SCHEDULER_MAX_PENDING_REQUESTS = 20;
-export const SCHEDULER_MAX_P95_QUEUE_WAIT_MS = 20_000;
+/**
+ * Production defaults are buffered below Riot's published starting production limits.
+ * Development defaults stay aligned with personal-key limits unless explicitly overridden.
+ */
+export const RIOT_APP_RATE_PER_SECOND = parsePositiveIntEnv(
+  process.env.RIOT_APP_RATE_PER_SECOND,
+  IS_PRODUCTION ? 40 : 20,
+);
+export const RIOT_APP_RATE_PER_120_SECONDS = parsePositiveIntEnv(
+  process.env.RIOT_APP_RATE_PER_120_SECONDS,
+  IS_PRODUCTION ? 4_800 : 100,
+);
+export const RIOT_QUEUE_MAX_IN_FLIGHT = parsePositiveIntEnv(
+  process.env.RIOT_QUEUE_MAX_IN_FLIGHT,
+  IS_PRODUCTION ? 6 : 3,
+);
+export const SCHEDULER_MAX_PENDING_REQUESTS = parsePositiveIntEnv(
+  process.env.SCHEDULER_MAX_PENDING_REQUESTS,
+  IS_PRODUCTION ? 60 : 20,
+);
+export const SCHEDULER_MAX_P95_QUEUE_WAIT_MS = parsePositiveIntEnv(
+  process.env.SCHEDULER_MAX_P95_QUEUE_WAIT_MS,
+  IS_PRODUCTION ? 45_000 : 20_000,
+);
+export const SCHEDULER_MAX_BLOCKED_FOR_MS = parsePositiveIntEnv(
+  process.env.SCHEDULER_MAX_BLOCKED_FOR_MS,
+  IS_PRODUCTION ? 5_000 : 1_000,
+);
 export const MATCH_ID_FETCH_COUNT_BASELINE = 10;
 export const MATCH_ID_FETCH_COUNT_HOT = 10;
 export const MATCH_DETAIL_FETCH_CAP_BASELINE = 1;

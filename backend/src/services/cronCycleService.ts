@@ -8,6 +8,7 @@ import {
   HOT_POLL_INTERVAL_SECONDS,
   HOT_RANK_REFRESH_INTERVAL_MINUTES,
   RIOT_APP_RATE_PER_120_SECONDS,
+  SCHEDULER_MAX_BLOCKED_FOR_MS,
   SCHEDULER_MAX_P95_QUEUE_WAIT_MS,
   SCHEDULER_MAX_PENDING_REQUESTS,
 } from '@/constants';
@@ -382,7 +383,7 @@ async function countOutstandingMatchAttribution(puuid: string): Promise<number> 
 function hasQueuePressure(riotClient: ReturnType<typeof getRiotClient>, nowMs: number): boolean {
   const queueSnapshot = getQueueBackpressureSnapshot(riotClient, nowMs);
   return queueSnapshot.queuedRequests >= SCHEDULER_MAX_PENDING_REQUESTS
-    || queueSnapshot.blockedForMs > 0
+    || queueSnapshot.blockedForMs >= SCHEDULER_MAX_BLOCKED_FOR_MS
     || queueSnapshot.p95QueueWaitMs >= SCHEDULER_MAX_P95_QUEUE_WAIT_MS;
 }
 
