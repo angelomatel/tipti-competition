@@ -1,9 +1,12 @@
-import { CRON_PLAYER_CONCURRENCY } from '@/constants';
+import {
+  CRON_PLAYER_CONCURRENCY,
+  HOT_PLAYER_TTL_MINUTES,
+} from '@/constants';
 import { PlayerPollState } from '@/db/models/PlayerPollState';
 import type { PlayerDocument } from '@/types/Player';
 import type { IPlayerPollState } from '@/types/PlayerPollState';
 
-export interface PersistedPlayerPollState extends IPlayerPollState {}
+export type PersistedPlayerPollState = IPlayerPollState;
 
 export interface CronSchedulerSelection {
   hotCandidates: PlayerDocument[];
@@ -36,6 +39,7 @@ export async function syncActivePollStates(
       upsert: true;
     };
   }> = [];
+  const nowMs = Date.now();
 
   for (const player of players) {
     const existingState = stateByPlayerId.get(player.discordId);
@@ -46,6 +50,19 @@ export async function syncActivePollStates(
         updateOne: {
           filter: { playerId: player.discordId },
           update: { $setOnInsert: serializePollState(nextState) },
+          upsert: true,
+        },
+      });
+      continue;
+    }
+
+    const normalizedState = normalizeStaleHotState(existingState, nowMs);
+    if (normalizedState !== existingState) {
+      stateByPlayerId.set(player.discordId, normalizedState);
+      bulkOperations.push({
+        updateOne: {
+          filter: { playerId: player.discordId },
+          update: { $set: serializePollState(normalizedState) },
           upsert: true,
         },
       });
@@ -193,16 +210,22 @@ function compareHotPlayers(
     return rightOutstanding - leftOutstanding;
   }
 
-  const leftActivityAt = getComparableTime(leftState?.lastObservedActivityAt, nowMs);
-  const rightActivityAt = getComparableTime(rightState?.lastObservedActivityAt, nowMs);
-  if (leftActivityAt !== rightActivityAt) {
-    return rightActivityAt - leftActivityAt;
+  const leftProcessedAt = getComparableTime(leftState?.lastProcessedAt, 0);
+  const rightProcessedAt = getComparableTime(rightState?.lastProcessedAt, 0);
+  if (leftProcessedAt !== rightProcessedAt) {
+    return leftProcessedAt - rightProcessedAt;
   }
 
   const leftEligibleAt = getComparableTime(leftState?.nextEligibleAt, 0);
   const rightEligibleAt = getComparableTime(rightState?.nextEligibleAt, 0);
   if (leftEligibleAt !== rightEligibleAt) {
     return leftEligibleAt - rightEligibleAt;
+  }
+
+  const leftActivityAt = getComparableTime(leftState?.lastObservedActivityAt, nowMs);
+  const rightActivityAt = getComparableTime(rightState?.lastObservedActivityAt, nowMs);
+  if (leftActivityAt !== rightActivityAt) {
+    return rightActivityAt - leftActivityAt;
   }
 
   return comparePlayersStable(left, right);
@@ -212,7 +235,7 @@ function compareBaselinePlayers(
   left: PlayerDocument,
   right: PlayerDocument,
   states: Map<string, PersistedPlayerPollState>,
-  nowMs: number,
+  _nowMs: number,
 ): number {
   const leftState = states.get(left.discordId);
   const rightState = states.get(right.discordId);
@@ -249,4 +272,36 @@ function getComparableTime(date: Date | null | undefined, fallback: number): num
 function isStateEligible(state: PersistedPlayerPollState | undefined, nowMs: number): boolean {
   if (!state?.nextEligibleAt) return true;
   return state.nextEligibleAt.getTime() <= nowMs;
+}
+
+function normalizeStaleHotState(
+  state: PersistedPlayerPollState,
+  nowMs: number,
+): PersistedPlayerPollState {
+  if (state.mode !== 'hot' || hasOutstandingHotWork(state)) {
+    return state;
+  }
+
+  const cooldownReferenceMs = Math.max(
+    getComparableTime(state.lastObservedActivityAt, 0),
+    getComparableTime(state.lastProcessedAt, 0),
+    getComparableTime(state.enteredHotAt, 0),
+  );
+
+  if (cooldownReferenceMs === 0) {
+    return state;
+  }
+
+  const staleThresholdMs = HOT_PLAYER_TTL_MINUTES * 60 * 1_000;
+  if (nowMs - cooldownReferenceMs < staleThresholdMs) {
+    return state;
+  }
+
+  return {
+    ...state,
+    mode: 'baseline',
+    enteredHotAt: null,
+    consecutiveIdleHotPolls: 0,
+    nextEligibleAt: new Date(nowMs),
+  };
 }
