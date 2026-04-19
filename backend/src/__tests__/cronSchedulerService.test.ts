@@ -150,7 +150,8 @@ describe('cronSchedulerService', () => {
   });
 
   it('demotes stale hot players back to baseline during poll-state sync', async () => {
-    const now = new Date('2026-02-01T00:20:00.000Z');
+    // lastObservedActivityAt must be > HOT_PLAYER_TTL_MINUTES (75) minutes in the past.
+    const now = new Date('2026-02-01T02:00:00.000Z');
     vi.useFakeTimers();
     try {
       vi.setSystemTime(now);

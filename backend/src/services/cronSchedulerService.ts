@@ -1,5 +1,6 @@
 import {
   CRON_PLAYER_CONCURRENCY,
+  FETCH_INTERVAL_MINUTES,
   HOT_PLAYER_TTL_MINUTES,
 } from '@/constants';
 import { PlayerPollState } from '@/db/models/PlayerPollState';
@@ -231,22 +232,39 @@ function compareHotPlayers(
   return comparePlayersStable(left, right);
 }
 
+/**
+ * Players are eligible for starvation priority if they have been polled before but not within
+ * 2× the baseline interval. This ensures no baseline player is indefinitely skipped under load.
+ */
+const BASELINE_STARVATION_THRESHOLD_MS = 2 * FETCH_INTERVAL_MINUTES * 60 * 1_000;
+
 function compareBaselinePlayers(
   left: PlayerDocument,
   right: PlayerDocument,
   states: Map<string, PersistedPlayerPollState>,
-  _nowMs: number,
+  nowMs: number,
 ): number {
   const leftState = states.get(left.discordId);
   const rightState = states.get(right.discordId);
+
+  // Never-polled players come first.
   const leftNeverPolled = leftState?.lastProcessedAt ? 0 : 1;
   const rightNeverPolled = rightState?.lastProcessedAt ? 0 : 1;
   if (leftNeverPolled !== rightNeverPolled) {
     return rightNeverPolled - leftNeverPolled;
   }
 
+  // Starved players (polled before but not recently) come next, ahead of fresh peers.
+  // This prevents any single player from being indefinitely skipped under queue pressure.
   const leftProcessedAt = getComparableTime(leftState?.lastProcessedAt, 0);
   const rightProcessedAt = getComparableTime(rightState?.lastProcessedAt, 0);
+  const leftStarved = leftProcessedAt > 0 && nowMs - leftProcessedAt >= BASELINE_STARVATION_THRESHOLD_MS ? 1 : 0;
+  const rightStarved = rightProcessedAt > 0 && nowMs - rightProcessedAt >= BASELINE_STARVATION_THRESHOLD_MS ? 1 : 0;
+  if (leftStarved !== rightStarved) {
+    return rightStarved - leftStarved;
+  }
+
+  // Among equally-starved (or equally-fresh) players, oldest lastProcessedAt goes first.
   if (leftProcessedAt !== rightProcessedAt) {
     return leftProcessedAt - rightProcessedAt;
   }

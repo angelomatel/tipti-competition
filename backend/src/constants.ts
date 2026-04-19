@@ -24,7 +24,10 @@ export const BACKEND_MODE = parseBackendMode(process.env.BACKEND_MODE);
 export const FETCH_INTERVAL_MINUTES = 5;
 export const CRON_PLAYER_CONCURRENCY = 4;
 export const HOT_POLL_INTERVAL_SECONDS = 60;
-export const HOT_PLAYER_TTL_MINUTES = 15;
+// Riot's ranked endpoint typically lags 30–75 min after a match ends before publishing LP.
+// This TTL must exceed that lag so hot players are still polled when LP finally appears.
+// Measured p75 lag across production data: ~74 min. Set to 75 for p75 coverage.
+export const HOT_PLAYER_TTL_MINUTES = 75;
 export const HOT_IDLE_POLLS_TO_COOLDOWN = 3;
 export const COLD_DISCOVERY_RESERVE_PER_MINUTE = 10;
 export const HOT_RANK_REFRESH_INTERVAL_MINUTES = 5;
@@ -96,7 +99,7 @@ export const SCHEDULER_MAX_BLOCKED_FOR_MS = parsePositiveIntEnv(
 );
 export const MATCH_ID_FETCH_COUNT_BASELINE = 10;
 export const MATCH_ID_FETCH_COUNT_HOT = 10;
-export const MATCH_DETAIL_FETCH_CAP_BASELINE = 1;
+export const MATCH_DETAIL_FETCH_CAP_BASELINE = 3;
 export const MATCH_DETAIL_FETCH_CAP_HOT = MATCH_ID_FETCH_COUNT_HOT;
 export const MATCH_ID_FETCH_COUNT_NORMAL = 10;
 export const MATCH_ID_FETCH_COUNT_CATCHUP = 25;
