@@ -49,4 +49,6 @@ export interface GodStanding {
   score: number;
   playerCount: number;
   isEliminated: boolean;
+  isAcceptingSubjects: boolean;
+  registrationMessage: string | null;
 }

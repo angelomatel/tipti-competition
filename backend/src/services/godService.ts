@@ -2,6 +2,7 @@ import { God } from '@/db/models/God';
 import { Player } from '@/db/models/Player';
 import { GOD_DEFINITIONS, GOD_SCORE_TOP_N } from '@/constants';
 import { computePlayerScoreTotals } from '@/services/scoringEngine';
+import { applyGodRegistrationAvailability } from '@/services/registrationRulesService';
 import type { GodDocument, GodStanding } from '@/types/God';
 import type { PlayerDocument } from '@/types/Player';
 
@@ -81,7 +82,7 @@ export async function getGodStandings(): Promise<GodStanding[]> {
     playersByGod.set(player.godSlug, godPlayers);
   }
 
-  const standings: GodStanding[] = gods.map((god) => {
+  const standings = gods.map((god) => {
     const godPlayers = playersByGod.get(god.slug) ?? [];
     const scoringPlayers = godPlayers.filter((player) => !player.isEliminatedFromGod);
     const scores = scoringPlayers
@@ -112,5 +113,5 @@ export async function getGodStandings(): Promise<GodStanding[]> {
     return b.score - a.score;
   });
 
-  return standings;
+  return applyGodRegistrationAvailability(standings);
 }

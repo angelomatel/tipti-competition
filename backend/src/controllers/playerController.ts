@@ -45,6 +45,17 @@ export async function createPlayer(req: Request, res: Response, next: NextFuncti
       res.status(409).json({ error: err.message });
       return;
     }
+    if (err.message?.includes('Registration is closed')) {
+      res.status(403).json({ error: err.message });
+      return;
+    }
+    if (
+      err.message?.includes('not accepting subjects at this moment')
+      || err.message?.includes('no longer available for registration')
+    ) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
     next(err);
   }
 }

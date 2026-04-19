@@ -3,11 +3,12 @@ import {
   getTournamentSettings,
   updateTournamentSettings,
 } from '@/services/tournamentService';
+import { getTournamentRegistrationStatus } from '@/services/registrationRulesService';
 
 export async function getTournament(_req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const settings = await getTournamentSettings();
-    res.json({ settings });
+    res.json({ settings, status: getTournamentRegistrationStatus(settings) });
   } catch (err) { next(err); }
 }
 
@@ -30,6 +31,6 @@ export async function updateTournament(req: Request, res: Response, next: NextFu
     }
 
     const settings = await updateTournamentSettings(updates);
-    res.json({ settings });
+    res.json({ settings, status: getTournamentRegistrationStatus(settings) });
   } catch (err) { next(err); }
 }

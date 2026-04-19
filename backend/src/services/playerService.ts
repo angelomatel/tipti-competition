@@ -7,6 +7,7 @@ import { findRankedEntry } from '@/lib/riotUtils';
 import { normalizeLP } from '@/lib/normalizeLP';
 import { PointTransaction } from '@/db/models/PointTransaction';
 import { logger } from '@/lib/logger';
+import { assertRegistrationAllowed } from '@/services/registrationRulesService';
 import type { PlayerDocument } from '@/types/Player';
 import type { RegisterPlayerRequest } from '@/types/User';
 
@@ -25,11 +26,24 @@ function isMongoDuplicateKeyError(err: unknown): err is { code: number; message?
 }
 
 export async function registerPlayer(data: RegisterPlayerRequest): Promise<PlayerDocument> {
-  const { discordId, gameName, tagLine, addedBy, discordAvatarUrl, discordUsername, godSlug } = data;
+  const {
+    discordId,
+    gameName,
+    tagLine,
+    addedBy,
+    discordAvatarUrl,
+    discordUsername,
+    godSlug,
+    enforceRegistrationRules = false,
+  } = data;
 
   const existing = await Player.findOne({ discordId });
   if (existing) {
     if (!existing.isActive) {
+      if (enforceRegistrationRules) {
+        await assertRegistrationAllowed(godSlug);
+      }
+
       // Re-fetch current rank from Riot and create a fresh baseline
       const riot = getRiotClient();
       const leagueEntries = await riot.getTftLeagueByPuuid(existing.puuid);
@@ -87,6 +101,10 @@ export async function registerPlayer(data: RegisterPlayerRequest): Promise<Playe
       return existing;
     }
     throw new Error(`Player with discordId ${discordId} is already registered.`);
+  }
+
+  if (enforceRegistrationRules) {
+    await assertRegistrationAllowed(godSlug);
   }
 
   const riot = getRiotClient();

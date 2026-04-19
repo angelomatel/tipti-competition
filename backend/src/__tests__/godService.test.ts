@@ -68,6 +68,8 @@ describe('getGodStandings optimized aggregation', () => {
         score: 75,
         playerCount: 3,
         isEliminated: false,
+        isAcceptingSubjects: true,
+        registrationMessage: null,
       },
       {
         slug: 'hades',
@@ -76,6 +78,8 @@ describe('getGodStandings optimized aggregation', () => {
         score: 0,
         playerCount: 1,
         isEliminated: true,
+        isAcceptingSubjects: false,
+        registrationMessage: null,
       },
     ]);
   });

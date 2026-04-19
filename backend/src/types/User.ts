@@ -6,4 +6,5 @@ export interface RegisterPlayerRequest {
   discordAvatarUrl?: string;
   discordUsername?: string;
   godSlug: string;
+  enforceRegistrationRules?: boolean;
 }
