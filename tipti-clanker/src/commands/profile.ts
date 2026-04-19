@@ -8,8 +8,8 @@ import {
 import { Discord, Slash, SlashOption } from 'discordx';
 import { getPlayer, getLeaderboard, getTournamentSettings } from '@/lib/backendClient';
 import { formatOrdinal, formatTierDisplay } from '@/lib/format';
-import { EMBED_COLORS, RANK_EMOJIS, GOD_COLORS, SOURCE_LABELS } from '@/lib/constants';
-import { Tier } from '@/types/Rank';
+import { EMBED_COLORS, RANK_EMOJIS, GOD_COLORS } from '@/lib/constants';
+import type { Tier } from '@/types/Rank';
 import { logger } from '@/lib/logger';
 import { dateToPhtDayStr, getCurrentPhtDay } from '@/lib/dateUtils';
 import {
@@ -28,6 +28,7 @@ type MatchEntry = {
 };
 
 type DailyPointTransaction = {
+  type?: string;
   value: number;
   source: string;
   matchId?: string | null;
@@ -102,35 +103,19 @@ function buildMatchLpMap(dailyPoints: DailyPointEntry[] | undefined): Map<string
   return matchLpMap;
 }
 
-function truncateFieldValue(lines: string[], maxLength = 1024): string {
-  if (lines.length === 0) return 'No data.';
+function buildDailyBreakdownValue(day: DailyPointEntry): string {
+  let matchTotal = 0;
+  let godTotal = 0;
 
-  const accepted: string[] = [];
-  for (const line of lines) {
-    const candidate = accepted.length === 0 ? line : `${accepted.join('\n')}\n${line}`;
-    if (candidate.length > maxLength) {
-      if (accepted.length === 0) {
-        return `${line.slice(0, Math.max(0, maxLength - 1))}...`;
-      }
-      return `${accepted.join('\n')}\n...`;
+  for (const tx of day.transactions) {
+    if (tx.type === 'match' || tx.source === 'lp_data' || tx.source === 'lp_delta') {
+      matchTotal += tx.value;
+    } else {
+      godTotal += tx.value;
     }
-    accepted.push(line);
   }
 
-  return accepted.join('\n');
-}
-
-function formatTransactionLine(tx: DailyPointTransaction): string {
-  const placementText = typeof tx.placement === 'number' ? ` (${formatOrdinal(tx.placement)})` : '';
-  const label = (tx.source === 'lp_data' || tx.source === 'lp_delta')
-    ? 'LP Delta'
-    : (SOURCE_LABELS[tx.source] ?? tx.source);
-
-  if (tx.lpStatus === 'unknown') return `${label}${placementText}: LP unknown`;
-  if (tx.lpStatus === 'resolving') return `${label}${placementText}: LP resolving`;
-
-  const unit = tx.source === 'lp_data' || tx.source === 'lp_delta' ? 'LP' : 'pts';
-  return `${label}${placementText}: ${formatSignedValue(tx.value, unit)}`;
+  return `Match: ${formatSignedValue(matchTotal, 'pts')}\nGod: ${formatSignedValue(godTotal, 'pts')}`;
 }
 
 @Discord()
@@ -211,24 +196,49 @@ export class Profile {
             ? `${formatOrdinal(match.placement)} | ${lpInfo}`
             : formatOrdinal(match.placement);
           return `[${linkLabel}](${buildTacticsToolsMatchUrl(player.gameName, player.tagLine, match.matchId)})`;
-        }).join(' | ')
+        }).join('\n')
         : 'No recent matches.';
 
       const fields: APIEmbedField[] = [
         {
-          name: 'Rank | W/L | Games today',
-          value: `${tierEmoji} ${tierDisplay} | ${player.currentWins}W / ${player.currentLosses}L | ${gamesToday}`,
+          name: 'Rank',
+          value: `${tierEmoji} ${tierDisplay}`,
+          inline: true,
+        },
+        {
+          name: 'W/L',
+          value: `${player.currentWins}W / ${player.currentLosses}L`,
+          inline: true,
+        },
+        {
+          name: 'Games today',
+          value: `${gamesToday}`,
+          inline: true,
+        },
+        {
+          name: 'Score Points',
+          value: `${scorePoints}`,
+          inline: true,
+        },
+        {
+          name: 'Gains Today',
+          value: `${formatSignedValue(gainsToday, 'pts')}`,
+          inline: true,
+        },
+        {
+          name: '\u200B',
+          value: '\u200B',
           inline: false,
         },
         {
-          name: 'Score Points | Gains Today',
-          value: `${scorePoints} | ${formatSignedValue(gainsToday, 'pts')}`,
-          inline: false,
+          name: 'God',
+          value: `${godName}${godTitle}`,
+          inline: true,
         },
         {
-          name: 'God | Links',
-          value: `${godName}${godTitle} | [tactics.tools](${tacticsToolsProfileUrl}) | [metatft](${metatftProfileUrl})`,
-          inline: false,
+          name: 'Links',
+          value: `[tactics.tools](${tacticsToolsProfileUrl}) | [metatft](${metatftProfileUrl})`,
+          inline: true,
         },
         {
           name: 'Recent Matches',
@@ -247,15 +257,9 @@ export class Profile {
       } else {
         const maxBreakdownDays = dailyPoints.length > 21 ? 20 : dailyPoints.length;
         for (const day of dailyPoints.slice(0, maxBreakdownDays)) {
-          const total = day.transactions.reduce((sum, tx) => sum + tx.value, 0);
-          const value = truncateFieldValue([
-            `Total: ${formatSignedValue(total, 'pts')}`,
-            ...day.transactions.map((tx) => formatTransactionLine(tx)),
-          ]);
-
           fields.push({
             name: `Point Breakdown - ${day.day}`,
-            value,
+            value: buildDailyBreakdownValue(day),
             inline: false,
           });
         }
