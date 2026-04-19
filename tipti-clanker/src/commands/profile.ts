@@ -11,7 +11,7 @@ import { formatOrdinal, formatTierDisplay } from '@/lib/format';
 import { EMBED_COLORS, RANK_EMOJIS, GOD_COLORS } from '@/lib/constants';
 import type { Tier } from '@/types/Rank';
 import { logger } from '@/lib/logger';
-import { dateToPhtDayStr, getCurrentPhtDay } from '@/lib/dateUtils';
+import { dateToPhtDayStr, getCurrentPhtDay, getPhtTimeZone } from '@/lib/dateUtils';
 import {
   getPublicErrorMessage,
   PUBLIC_ERROR_MESSAGES,
@@ -46,6 +46,11 @@ type MatchLpInfo = {
   lpStatus: LpStatus;
 };
 
+type DailyBreakdownSummary = {
+  day: string;
+  lines: string[];
+};
+
 function buildTacticsToolsProfileUrl(gameName: string, tagLine: string): string {
   return `https://tactics.tools/player/sg/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`;
 }
@@ -62,10 +67,19 @@ function formatSignedValue(value: number, unit: string): string {
   return `${value >= 0 ? '+' : ''}${value} ${unit}`;
 }
 
+function formatMatchTimestamp(date: string | Date): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: getPhtTimeZone(),
+  }).format(new Date(date));
+}
+
 function formatLpInfo(info: MatchLpInfo | undefined): string | null {
   if (!info) return null;
-  if (info.lpStatus === 'unknown') return 'LP unknown';
-  if (info.lpStatus === 'resolving') return 'LP resolving';
   if (info.lpStatus === 'known' && typeof info.value === 'number') {
     return formatSignedValue(info.value, 'LP');
   }
@@ -103,7 +117,7 @@ function buildMatchLpMap(dailyPoints: DailyPointEntry[] | undefined): Map<string
   return matchLpMap;
 }
 
-function buildDailyBreakdownValue(day: DailyPointEntry): string {
+function buildDailyBreakdownSummary(day: DailyPointEntry): DailyBreakdownSummary | null {
   let matchTotal = 0;
   let godTotal = 0;
 
@@ -115,7 +129,19 @@ function buildDailyBreakdownValue(day: DailyPointEntry): string {
     }
   }
 
-  return `Match: ${formatSignedValue(matchTotal, 'pts')}\nGod: ${formatSignedValue(godTotal, 'pts')}`;
+  if (matchTotal === 0 && godTotal === 0) {
+    return null;
+  }
+
+  const lines: string[] = [];
+  if (matchTotal !== 0) {
+    lines.push(`Match: ${formatSignedValue(matchTotal, 'pts')}`);
+  }
+  if (godTotal !== 0) {
+    lines.push(`God: ${formatSignedValue(godTotal, 'pts')}`);
+  }
+
+  return lines.length > 0 ? { day: day.day, lines } : null;
 }
 
 @Discord()
@@ -192,11 +218,16 @@ export class Profile {
       const recentMatchLinks = recentMatches.length > 0
         ? recentMatches.map((match) => {
           const lpInfo = formatLpInfo(matchLpMap.get(match.matchId) ?? (match.lpStatus ? { lpStatus: match.lpStatus } : undefined));
-          const linkLabel = lpInfo
-            ? `${formatOrdinal(match.placement)} | ${lpInfo}`
-            : formatOrdinal(match.placement);
-          return `[${linkLabel}](${buildTacticsToolsMatchUrl(player.gameName, player.tagLine, match.matchId)})`;
-        }).join('\n')
+          const placementTone = match.placement <= 4 ? '🟢' : '🔴';
+          const lpPart = lpInfo ? ` \`${lpInfo}\`` : '';
+          const tacticsUrl = buildTacticsToolsMatchUrl(player.gameName, player.tagLine, match.matchId);
+          const metaTftUrl = `${metatftProfileUrl}?match=${encodeURIComponent(match.matchId)}`;
+
+          return [
+            `${placementTone} **${formatOrdinal(match.placement)}**`,
+            `${formatMatchTimestamp(match.playedAt)}${lpPart} — [tactics.tools](${tacticsUrl}) | [MetaTFT](${metaTftUrl})`,
+          ].join('\n');
+        }).join('\n\n')
         : 'No recent matches.';
 
       const fields: APIEmbedField[] = [
@@ -226,18 +257,13 @@ export class Profile {
           inline: true,
         },
         {
-          name: '\u200B',
-          value: '\u200B',
-          inline: false,
-        },
-        {
           name: 'God',
           value: `${godName}${godTitle}`,
           inline: true,
         },
         {
           name: 'Links',
-          value: `[tactics.tools](${tacticsToolsProfileUrl}) | [metatft](${metatftProfileUrl})`,
+          value: `[tactics.tools](${tacticsToolsProfileUrl})\n[MetaTFT](${metatftProfileUrl})`,
           inline: true,
         },
         {
@@ -247,27 +273,34 @@ export class Profile {
         },
       ];
 
-      const dailyPoints: DailyPointEntry[] = [...(profileData.dailyPoints ?? [])].reverse();
-      if (dailyPoints.length === 0) {
+      const dailyBreakdowns = [...(profileData.dailyPoints ?? [])]
+        .sort((a: DailyPointEntry, b: DailyPointEntry) => a.day.localeCompare(b.day))
+        .map((day: DailyPointEntry) => buildDailyBreakdownSummary(day))
+        .filter((day): day is DailyBreakdownSummary => day !== null);
+
+      if (dailyBreakdowns.length === 0) {
         fields.push({
           name: 'Point Breakdown',
           value: 'No point transactions yet.',
           inline: false,
         });
       } else {
-        const maxBreakdownDays = dailyPoints.length > 21 ? 20 : dailyPoints.length;
-        for (const day of dailyPoints.slice(0, maxBreakdownDays)) {
+        const availableBreakdownFields = 25 - fields.length;
+        const needsOverflowNote = dailyBreakdowns.length > availableBreakdownFields;
+        const maxBreakdownDays = needsOverflowNote ? Math.max(0, availableBreakdownFields - 1) : availableBreakdownFields;
+
+        for (const day of dailyBreakdowns.slice(0, maxBreakdownDays)) {
           fields.push({
             name: `Point Breakdown - ${day.day}`,
-            value: buildDailyBreakdownValue(day),
+            value: day.lines.join('\n'),
             inline: false,
           });
         }
 
-        if (dailyPoints.length > maxBreakdownDays) {
+        if (dailyBreakdowns.length > maxBreakdownDays) {
           fields.push({
             name: 'Point Breakdown',
-            value: `Showing latest ${maxBreakdownDays} days out of ${dailyPoints.length}.`,
+            value: `Showing ${maxBreakdownDays} days out of ${dailyBreakdowns.length}.`,
             inline: false,
           });
         }
