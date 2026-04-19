@@ -8,7 +8,7 @@ const RegistrationInfo = () => (
         Registration
       </h4>
       <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-        Use <code className="text-accent-cyan">/register</code> in Discord. Enter your Riot ID, then choose your god from the dropdown. Your god choice is permanent for the tournament.
+        Use <code className="text-accent-cyan">/register</code> in Discord during Phase 1. Enter your Riot ID, then choose your god from the dropdown. Your god choice is permanent for the tournament.
       </p>
     </div>
     <div

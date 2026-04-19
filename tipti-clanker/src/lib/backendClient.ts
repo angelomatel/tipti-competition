@@ -67,6 +67,7 @@ export interface RegisterPlayerRequest {
   discordAvatarUrl?: string;
   discordUsername?: string;
   godSlug: string;
+  enforceRegistrationRules?: boolean;
 }
 
 export function registerPlayer(data: RegisterPlayerRequest): Promise<any> {

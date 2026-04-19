@@ -25,12 +25,6 @@ import { sendRegistrationFailureNotice } from '@/lib/registrationFailureNotice';
 
 const GOD_SELECTION_TIMEOUT_MS = 180_000;
 
-function hasTournamentStarted(settingsResponse: any): boolean {
-  const startDate = settingsResponse?.settings?.startDate ?? settingsResponse?.startDate;
-
-  return !!startDate && new Date() >= new Date(startDate);
-}
-
 @Discord()
 export class Register {
   @Slash({
@@ -114,29 +108,47 @@ export class Register {
     }
 
     let eventStarted = false;
+    let registrationClosedMessage: string | null = null;
     try {
       const settings = await getTournamentSettings();
-      eventStarted = hasTournamentStarted(settings);
-    } catch {
-      eventStarted = false;
+      eventStarted = Boolean(settings?.status?.hasStarted);
+      if (settings?.status?.isRegistrationOpen === false) {
+        registrationClosedMessage = settings?.status?.registrationClosedReason ?? 'Registration is closed.';
+      }
+    } catch (err) {
+      const userMessage = getPublicErrorMessage(err);
+      await handleFailure(userMessage, { error: err });
+      return;
+    }
+
+    if (registrationClosedMessage) {
+      await handleFailure(registrationClosedMessage);
+      return;
     }
 
     let gods: any[] = [];
     try {
       gods = await listGods();
-    } catch {
-      gods = GOD_CHOICES.map((g) => ({ ...g, isEliminated: false, playerCount: 0 }));
+    } catch (err) {
+      const userMessage = getPublicErrorMessage(err);
+      await handleFailure(userMessage, { error: err });
+      return;
     }
 
+    const unavailableGodLabels = gods
+      .filter((god: any) => !god.isEliminated && god.isAcceptingSubjects === false)
+      .map((god: any) => god.name);
     const options = GOD_CHOICES
       .filter((god) => {
         const godData = gods.find((g: any) => g.slug === god.slug);
-        return !(godData?.isEliminated ?? false);
+        return godData?.isAcceptingSubjects !== false;
       })
       .map((god) => {
         const godData = gods.find((g: any) => g.slug === god.slug);
         const playerCount = godData?.playerCount ?? 0;
-        const description = eventStarted ? `${playerCount} player${playerCount !== 1 ? 's' : ''}` : god.title;
+        const description = eventStarted
+          ? `${playerCount} player${playerCount !== 1 ? 's' : ''}`
+          : god.title;
 
         return new StringSelectMenuOptionBuilder()
           .setLabel(`${god.name} — ${god.title}`)
@@ -144,6 +156,11 @@ export class Register {
           .setValue(god.slug)
           .setDefault(false);
       });
+
+    if (options.length === 0) {
+      await handleFailure('No gods are accepting subjects at this moment. Please try again later.');
+      return;
+    }
 
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId('god_select')
@@ -157,6 +174,9 @@ export class Register {
       .setDescription(
         `Account: **${gameName}#${tagLine}**\n\n` +
         '> God buffs activate **after Phase 1** (Day 6+). During Phase 1, all gods play without buffs.\n\n' +
+        (unavailableGodLabels.length > 0
+          ? `Temporarily unavailable: **${unavailableGodLabels.join(', ')}**.\nGods with significantly more players than the rest are hidden until the numbers even out.\n\n`
+          : '') +
         'You can view each god\'s lore and buffs in <#1487949751587573861> or at\n' +
         'https://tipti-bootcamp.vercel.app/leaderboard/gods\n\n' +
         '-# [See the points formula here](https://tipti-bootcamp.vercel.app/rules)',
@@ -188,6 +208,7 @@ export class Register {
         discordAvatarUrl: interaction.user.displayAvatarURL({ extension: 'png', size: 128 }),
         discordUsername: interaction.user.username,
         godSlug,
+        enforceRegistrationRules: true,
       });
 
       const player = result.player;

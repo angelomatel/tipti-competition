@@ -62,6 +62,16 @@ export function isAlreadyRegisteredError(error: unknown): boolean {
   return isHttpStatus(error, 409) && normalizedMessage.includes('already registered');
 }
 
+export function isRegistrationClosedError(error: unknown): boolean {
+  const normalizedMessage = extractBackendErrorMessage(error).toLowerCase();
+  return isHttpStatus(error, 403) && normalizedMessage.includes('registration is closed');
+}
+
+export function isGodNotAcceptingSubjectsError(error: unknown): boolean {
+  const normalizedMessage = extractBackendErrorMessage(error).toLowerCase();
+  return isHttpStatus(error, 409) && normalizedMessage.includes('is not accepting subjects at this moment');
+}
+
 export function isTimeoutError(error: unknown): boolean {
   const normalizedMessage = getRawErrorMessage(error).toLowerCase();
   return normalizedMessage.includes('timed out') || normalizedMessage.includes('timeout');
@@ -96,6 +106,10 @@ export function sanitizeErrorMessage(error: unknown): string {
 export function getPublicErrorMessage(error: unknown, options: PublicErrorOptions = {}): string {
   if (isAlreadyRegisteredError(error)) {
     return PUBLIC_ERROR_MESSAGES.alreadyRegistered;
+  }
+
+  if (isRegistrationClosedError(error) || isGodNotAcceptingSubjectsError(error)) {
+    return sanitizeErrorMessage(error);
   }
 
   if (isHttpStatus(error, 404) && options.notFoundMessage) {

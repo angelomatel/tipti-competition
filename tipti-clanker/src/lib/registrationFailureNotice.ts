@@ -8,7 +8,16 @@ const DEFAULT_FAILURE_REASON = 'Something went wrong.';
 const RETRY_INSTRUCTION = 'Please run `/register` again.';
 
 export function shouldSendRegistrationFailureNotice(userMessage: string): boolean {
-  return userMessage.trim() !== PUBLIC_ERROR_MESSAGES.alreadyRegistered;
+  const trimmed = userMessage.trim();
+  if (trimmed === PUBLIC_ERROR_MESSAGES.alreadyRegistered) {
+    return false;
+  }
+
+  if (trimmed === 'Registration is closed. Phase 2 has already started.') {
+    return false;
+  }
+
+  return !trimmed.endsWith('is not accepting subjects at this moment.');
 }
 
 function normalizeRegistrationFailureReason(userMessage: string): string {

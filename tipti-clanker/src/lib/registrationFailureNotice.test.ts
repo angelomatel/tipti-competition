@@ -10,6 +10,11 @@ describe('registrationFailureNotice', () => {
     expect(shouldSendRegistrationFailureNotice(PUBLIC_ERROR_MESSAGES.alreadyRegistered)).toBe(false);
   });
 
+  it('skips channel notices for registration rule failures', () => {
+    expect(shouldSendRegistrationFailureNotice('Registration is closed. Phase 2 has already started.')).toBe(false);
+    expect(shouldSendRegistrationFailureNotice('Varus is not accepting subjects at this moment.')).toBe(false);
+  });
+
   it('builds a retry notice for retryable failures', () => {
     expect(
       buildRegistrationFailureNoticeContent(
