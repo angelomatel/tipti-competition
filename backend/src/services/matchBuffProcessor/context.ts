@@ -56,7 +56,7 @@ export function mapPlayersByPuuid(
   const playersByPuuid = new Map<string, PlayerContext>();
 
   for (const player of players) {
-    if (!targetPuuidSet.has(player.puuid) || !player.godSlug) continue;
+    if (!targetPuuidSet.has(player.puuid) || !player.godSlug || player.isEliminatedFromGod) continue;
     playersByPuuid.set(player.puuid, {
       discordId: player.discordId,
       puuid: player.puuid,
