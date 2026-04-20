@@ -22,6 +22,7 @@ import type {
   LeanMatchRecord,
 } from '@/services/matchBuffProcessor/types';
 import { getTournamentSettings } from '@/services/tournamentService';
+import type { BuffSkipReason } from '@/types/Player';
 
 export async function processNewMatchBuffs(): Promise<void> {
   const settings = await getTournamentSettings();
@@ -111,7 +112,7 @@ export async function processNewMatchBuffs(): Promise<void> {
   const phaseNum = phase?.phase ?? settings.currentPhase;
   const buffActivationStart = getBuffActivationStart(settings);
 
-  const processedMatchIds: unknown[] = [];
+  const processedMatches: Array<{ _id: unknown; skipReason: BuffSkipReason | null }> = [];
   const transactionDocs: Array<{
     playerId: string;
     godSlug: string;
@@ -126,23 +127,35 @@ export async function processNewMatchBuffs(): Promise<void> {
   for (const match of unprocessed) {
     const player = playerByPuuid.get(match.puuid);
     if (!player) {
-      processedMatchIds.push(match._id);
+      logger.info(
+        {
+          puuid: match.puuid,
+          matchId: match.matchId,
+          placement: match.placement,
+          playedAt: match.playedAt.toISOString(),
+          reason: 'no_player' satisfies BuffSkipReason,
+        },
+        `[match-buff] Match ${match.matchId} has no tracked player for puuid ${match.puuid}; marking processed without buffs`,
+      );
+      processedMatches.push({ _id: match._id, skipReason: 'no_player' });
       continue;
     }
 
     if (buffActivationStart && match.playedAt < buffActivationStart) {
-      logger.debug(
+      logger.info(
         {
           discordId: player.discordId,
           riotId: player.riotId ?? null,
           godSlug: player.godSlug,
           matchId: match.matchId,
+          placement: match.placement,
           playedAt: match.playedAt.toISOString(),
           buffActivationStart: buffActivationStart.toISOString(),
+          reason: 'before_buff_activation' satisfies BuffSkipReason,
         },
         `[match-buff] Match ${match.matchId} for ${getPlayerLogLabel(player)} occurred before buff activation; marking processed without buffs`,
       );
-      processedMatchIds.push(match._id);
+      processedMatches.push({ _id: match._id, skipReason: 'before_buff_activation' });
       continue;
     }
 
@@ -164,6 +177,7 @@ export async function processNewMatchBuffs(): Promise<void> {
       kayleActivityAwarded: derivedState.kayleActivityAwarded,
     });
 
+    let writtenForMatch = 0;
     for (const entry of entries) {
       let finalValue = entry.value;
       if (finalValue > 0) {
@@ -185,6 +199,7 @@ export async function processNewMatchBuffs(): Promise<void> {
         day: matchDay,
         phase: phaseNum,
       });
+      writtenForMatch += 1;
 
       logger.info(
         {
@@ -204,16 +219,45 @@ export async function processNewMatchBuffs(): Promise<void> {
     }
 
     derivedState.dailyBuffTotals.set(totalKey, currentTotal);
-    processedMatchIds.push(match._id);
+
+    let skipReason: BuffSkipReason | null = null;
+    if (writtenForMatch === 0) {
+      if (entries.length === 0) {
+        skipReason = player.godSlug === 'aurelion_sol' ? 'rule_rolled_zero' : 'rule_returned_empty';
+      } else {
+        skipReason = 'daily_cap_hit';
+      }
+      logger.info(
+        {
+          discordId: player.discordId,
+          riotId: player.riotId ?? null,
+          godSlug: player.godSlug,
+          matchId: match.matchId,
+          placement: match.placement,
+          day: matchDay,
+          phase: phaseNum,
+          reason: skipReason,
+          currentCapTotal: currentTotal,
+          cap,
+        },
+        `[match-buff] Match ${match.matchId} for ${getPlayerLogLabel(player)} produced no transactions (${skipReason}); marking processed`,
+      );
+    }
+
+    processedMatches.push({ _id: match._id, skipReason });
   }
 
   if (transactionDocs.length > 0) {
     await PointTransaction.insertMany(transactionDocs, { ordered: false });
   }
-  if (processedMatchIds.length > 0) {
-    await MatchRecord.updateMany(
-      { _id: { $in: processedMatchIds } },
-      { $set: { buffProcessed: true } },
+  if (processedMatches.length > 0) {
+    await MatchRecord.bulkWrite(
+      processedMatches.map((entry) => ({
+        updateOne: {
+          filter: { _id: entry._id },
+          update: { $set: { buffProcessed: true, buffSkipReason: entry.skipReason } },
+        },
+      })),
     );
   }
 

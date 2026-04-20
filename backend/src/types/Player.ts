@@ -32,6 +32,13 @@ export interface ILpSnapshot {
   capturedAt: Date;
 }
 
+export type BuffSkipReason =
+  | 'before_buff_activation'
+  | 'no_player'
+  | 'rule_returned_empty'
+  | 'rule_rolled_zero'
+  | 'daily_cap_hit';
+
 export interface IMatchRecord {
   puuid: string;
   matchId: string;
@@ -40,6 +47,7 @@ export interface IMatchRecord {
   capturedAt: Date;
   notifiedAt: Date | null;
   buffProcessed: boolean;
+  buffSkipReason: BuffSkipReason | null;
   lpAttributionStatus: 'pending' | 'linked' | 'ambiguous' | null;
   lpAttributionReason: 'multiple_matches_single_delta' | null;
 }

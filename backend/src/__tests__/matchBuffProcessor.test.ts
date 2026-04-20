@@ -12,6 +12,7 @@ vi.mock('@/db/models/MatchRecord', () => ({
   MatchRecord: {
     find: vi.fn(),
     updateMany: vi.fn(),
+    bulkWrite: vi.fn(),
   },
 }));
 
@@ -54,7 +55,7 @@ import { computePlayerScoreTotals } from '@/services/scoringEngine';
 import { logger } from '@/lib/logger';
 
 const mockMatchFind = vi.mocked(MatchRecord.find);
-const mockMatchUpdateMany = vi.mocked(MatchRecord.updateMany);
+const mockMatchBulkWrite = vi.mocked(MatchRecord.bulkWrite);
 const mockPlayerFind = vi.mocked(Player.find);
 const mockPointAggregate = vi.mocked(PointTransaction.aggregate);
 const mockPointFind = vi.mocked(PointTransaction.find);
@@ -62,7 +63,6 @@ const mockPointInsertMany = vi.mocked(PointTransaction.insertMany);
 const mockSnapshotFind = vi.mocked(LpSnapshot.find);
 const mockGetTournamentSettings = vi.mocked(getTournamentSettings);
 const mockComputePlayerScoreTotals = vi.mocked(computePlayerScoreTotals);
-const mockDebug = vi.mocked(logger.debug);
 const mockInfo = vi.mocked(logger.info);
 
 function makeSettings() {
@@ -126,21 +126,26 @@ describe('processNewMatchBuffs', () => {
     mockMatchFind
       .mockReturnValueOnce(mockFindSortLean([match]) as any)
       .mockReturnValueOnce(mockFindSortLean([match]) as any);
-    mockMatchUpdateMany.mockResolvedValue({ modifiedCount: 1 } as any);
+    mockMatchBulkWrite.mockResolvedValue({ modifiedCount: 1 } as any);
 
     await processNewMatchBuffs();
 
     expect(mockPointInsertMany).not.toHaveBeenCalled();
-    expect(mockMatchUpdateMany).toHaveBeenCalledWith(
-      { _id: { $in: [match._id] } },
-      { $set: { buffProcessed: true } },
-    );
-    expect(mockDebug).toHaveBeenCalledWith(
+    expect(mockMatchBulkWrite).toHaveBeenCalledWith([
+      {
+        updateOne: {
+          filter: { _id: match._id },
+          update: { $set: { buffProcessed: true, buffSkipReason: 'before_buff_activation' } },
+        },
+      },
+    ]);
+    expect(mockInfo).toHaveBeenCalledWith(
       expect.objectContaining({
         discordId: player.discordId,
         riotId: null,
         godSlug: player.godSlug,
         matchId: match.matchId,
+        reason: 'before_buff_activation',
       }),
       '[match-buff] Match match-1 for discord:discord-1 occurred before buff activation; marking processed without buffs',
     );
@@ -157,7 +162,7 @@ describe('processNewMatchBuffs', () => {
     mockMatchFind
       .mockReturnValueOnce(mockFindSortLean([match]) as any)
       .mockReturnValueOnce(mockFindSortLean([match]) as any);
-    mockMatchUpdateMany.mockResolvedValue({ modifiedCount: 1 } as any);
+    mockMatchBulkWrite.mockResolvedValue({ modifiedCount: 1 } as any);
     mockPointInsertMany.mockResolvedValue([] as any);
 
     await processNewMatchBuffs();
@@ -174,10 +179,14 @@ describe('processNewMatchBuffs', () => {
         value: 17,
       }),
     ], { ordered: false });
-    expect(mockMatchUpdateMany).toHaveBeenCalledWith(
-      { _id: { $in: [match._id] } },
-      { $set: { buffProcessed: true } },
-    );
+    expect(mockMatchBulkWrite).toHaveBeenCalledWith([
+      {
+        updateOne: {
+          filter: { _id: match._id },
+          update: { $set: { buffProcessed: true, buffSkipReason: null } },
+        },
+      },
+    ]);
     expect(mockInfo).toHaveBeenCalledWith(
       expect.objectContaining({
         playerId: player.discordId,
@@ -189,6 +198,167 @@ describe('processNewMatchBuffs', () => {
         value: 17,
       }),
       '[match-buff] Created buff transaction of 17 from ahri_first_place for discord:discord-1 on match match-2',
+    );
+  });
+
+  it('logs no_player reason when match has no tracked player', async () => {
+    const match = {
+      _id: 'match-np',
+      puuid: 'puuid-orphan',
+      matchId: 'match-np',
+      placement: 3,
+      playedAt: new Date('2026-04-06T12:00:00.000Z'),
+    };
+    mockMatchFind
+      .mockReturnValueOnce(mockFindSortLean([match]) as any)
+      .mockReturnValueOnce(mockFindSortLean([match]) as any);
+    mockMatchBulkWrite.mockResolvedValue({ modifiedCount: 1 } as any);
+
+    await processNewMatchBuffs();
+
+    expect(mockPointInsertMany).not.toHaveBeenCalled();
+    expect(mockMatchBulkWrite).toHaveBeenCalledWith([
+      {
+        updateOne: {
+          filter: { _id: match._id },
+          update: { $set: { buffProcessed: true, buffSkipReason: 'no_player' } },
+        },
+      },
+    ]);
+    expect(mockInfo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        puuid: 'puuid-orphan',
+        matchId: match.matchId,
+        reason: 'no_player',
+      }),
+      expect.stringContaining('has no tracked player'),
+    );
+  });
+
+  it('logs rule_returned_empty reason when rule produces no entries (Ahri placement 5)', async () => {
+    const match = {
+      _id: 'match-empty',
+      puuid: player.puuid,
+      matchId: 'match-empty',
+      placement: 5,
+      playedAt: new Date('2026-04-06T12:00:00.000Z'),
+    };
+    mockMatchFind
+      .mockReturnValueOnce(mockFindSortLean([match]) as any)
+      .mockReturnValueOnce(mockFindSortLean([match]) as any);
+    mockMatchBulkWrite.mockResolvedValue({ modifiedCount: 1 } as any);
+
+    await processNewMatchBuffs();
+
+    expect(mockPointInsertMany).not.toHaveBeenCalled();
+    expect(mockMatchBulkWrite).toHaveBeenCalledWith([
+      {
+        updateOne: {
+          filter: { _id: match._id },
+          update: { $set: { buffProcessed: true, buffSkipReason: 'rule_returned_empty' } },
+        },
+      },
+    ]);
+    expect(mockInfo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        discordId: player.discordId,
+        godSlug: 'ahri',
+        matchId: match.matchId,
+        reason: 'rule_returned_empty',
+      }),
+      expect.stringContaining('produced no transactions (rule_returned_empty)'),
+    );
+  });
+
+  it('logs rule_rolled_zero reason when Aurelion Sol rolls a 0', async () => {
+    const asolPlayer = {
+      discordId: 'discord-asol',
+      puuid: 'puuid-asol',
+      godSlug: 'aurelion_sol',
+      currentTier: 'GOLD',
+      isEliminatedFromGod: false,
+    };
+    mockPlayerFind.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        lean: vi.fn().mockResolvedValue([asolPlayer]),
+      }),
+    } as any);
+
+    const match = {
+      _id: 'match-asol',
+      puuid: asolPlayer.puuid,
+      matchId: 'match-asol',
+      placement: 1,
+      playedAt: new Date('2026-04-06T12:00:00.000Z'),
+    };
+    mockMatchFind
+      .mockReturnValueOnce(mockFindSortLean([match]) as any)
+      .mockReturnValueOnce(mockFindSortLean([match]) as any);
+    mockMatchBulkWrite.mockResolvedValue({ modifiedCount: 1 } as any);
+
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      await processNewMatchBuffs();
+    } finally {
+      randomSpy.mockRestore();
+    }
+
+    expect(mockPointInsertMany).not.toHaveBeenCalled();
+    expect(mockMatchBulkWrite).toHaveBeenCalledWith([
+      {
+        updateOne: {
+          filter: { _id: match._id },
+          update: { $set: { buffProcessed: true, buffSkipReason: 'rule_rolled_zero' } },
+        },
+      },
+    ]);
+    expect(mockInfo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        godSlug: 'aurelion_sol',
+        matchId: match.matchId,
+        reason: 'rule_rolled_zero',
+      }),
+      expect.stringContaining('produced no transactions (rule_rolled_zero)'),
+    );
+  });
+
+  it('logs daily_cap_hit reason when cap is exhausted before any entry is written', async () => {
+    const match = {
+      _id: 'match-cap',
+      puuid: player.puuid,
+      matchId: 'match-cap',
+      placement: 1,
+      playedAt: new Date('2026-04-06T12:00:00.000Z'),
+    };
+    mockMatchFind
+      .mockReturnValueOnce(mockFindSortLean([match]) as any)
+      .mockReturnValueOnce(mockFindSortLean([match]) as any);
+    mockMatchBulkWrite.mockResolvedValue({ modifiedCount: 1 } as any);
+    mockPointAggregate.mockResolvedValue([
+      { _id: { playerId: player.discordId, day: '2026-04-06' }, total: 75 },
+    ] as any);
+
+    await processNewMatchBuffs();
+
+    expect(mockPointInsertMany).not.toHaveBeenCalled();
+    expect(mockMatchBulkWrite).toHaveBeenCalledWith([
+      {
+        updateOne: {
+          filter: { _id: match._id },
+          update: { $set: { buffProcessed: true, buffSkipReason: 'daily_cap_hit' } },
+        },
+      },
+    ]);
+    expect(mockInfo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        discordId: player.discordId,
+        godSlug: 'ahri',
+        matchId: match.matchId,
+        reason: 'daily_cap_hit',
+        currentCapTotal: 75,
+        cap: 75,
+      }),
+      expect.stringContaining('produced no transactions (daily_cap_hit)'),
     );
   });
 });
