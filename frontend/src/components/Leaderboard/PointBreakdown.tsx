@@ -183,7 +183,7 @@ const PointBreakdown: React.FC<PointBreakdownProps> = ({ dailyPoints, gameName, 
         return (
           <div key={day.day}>
             <button
-              className="w-full flex justify-between items-center px-3 py-2 rounded-[var(--radius-sm)] transition-colors text-left"
+              className="w-full flex justify-between items-center px-3 py-2 rounded-[var(--radius-sm)] transition-colors text-left cursor-pointer"
               style={{ background: 'var(--surface-0)' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-hover)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--surface-0)'; }}
