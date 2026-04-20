@@ -54,17 +54,34 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
     }).sort({ puuid: 1, capturedAt: 1 }).lean(),
   ]);
   const playerByPuuid = new Map(players.map((player) => [player.puuid, player]));
-  const buffsByMatchId = new Map<string, Array<{ source: string; value: number }>>();
+  const playerByDiscordId = new Map(players.map((player) => [player.discordId, player]));
+  const buffsByPlayerMatch = new Map<string, Array<{ source: string; value: number }>>();
   const trackedPlayersByMatchId = new Map<string, number>();
   for (const match of pendingMatches) {
     trackedPlayersByMatchId.set(match.matchId, (trackedPlayersByMatchId.get(match.matchId) ?? 0) + 1);
   }
 
   for (const txn of buffTransactions) {
-    if (!txn.matchId) continue;
-    const buffs = buffsByMatchId.get(txn.matchId) ?? [];
+    if (!txn.matchId || !txn.playerId) continue;
+    const owner = playerByDiscordId.get(txn.playerId);
+    if (owner && owner.godSlug && txn.godSlug && owner.godSlug !== txn.godSlug) {
+      logger.warn(
+        {
+          playerId: txn.playerId,
+          matchId: txn.matchId,
+          txnGodSlug: txn.godSlug,
+          playerGodSlug: owner.godSlug,
+          source: txn.source,
+          value: txn.value,
+        },
+        '[feed] Skipping buff transaction whose godSlug does not match the player\'s current god',
+      );
+      continue;
+    }
+    const key = `${txn.playerId}:${txn.matchId}`;
+    const buffs = buffsByPlayerMatch.get(key) ?? [];
     buffs.push({ source: txn.source, value: txn.value });
-    buffsByMatchId.set(txn.matchId, buffs);
+    buffsByPlayerMatch.set(key, buffs);
   }
 
   const lpDeltaByPlayerMatch = new Map<string, number>();
@@ -167,7 +184,7 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
         transactionLpDelta: transactionLpDelta ?? null,
         snapshotLpDelta,
         lpTxnCount,
-        buffCount: (buffsByMatchId.get(match.matchId) ?? []).length,
+        buffCount: (buffsByPlayerMatch.get(playerMatchKey) ?? []).length,
         trackedPlayersInMatch,
         matchLpAttributionStatus: match.lpAttributionStatus ?? null,
         hasSnapshotBefore: Boolean(snapshotBefore),
@@ -211,7 +228,7 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
       lpStatus,
       lpSource,
       godSlug: player.godSlug ?? null,
-      godBuffs: buffsByMatchId.get(match.matchId) ?? [],
+      godBuffs: buffsByPlayerMatch.get(playerMatchKey) ?? [],
       playedAt: match.playedAt,
       lpAttributionStatus: match.lpAttributionStatus ?? null,
     });

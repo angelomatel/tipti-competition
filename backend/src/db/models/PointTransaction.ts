@@ -29,6 +29,16 @@ PointTransactionSchema.index(
   },
 );
 PointTransactionSchema.index({ matchId: 1, type: 1 });
+PointTransactionSchema.index(
+  { playerId: 1, matchId: 1, source: 1, type: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      type: 'buff',
+      matchId: { $type: 'string' },
+    },
+  },
+);
 
 export const PointTransaction = mongoose.model<PointTransactionDocument>(
   'PointTransaction',

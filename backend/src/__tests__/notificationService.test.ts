@@ -121,7 +121,7 @@ describe('notification service', () => {
     ]) as any);
     mockPointTransactionFind
       .mockReturnValueOnce(mockFindLean([
-        { matchId: 'match-1', source: 'varus_flat', value: 7 },
+        { playerId: 'user-1', godSlug: 'zeus', matchId: 'match-1', source: 'varus_flat', value: 7 },
       ]) as any)
       .mockReturnValueOnce(mockFindLean([
         { playerId: 'user-1', matchId: 'match-1', source: 'lp_delta', value: 44 },
@@ -272,6 +272,118 @@ describe('notification service', () => {
     });
   });
 
+  it('attaches buffs only to their owning player when two gods share a match id', async () => {
+    const matches = [
+      {
+        puuid: 'puuid-1',
+        matchId: 'match-shared',
+        placement: 5,
+        playedAt: new Date('2026-01-10T10:00:00Z'),
+        lpAttributionStatus: null,
+      },
+      {
+        puuid: 'puuid-2',
+        matchId: 'match-shared',
+        placement: 3,
+        playedAt: new Date('2026-01-10T10:00:00Z'),
+        lpAttributionStatus: null,
+      },
+    ];
+    const leanMatches = vi.fn().mockResolvedValue(matches);
+    const limitMatches = vi.fn().mockReturnValue({ lean: leanMatches });
+    const sortMatches = vi.fn().mockReturnValue({ limit: limitMatches });
+    mockMatchFind.mockReturnValue({ sort: sortMatches } as any);
+
+    mockPlayerFind.mockReturnValue(mockFindLean([
+      {
+        puuid: 'puuid-1',
+        discordId: 'user-1',
+        gameName: 'One',
+        tagLine: 'TAG',
+        discordUsername: 'one',
+        discordAvatarUrl: '',
+        godSlug: 'varus',
+      },
+      {
+        puuid: 'puuid-2',
+        discordId: 'user-2',
+        gameName: 'Two',
+        tagLine: 'TAG',
+        discordUsername: 'two',
+        discordAvatarUrl: '',
+        godSlug: 'aurelion-sol',
+      },
+    ]) as any);
+    mockPointTransactionFind
+      .mockReturnValueOnce(mockFindLean([
+        { playerId: 'user-1', godSlug: 'varus', matchId: 'match-shared', source: 'varus_flat', value: 7 },
+        { playerId: 'user-2', godSlug: 'aurelion-sol', matchId: 'match-shared', source: 'asol_random', value: 1 },
+      ]) as any)
+      .mockReturnValueOnce(mockFindLean([
+        { playerId: 'user-1', matchId: 'match-shared', source: 'lp_delta', value: -20 },
+        { playerId: 'user-2', matchId: 'match-shared', source: 'lp_delta', value: 18 },
+      ]) as any);
+    mockSnapshotFind.mockReturnValue({
+      sort: vi.fn().mockReturnValue(mockFindLean([])),
+    } as any);
+
+    const result = await getFeedNotifications();
+
+    expect(result).toHaveLength(2);
+    const user1 = result.find((item) => item.discordId === 'user-1')!;
+    const user2 = result.find((item) => item.discordId === 'user-2')!;
+    expect(user1.godBuffs).toEqual([{ source: 'varus_flat', value: 7 }]);
+    expect(user2.godBuffs).toEqual([{ source: 'asol_random', value: 1 }]);
+  });
+
+  it('drops buff transactions whose godSlug disagrees with the current player god', async () => {
+    const matches = [
+      {
+        puuid: 'puuid-1',
+        matchId: 'match-1',
+        placement: 5,
+        playedAt: new Date('2026-01-10T10:00:00Z'),
+        lpAttributionStatus: null,
+      },
+    ];
+    const leanMatches = vi.fn().mockResolvedValue(matches);
+    const limitMatches = vi.fn().mockReturnValue({ lean: leanMatches });
+    const sortMatches = vi.fn().mockReturnValue({ limit: limitMatches });
+    mockMatchFind.mockReturnValue({ sort: sortMatches } as any);
+
+    mockPlayerFind.mockReturnValue(mockFindLean([
+      {
+        puuid: 'puuid-1',
+        discordId: 'user-1',
+        gameName: 'One',
+        tagLine: 'TAG',
+        discordUsername: 'one',
+        discordAvatarUrl: '',
+        godSlug: 'varus',
+      },
+    ]) as any);
+    mockPointTransactionFind
+      .mockReturnValueOnce(mockFindLean([
+        { playerId: 'user-1', godSlug: 'varus', matchId: 'match-1', source: 'varus_flat', value: 7 },
+        { playerId: 'user-1', godSlug: 'aurelion-sol', matchId: 'match-1', source: 'asol_random', value: 1 },
+      ]) as any)
+      .mockReturnValueOnce(mockFindLean([
+        { playerId: 'user-1', matchId: 'match-1', source: 'lp_delta', value: -15 },
+      ]) as any);
+    mockSnapshotFind.mockReturnValue({
+      sort: vi.fn().mockReturnValue(mockFindLean([])),
+    } as any);
+
+    const result = await getFeedNotifications();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].godBuffs).toEqual([{ source: 'varus_flat', value: 7 }]);
+    expect(mockWarn).toHaveBeenCalledWith(
+      expect.objectContaining({ txnGodSlug: 'aurelion-sol', playerGodSlug: 'varus' }),
+      expect.stringContaining('godSlug'),
+    );
+  });
+
   it('groups ambiguous matches into one notification when the shared lp delta is linked to the latest match', async () => {
     const matches = [
       {
@@ -307,8 +419,8 @@ describe('notification service', () => {
     ]) as any);
     mockPointTransactionFind
       .mockReturnValueOnce(mockFindLean([
-        { matchId: 'match-older', source: 'varus_flat', value: 2 },
-        { matchId: 'match-latest', source: 'evelynn_streak', value: 3 },
+        { playerId: 'user-1', godSlug: 'zeus', matchId: 'match-older', source: 'varus_flat', value: 2 },
+        { playerId: 'user-1', godSlug: 'zeus', matchId: 'match-latest', source: 'evelynn_streak', value: 3 },
       ]) as any)
       .mockReturnValueOnce(mockFindLean([
         { playerId: 'user-1', matchId: 'match-latest', source: 'lp_delta', value: -41 },
