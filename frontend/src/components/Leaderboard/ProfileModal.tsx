@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePlayer } from '@/src/hooks/usePlayer';
 import { formatTier } from '@/src/types/Rank';
@@ -20,7 +20,16 @@ interface ProfileModalProps {
 }
 
 const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose, hideGod }) => {
-  const { data, error, isLoading } = usePlayer(discordId);
+  const [matchLimit, setMatchLimit] = useState(20);
+  useEffect(() => { setMatchLimit(20); }, [discordId]);
+  const { data: freshData, error, isLoading } = usePlayer(discordId, matchLimit);
+
+  // Keep previous data only while the same player's limit is changing — not across player switches.
+  const staleRef = useRef<{ discordId: string | null; data: typeof freshData }>(
+    { discordId: null, data: undefined },
+  );
+  if (freshData) staleRef.current = { discordId, data: freshData };
+  const data = freshData ?? (staleRef.current.discordId === discordId ? staleRef.current.data : undefined);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -68,7 +77,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose, hideGod
           </svg>
         </button>
 
-        {isLoading && (
+        {!data && isLoading && (
           <div className="p-8">
             <div
               className="h-[120px] animate-pulse rounded-t-[var(--radius-xl)]"
@@ -132,9 +141,31 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose, hideGod
                   {data.player.gameName}
                   <span className="font-normal text-text-muted">#{data.player.tagLine}</span>
                 </h2>
-                {data.player.discordUsername && (
-                  <p className="text-xs text-text-muted">@{data.player.discordUsername}</p>
-                )}
+                <div className="flex items-center justify-between">
+                  {data.player.discordUsername ? (
+                    <p className="text-xs text-text-muted">@{data.player.discordUsername}</p>
+                  ) : (
+                    <span />
+                  )}
+                  {data.snapshots && data.snapshots.length > 0 && (() => {
+                    const latest = data.snapshots.reduce((a, b) =>
+                      new Date(a.capturedAt) > new Date(b.capturedAt) ? a : b
+                    );
+                    const date = new Date(latest.capturedAt);
+                    const diffMs = Date.now() - date.getTime();
+                    const diffMin = Math.floor(diffMs / 60000);
+                    const relative =
+                      diffMin < 1 ? 'just now'
+                      : diffMin < 60 ? `${diffMin}m ago`
+                      : diffMin < 1440 ? `${Math.floor(diffMin / 60)}h ago`
+                      : `${Math.floor(diffMin / 1440)}d ago`;
+                    return (
+                      <p className="text-[0.65rem] text-text-muted" title={date.toLocaleString()}>
+                        Updated {relative}
+                      </p>
+                    );
+                  })()}
+                </div>
               </div>
             </div>
 
@@ -207,7 +238,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose, hideGod
               <h3 className="text-sm font-semibold mb-2 text-text-secondary">
                 LP History
               </h3>
-              <LPGraph matchPoints={data.matchPoints ?? []} />
+              <LPGraph matchPoints={data.matchPoints ?? []} matchLimit={matchLimit} onRangeChange={setMatchLimit} />
             </div>
 
             {/* Point Breakdown */}
