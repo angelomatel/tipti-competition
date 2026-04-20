@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { DailyPointEntry } from '@/src/types/PlayerProfile';
+import type { DailyPointEntry, DailyPointTransaction } from '@/src/types/PlayerProfile';
 import { MATCH_LINK_TACTICS_TOOLS, MATCH_LINK_METATFT } from '@/src/lib/constants';
 
 interface PointBreakdownProps {
@@ -38,6 +38,128 @@ const SOURCE_LABELS: Record<string, string> = {
   god_3rd_place: 'God 3rd Place Bonus',
 };
 
+const isLpSource = (source: string) => source === 'lp_data' || source === 'lp_delta';
+
+const labelFor = (tx: DailyPointTransaction) => {
+  if (isLpSource(tx.source)) {
+    return tx.value >= 0 ? 'LP Gain' : 'LP Loss';
+  }
+  return SOURCE_LABELS[tx.source] ?? tx.source;
+};
+
+const formatTime = (iso?: string) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+};
+
+interface MatchGroup {
+  matchId: string;
+  primary: DailyPointTransaction | null;
+  extras: DailyPointTransaction[];
+}
+
+const groupTransactions = (transactions: DailyPointTransaction[]) => {
+  const matchGroups: MatchGroup[] = [];
+  const matchIndex = new Map<string, MatchGroup>();
+  const standalone: DailyPointTransaction[] = [];
+
+  for (const tx of transactions) {
+    if (!tx.matchId) {
+      standalone.push(tx);
+      continue;
+    }
+    let g = matchIndex.get(tx.matchId);
+    if (!g) {
+      g = { matchId: tx.matchId, primary: null, extras: [] };
+      matchIndex.set(tx.matchId, g);
+      matchGroups.push(g);
+    }
+    if (isLpSource(tx.source)) {
+      g.primary = tx;
+    } else {
+      g.extras.push(tx);
+    }
+  }
+
+  // If a group has no LP primary, promote the first extra so the group still has a header.
+  for (const g of matchGroups) {
+    if (!g.primary && g.extras.length > 0) {
+      g.primary = g.extras.shift() ?? null;
+    }
+  }
+
+  // Latest match first within the day.
+  const playedAtMs = (tx: DailyPointTransaction | null) => {
+    const t = tx?.playedAt ? new Date(tx.playedAt).getTime() : NaN;
+    return Number.isNaN(t) ? 0 : t;
+  };
+  matchGroups.sort((a, b) => playedAtMs(b.primary) - playedAtMs(a.primary));
+
+  return { matchGroups, standalone };
+};
+
+interface TxRowProps {
+  tx: DailyPointTransaction;
+  gameName: string;
+  tagLine: string;
+  showLinks?: boolean;
+  showTime?: boolean;
+  nested?: boolean;
+}
+
+const TxRow: React.FC<TxRowProps> = ({ tx, gameName, tagLine, showLinks = false, showTime = false, nested = false }) => (
+  <div className={`flex justify-between gap-2 text-xs ${nested ? 'pl-10' : ''}`}>
+    <div className="min-w-0 flex items-center gap-2 flex-wrap">
+      {showTime && tx.playedAt && (
+        <span
+          className="text-[10px] w-8 shrink-0 tabular-nums"
+          style={{ color: 'var(--text-muted)', opacity: 0.7 }}
+        >
+          {formatTime(tx.playedAt)}
+        </span>
+      )}
+      <span style={{ color: 'var(--text-muted)' }}>
+        {labelFor(tx)}
+        {typeof tx.placement === 'number' ? ` (Place #${tx.placement})` : ''}
+      </span>
+      {showLinks && tx.matchId && (
+        <>
+          <a
+            href={MATCH_LINK_TACTICS_TOOLS(gameName, tagLine, tx.matchId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] transition-colors text-indigo-300 hover:text-indigo-200"
+          >
+            tactics.tools
+          </a>
+          <a
+            href={MATCH_LINK_METATFT(gameName, tagLine, tx.matchId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] transition-colors text-indigo-300 hover:text-indigo-200"
+          >
+            metatft
+          </a>
+        </>
+      )}
+    </div>
+    <span className="shrink-0" style={{ color: tx.value >= 0 ? 'var(--accent-cyan)' : '#f87171' }}>
+      {tx.lpStatus === 'unknown'
+        ? 'LP unknown'
+        : tx.lpStatus === 'resolving'
+          ? 'LP resolving'
+        : (
+          <>
+            {tx.value >= 0 ? '+' : ''}{tx.value}
+            {isLpSource(tx.source) ? ' LP' : ''}
+          </>
+        )}
+    </span>
+  </div>
+);
+
 const PointBreakdown: React.FC<PointBreakdownProps> = ({ dailyPoints, gameName, tagLine }) => {
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
 
@@ -49,14 +171,14 @@ const PointBreakdown: React.FC<PointBreakdownProps> = ({ dailyPoints, gameName, 
     );
   }
 
-  // Show most recent first
-  const sorted = [...dailyPoints].reverse();
+  const sorted = [...dailyPoints].sort((a, b) => b.day.localeCompare(a.day));
 
   return (
     <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
       {sorted.map((day) => {
         const total = day.transactions.reduce((s, t) => s + t.value, 0);
         const isExpanded = expandedDay === day.day;
+        const { matchGroups, standalone } = groupTransactions(day.transactions);
 
         return (
           <div key={day.day}>
@@ -77,51 +199,41 @@ const PointBreakdown: React.FC<PointBreakdownProps> = ({ dailyPoints, gameName, 
             </button>
 
             {isExpanded && (
-              <div className="pl-4 py-1 space-y-0.5">
-                {day.transactions.map((tx, i) => (
-                  <div key={`${tx.source}-${tx.matchId ?? 'none'}-${i}`} className="flex justify-between gap-2 text-xs">
-                    <div className="min-w-0 flex items-center gap-2 flex-wrap">
-                      <span style={{ color: 'var(--text-muted)' }}>
-                        {(tx.source === 'lp_data' || tx.source === 'lp_delta')
-                          ? 'LP Gain'
-                          : (SOURCE_LABELS[tx.source] ?? tx.source)}
-                        {typeof tx.placement === 'number' ? ` (Place #${tx.placement})` : ''}
-                      </span>
-                      {tx.matchId && (
-                        <>
-                          <a
-                            href={MATCH_LINK_TACTICS_TOOLS(gameName, tagLine, tx.matchId)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[10px] transition-colors text-indigo-300 hover:text-indigo-200"
-                          >
-                            tactics.tools
-                          </a>
-                          <a
-                            href={MATCH_LINK_METATFT(gameName, tagLine, tx.matchId)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[10px] transition-colors text-indigo-300 hover:text-indigo-200"
-                          >
-                            metatft
-                          </a>
-                        </>
-                      )}
-                    </div>
-                    <span className="shrink-0" style={{ color: tx.value >= 0 ? 'var(--accent-cyan)' : '#f87171' }}>
-                      {tx.lpStatus === 'unknown'
-                        ? 'LP unknown'
-                        : tx.lpStatus === 'resolving'
-                          ? 'LP resolving'
-                        : (
-                          <>
-                            {tx.value >= 0 ? '+' : ''}{tx.value}
-                            {(tx.source === 'lp_data' || tx.source === 'lp_delta') ? ' LP' : ''}
-                          </>
-                        )}
-                    </span>
+              <div className="pl-4 py-1 space-y-2">
+                {matchGroups.map((group) => (
+                  <div key={group.matchId} className="space-y-0.5">
+                    {group.primary && (
+                      <TxRow
+                        tx={group.primary}
+                        gameName={gameName}
+                        tagLine={tagLine}
+                        showLinks
+                        showTime
+                      />
+                    )}
+                    {group.extras.map((tx, i) => (
+                      <TxRow
+                        key={`${group.matchId}-${tx.source}-${i}`}
+                        tx={tx}
+                        gameName={gameName}
+                        tagLine={tagLine}
+                        nested
+                      />
+                    ))}
                   </div>
                 ))}
+                {standalone.length > 0 && (
+                  <div className="space-y-0.5">
+                    {standalone.map((tx, i) => (
+                      <TxRow
+                        key={`standalone-${tx.source}-${i}`}
+                        tx={tx}
+                        gameName={gameName}
+                        tagLine={tagLine}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
