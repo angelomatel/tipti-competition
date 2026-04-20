@@ -2,16 +2,17 @@ import { NextResponse } from 'next/server';
 import { BACKEND_URL } from '@/src/lib/constants';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ discordId: string }> },
 ) {
   const { discordId } = await params;
+  const { searchParams } = new URL(request.url);
+  const matchLimit = searchParams.get('matchLimit');
 
   try {
-    const res = await fetch(
-      `${BACKEND_URL}/api/players/${encodeURIComponent(discordId)}`,
-      { cache: 'no-store' },
-    );
+    const backendUrl = new URL(`${BACKEND_URL}/api/players/${encodeURIComponent(discordId)}`);
+    if (matchLimit !== null) backendUrl.searchParams.set('matchLimit', matchLimit);
+    const res = await fetch(backendUrl.toString(), { cache: 'no-store' });
     if (!res.ok) {
       return NextResponse.json({ error: 'Player not found' }, { status: res.status });
     }
