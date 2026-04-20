@@ -8,7 +8,8 @@
     "start": "node dist/server.js",
     "build": "npx tsc && npx tsc-alias",
     "test": "vitest",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "verify-buffs": "npx tsx src/scripts/verifyMatchBuffs.ts"
   },
   "author": "",
   "license": "ISC",

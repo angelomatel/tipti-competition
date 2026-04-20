@@ -9,9 +9,11 @@ export const TIER_ORDER: Record<Tier, number> = {
   [Tier.PLATINUM]:    5,
   [Tier.EMERALD]:     6,
   [Tier.DIAMOND]:     7,
+  // Master/Grandmaster/Challenger share one LP pool — LP does not reset on promotion,
+  // so all three get the same tier multiplier to avoid inflating deltas on tier-up.
   [Tier.MASTER]:      8,
-  [Tier.GRANDMASTER]: 9,
-  [Tier.CHALLENGER]:  10,
+  [Tier.GRANDMASTER]: 8,
+  [Tier.CHALLENGER]:  8,
 };
 
 export const DIVISION_ORDER: Record<Division, number> = {
