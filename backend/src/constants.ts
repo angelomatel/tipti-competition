@@ -53,7 +53,10 @@ export const ENABLE_DEV_DATA_FETCH_CRONS_ENV = 'ENABLE_DEV_DATA_FETCH_CRONS';
 export const QUERY_LIMITS = {
   SNAPSHOTS: 200,
   SNAPSHOTS_RAW: 100,
-  MATCHES: 50,
+  /** Default match limit when no matchLimit query param is provided. */
+  MATCHES: 20,
+  /** Hard cap on matchLimit query param to prevent abuse. */
+  MATCHES_MAX: 500,
 } as const;
 
 

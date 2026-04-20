@@ -91,6 +91,11 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
     const player = await measureAsyncStep(timings, 'playerLookupMs', () => getPlayerByDiscordId(discordId));
     if (!player) { res.status(404).json({ error: 'Player not found.' }); return; }
 
+    const rawMatchLimit = Number.parseInt(String(req.query['matchLimit'] ?? ''), 10);
+    const matchLimit = Number.isFinite(rawMatchLimit) && rawMatchLimit >= 0
+      ? Math.min(rawMatchLimit, QUERY_LIMITS.MATCHES_MAX)
+      : QUERY_LIMITS.MATCHES;
+
     const [
       rawSnapshots,
       rawMatches,
@@ -103,10 +108,10 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
         .sort({ capturedAt: -1 })
         .limit(QUERY_LIMITS.SNAPSHOTS)
         .lean()),
-      measureAsyncStep(timings, 'matchesQueryMs', () => MatchRecord.find({ puuid: player.puuid })
-        .sort({ playedAt: -1 })
-        .limit(QUERY_LIMITS.MATCHES)
-        .lean()),
+      measureAsyncStep(timings, 'matchesQueryMs', () => {
+        const q = MatchRecord.find({ puuid: player.puuid }).sort({ playedAt: -1 });
+        return (matchLimit > 0 ? q.limit(matchLimit) : q).lean();
+      }),
       measureAsyncStep(timings, 'godQueryMs', () => (player.godSlug ? God.findOne({ slug: player.godSlug }).lean() : Promise.resolve(null))),
       measureAsyncStep(timings, 'scoreBreakdownMs', () => computePlayerScoreBreakdown(player.discordId)),
       measureAsyncStep(timings, 'dailyBreakdownMs', () => computePlayerDailyBreakdown(player.discordId)),
@@ -168,6 +173,7 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
     logger.debug(
       {
         discordId,
+        matchLimit,
         timings,
         counts: {
           snapshots: snapshots.length,
