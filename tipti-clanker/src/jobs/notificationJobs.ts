@@ -17,9 +17,9 @@ import { getYesterdayPhtDay } from '@/lib/dateUtils';
 import {
   EMBED_COLORS,
   GOD_COLORS,
-  SOURCE_LABELS,
   CRON_SCHEDULES,
   PHT_TIMEZONE,
+  resolveSourceLabel,
   DAILY_RECAP_MAX_ATTEMPTS,
   DAILY_RECAP_RETRY_DELAY_MS,
 } from '@/lib/constants';
@@ -62,7 +62,7 @@ function formatGroupedMatchLines(
       `-# ${buildMatchLinks(gameName, tagLine, match.matchId)}`,
     ];
     for (const buff of match.godBuffs ?? []) {
-      const name = SOURCE_LABELS[buff.source] || buff.source;
+      const name = resolveSourceLabel(buff.source);
       lines.push(`-# God buff: **${name}** ${buff.value > 0 ? '+' : ''}${buff.value} pts`);
     }
     return lines.join('\n');
@@ -266,7 +266,7 @@ function renderSingleMatchBuffs(godBuffs: Array<{ source: string; value: number 
   if (!godBuffs || godBuffs.length === 0) return '';
 
   const buffStrings = godBuffs.map((b) => {
-    const name = SOURCE_LABELS[b.source] || b.source;
+    const name = resolveSourceLabel(b.source);
     return `🌟 **${name}**: ${b.value > 0 ? '+' : ''}${b.value} pts`;
   });
 

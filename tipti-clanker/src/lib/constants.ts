@@ -116,3 +116,12 @@ export const SOURCE_LABELS: Record<string, string> = {
   god_2nd_place: 'God 2nd Place Bonus',
   god_3rd_place: 'God 3rd Place Bonus',
 };
+
+export function resolveSourceLabel(source: string): string {
+  if (source.startsWith('dead_')) {
+    const base = source.slice(5);
+    const baseLabel = SOURCE_LABELS[base] ?? base;
+    return `(Chance) ${baseLabel}`;
+  }
+  return SOURCE_LABELS[source] ?? source;
+}
