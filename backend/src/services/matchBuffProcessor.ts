@@ -299,7 +299,18 @@ export async function processNewMatchBuffs(): Promise<void> {
   }
 
   if (transactionDocs.length > 0) {
-    await PointTransaction.insertMany(transactionDocs, { ordered: false });
+    try {
+      await PointTransaction.insertMany(transactionDocs, { ordered: false });
+    } catch (err: unknown) {
+      const isBulkDupKey = (e: unknown): boolean =>
+        typeof e === 'object' && e !== null &&
+        ((e as { code?: unknown }).code === 11000 || (e as { message?: unknown }).message?.toString().includes('E11000') === true);
+      if (!isBulkDupKey(err)) throw err;
+      logger.warn(
+        { count: transactionDocs.length },
+        '[match-buff] Some buff transactions were already written (duplicate key); marking matches processed anyway',
+      );
+    }
   }
   if (processedMatches.length > 0) {
     await MatchRecord.bulkWrite(

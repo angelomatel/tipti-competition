@@ -34,7 +34,7 @@ export function summarizeRequestsByEndpoint(metrics: RiotClientRequestMetrics[])
 export function getQueueBackpressureSnapshot(
   riotClient: RiotClient,
   nowMs: number,
-  lookbackMs = 5 * 60 * 1000,
+  lookbackMs = 2 * 60 * 1000,
 ): RiotQueueBackpressureSnapshot {
   const metrics = riotClient.getRequestMetricsSince(nowMs - lookbackMs);
   const queueStats = getQueueWaitStats(metrics);

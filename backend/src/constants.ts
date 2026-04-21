@@ -78,11 +78,11 @@ export const RIOT_REQUEST_TIMEOUT_MS = 15_000;
  */
 export const RIOT_APP_RATE_PER_SECOND = parsePositiveIntEnv(
   process.env.RIOT_APP_RATE_PER_SECOND,
-  IS_PRODUCTION ? 40 : 20,
+  IS_PRODUCTION ? 80 : 20,
 );
 export const RIOT_APP_RATE_PER_120_SECONDS = parsePositiveIntEnv(
   process.env.RIOT_APP_RATE_PER_120_SECONDS,
-  IS_PRODUCTION ? 4_800 : 100,
+  IS_PRODUCTION ? 9_600 : 100,
 );
 export const RIOT_QUEUE_MAX_IN_FLIGHT = parsePositiveIntEnv(
   process.env.RIOT_QUEUE_MAX_IN_FLIGHT,

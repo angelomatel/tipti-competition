@@ -1,7 +1,7 @@
 import {
   ApplicationCommandOptionType,
   type CommandInteraction,
-  type GuildMember,
+  GuildMember,
   PermissionFlagsBits,
 } from 'discord.js';
 import { Discord, Guild, Slash, SlashGroup, SlashOption } from 'discordx';
@@ -35,10 +35,11 @@ export class AdminRemovePlayerCommand {
       await removePlayer(member.id);
       await interaction.editReply({ content: `<@${member.id}> has been removed from the tournament.` });
 
+      const username = member instanceof GuildMember ? member.user.username : (member as any).username ?? 'unknown';
       await sendAuditLog(interaction.client, {
         action: '/admin remove-player',
         actorId: interaction.user.id,
-        details: [`Target Discord: <@${member.id}> (${member.user.username})`],
+        details: [`Target Discord: <@${member.id}> (${username})`],
       });
     } catch (err: any) {
       const notFound = err?.message?.includes('not found') || err?.message?.includes('404');

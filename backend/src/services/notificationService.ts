@@ -34,6 +34,9 @@ export interface FeedNotification {
   }>;
 }
 
+const warnedStuckMatches = new Set<string>();
+const ATTRIBUTION_GRACE_MS = 30 * 60 * 1000;
+
 export async function getFeedNotifications(): Promise<FeedNotification[]> {
   const settings = await getTournamentSettings();
   const pendingMatches = await MatchRecord.find({
@@ -194,24 +197,39 @@ export async function getFeedNotifications(): Promise<FeedNotification[]> {
     );
 
     if (lpSource === 'none' || lpStatus !== 'known') {
-      logger.warn(
-        {
-          matchId: match.matchId,
-          discordId: player.discordId,
-          riotId: `${player.gameName}#${player.tagLine}`,
-          placement: match.placement,
-          playedAt: match.playedAt,
-          lpDelta,
-          lpStatus,
-          lpSource,
-          trackedPlayersInMatch,
-          lpTxnCount,
-          matchLpAttributionStatus: match.lpAttributionStatus ?? null,
-          hasSnapshotBefore: Boolean(snapshotBefore),
-          hasSnapshotAfter: Boolean(snapshotAfter),
-        },
-        '[feed] Notification is missing a definitive LP attribution',
-      );
+      const matchAgeMs = Date.now() - new Date(match.playedAt).getTime();
+      const isAmbiguous = match.lpAttributionStatus === 'ambiguous';
+      const isStuck = matchAgeMs > ATTRIBUTION_GRACE_MS;
+      const warnKey = `${match.matchId}:${player.discordId}`;
+      const shouldWarn = (isAmbiguous || isStuck) && !warnedStuckMatches.has(warnKey);
+
+      if (shouldWarn) {
+        warnedStuckMatches.add(warnKey);
+        logger.warn(
+          {
+            matchId: match.matchId,
+            discordId: player.discordId,
+            riotId: `${player.gameName}#${player.tagLine}`,
+            placement: match.placement,
+            playedAt: match.playedAt,
+            lpDelta,
+            lpStatus,
+            lpSource,
+            trackedPlayersInMatch,
+            lpTxnCount,
+            matchLpAttributionStatus: match.lpAttributionStatus ?? null,
+            hasSnapshotBefore: Boolean(snapshotBefore),
+            hasSnapshotAfter: Boolean(snapshotAfter),
+            matchAgeMs,
+          },
+          '[feed] Notification is missing a definitive LP attribution',
+        );
+      } else {
+        logger.debug(
+          { matchId: match.matchId, discordId: player.discordId, lpStatus, lpSource, matchAgeMs },
+          '[feed] Notification is missing a definitive LP attribution',
+        );
+      }
     }
 
     const resolvedMatches = resolvedMatchesByPuuid.get(match.puuid) ?? [];

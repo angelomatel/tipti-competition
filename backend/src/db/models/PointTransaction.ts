@@ -21,6 +21,7 @@ PointTransactionSchema.index(
   { playerId: 1, source: 1, type: 1, matchId: 1 },
   {
     unique: true,
+    name: 'lp_delta_uniqueness',
     partialFilterExpression: {
       source: 'lp_delta',
       type: 'match',
@@ -33,6 +34,7 @@ PointTransactionSchema.index(
   { playerId: 1, matchId: 1, source: 1, type: 1 },
   {
     unique: true,
+    name: 'buff_uniqueness',
     partialFilterExpression: {
       type: 'buff',
       matchId: { $type: 'string' },
