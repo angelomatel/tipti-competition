@@ -36,6 +36,10 @@ vi.mock('@/services/scoringEngine', () => ({
   computePlayerScoreTotals: vi.fn(),
 }));
 
+vi.mock('@/services/godService', () => ({
+  getGodStandings: vi.fn(),
+}));
+
 vi.mock('@/lib/logger', () => ({
   logger: {
     debug: vi.fn(),
@@ -52,6 +56,7 @@ import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { processNewMatchBuffs } from '@/services/matchBuffProcessor';
 import { getTournamentSettings } from '@/services/tournamentService';
 import { computePlayerScoreTotals } from '@/services/scoringEngine';
+import { getGodStandings } from '@/services/godService';
 import { logger } from '@/lib/logger';
 
 const mockMatchFind = vi.mocked(MatchRecord.find);
@@ -63,6 +68,7 @@ const mockPointInsertMany = vi.mocked(PointTransaction.insertMany);
 const mockSnapshotFind = vi.mocked(LpSnapshot.find);
 const mockGetTournamentSettings = vi.mocked(getTournamentSettings);
 const mockComputePlayerScoreTotals = vi.mocked(computePlayerScoreTotals);
+const mockGetGodStandings = vi.mocked(getGodStandings);
 const mockInfo = vi.mocked(logger.info);
 
 function makeSettings() {
@@ -100,6 +106,7 @@ describe('processNewMatchBuffs', () => {
     vi.clearAllMocks();
     mockGetTournamentSettings.mockResolvedValue(makeSettings());
     mockComputePlayerScoreTotals.mockResolvedValue(new Map());
+    mockGetGodStandings.mockResolvedValue([] as any);
     mockPointAggregate.mockResolvedValue([] as any);
     mockPointFind.mockReturnValue({
       select: vi.fn().mockReturnValue({
