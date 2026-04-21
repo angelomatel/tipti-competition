@@ -37,7 +37,7 @@ export function getDailyCap(godSlug: string): number {
   return GOD_DAILY_CAP_OVERRIDES[godSlug] ?? BUFF_DAILY_CAP;
 }
 
-export function buildMatchBuffEntries(params: {
+type BuildBuffParams = {
   match: LeanMatchRecord;
   player: PlayerContext;
   matchDay: string;
@@ -48,10 +48,12 @@ export function buildMatchBuffEntries(params: {
   streakByMatchId: Map<string, MatchStreakState>;
   matchesByPuuidDay: Map<string, LeanMatchRecord[]>;
   kayleActivityAwarded: Set<string>;
-}): BuffEntry[] {
+};
+
+function evaluateGodRule(godSlug: string, params: BuildBuffParams): BuffEntry[] {
   const { match, matchDay, player } = params;
 
-  switch (player.godSlug) {
+  switch (godSlug) {
     case 'varus': {
       const rankings = params.rankingsByGod.get('varus') ?? new Map<string, number>();
       return computeVarusMatchBuff(rankings.get(player.discordId) ?? 999);
@@ -100,6 +102,17 @@ export function buildMatchBuffEntries(params: {
     default:
       return [];
   }
+}
+
+export function buildMatchBuffEntries(params: BuildBuffParams): BuffEntry[] {
+  return evaluateGodRule(params.player.godSlug, params);
+}
+
+export function buildDeadGodMatchBuffEntries(params: BuildBuffParams, deadGodSlug: string): BuffEntry[] {
+  return evaluateGodRule(deadGodSlug, params).map((entry) => ({
+    ...entry,
+    source: `dead_${entry.source}`,
+  }));
 }
 
 function randomInt(min: number, max: number): number {

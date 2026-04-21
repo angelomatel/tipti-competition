@@ -20,6 +20,12 @@ export function getBuffActivationStart(
   return getPhtDayBounds(phase2.startDay).dayStart;
 }
 
+export function getDeadGodLotteryStart(settings: { startDate: Date }): Date {
+  const startDay = dateToPhtDayStr(settings.startDate);
+  const { dayStart } = getPhtDayBounds(startDay);
+  return new Date(dayStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+}
+
 export function buildGodRankings(
   players: Array<Pick<ActivePlayerRecord, 'discordId' | 'godSlug' | 'isEliminatedFromGod'>>,
   scoreTotals: Map<string, number>,
