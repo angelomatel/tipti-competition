@@ -147,6 +147,13 @@ export const ELIMINATION_COUNTS = [3, 3, 0] as const;
 /** Default maximum buff points per player per day. */
 export const BUFF_DAILY_CAP = 75;
 
+/** Dead-god buff lottery: base chance for the top-ranked surviving god. */
+export const DEAD_GOD_LOTTERY_BASE = 0.10;
+/** Dead-god buff lottery: chance increment per rank step downward. */
+export const DEAD_GOD_LOTTERY_STEP = 0.15;
+/** Dead-god buff lottery: maximum chance (clamped at 6th rank and below). */
+export const DEAD_GOD_LOTTERY_MAX = 0.85;
+
 /** Per-god daily cap overrides. */
 export const GOD_DAILY_CAP_OVERRIDES: Partial<Record<string, number>> = {
   yasuo: 120,
