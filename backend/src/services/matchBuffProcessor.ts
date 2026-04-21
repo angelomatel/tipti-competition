@@ -2,6 +2,11 @@ import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { MatchRecord } from '@/db/models/MatchRecord';
 import { Player } from '@/db/models/Player';
 import { PointTransaction } from '@/db/models/PointTransaction';
+import {
+  DEAD_GOD_LOTTERY_BASE,
+  DEAD_GOD_LOTTERY_MAX,
+  DEAD_GOD_LOTTERY_STEP,
+} from '@/constants';
 import { dateToPhtDayStr, getCurrentPhtDay, getPhtDayBounds } from '@/lib/dateUtils';
 import { logger } from '@/lib/logger';
 import { getPlayerLogLabel } from '@/lib/playerLogLabel';
@@ -11,9 +16,11 @@ import {
   buildMatchBuffDerivedState,
   findTopRankedPlayerPuuid,
   getBuffActivationStart,
+  getDeadGodLotteryStart,
   mapPlayersByPuuid,
 } from '@/services/matchBuffProcessor/context';
-import { buildMatchBuffEntries, getDailyCap } from '@/services/matchBuffProcessor/rules';
+import { buildDeadGodMatchBuffEntries, buildMatchBuffEntries, getDailyCap } from '@/services/matchBuffProcessor/rules';
+import { getGodStandings } from '@/services/godService';
 import type {
   ActivePlayerRecord,
   DailyBuffTotalRow,
@@ -47,6 +54,20 @@ export async function processNewMatchBuffs(): Promise<void> {
   const scoreTotals = await computePlayerScoreTotals(allActivePlayers.map((player) => player.discordId));
   const godRankings = buildGodRankings(allActivePlayers, scoreTotals);
   const playerByPuuid = mapPlayersByPuuid(allActivePlayers, puuids);
+
+  const godStandings = await getGodStandings();
+  const aliveGodRankBySlug = new Map<string, number>();
+  const eliminatedGodSlugs: string[] = [];
+  let aliveRank = 1;
+  for (const god of godStandings) {
+    if (god.isEliminated) {
+      eliminatedGodSlugs.push(god.slug);
+    } else {
+      aliveGodRankBySlug.set(god.slug, aliveRank);
+      aliveRank += 1;
+    }
+  }
+  const deadGodLotteryStart = getDeadGodLotteryStart(settings);
   const threshTop1PlayerPuuid = findTopRankedPlayerPuuid('thresh', godRankings, allActivePlayers);
 
   const minDayStart = matchDays.length > 0 ? getPhtDayBounds(matchDays[0]!).dayStart : null;
@@ -164,7 +185,7 @@ export async function processNewMatchBuffs(): Promise<void> {
     const cap = getDailyCap(player.godSlug);
     let currentTotal = derivedState.dailyBuffTotals.get(totalKey) ?? 0;
 
-    const entries = buildMatchBuffEntries({
+    const buffParams = {
       match,
       player,
       matchDay,
@@ -175,7 +196,37 @@ export async function processNewMatchBuffs(): Promise<void> {
       streakByMatchId: derivedState.streakByMatchId,
       matchesByPuuidDay: derivedState.matchesByPuuidDay,
       kayleActivityAwarded: derivedState.kayleActivityAwarded,
-    });
+    };
+    const entries = buildMatchBuffEntries(buffParams);
+
+    if (
+      match.playedAt >= deadGodLotteryStart
+      && eliminatedGodSlugs.length > 0
+    ) {
+      const godRank = aliveGodRankBySlug.get(player.godSlug) ?? 1;
+      const chance = Math.min(DEAD_GOD_LOTTERY_MAX, DEAD_GOD_LOTTERY_BASE + (godRank - 1) * DEAD_GOD_LOTTERY_STEP);
+      const roll = Math.random();
+      const won = roll < chance;
+      const pickedGod = won
+        ? eliminatedGodSlugs[Math.floor(Math.random() * eliminatedGodSlugs.length)]!
+        : null;
+      logger.info(
+        {
+          discordId: player.discordId,
+          godSlug: player.godSlug,
+          godRank,
+          chance,
+          roll: roll.toFixed(4),
+          won,
+          pickedGod,
+          matchId: match.matchId,
+        },
+        `[match-buff] Dead-god lottery for ${getPlayerLogLabel(player)}: ${won ? `won → ${pickedGod}` : 'lost'}`,
+      );
+      if (won && pickedGod) {
+        entries.push(...buildDeadGodMatchBuffEntries(buffParams, pickedGod));
+      }
+    }
 
     let writtenForMatch = 0;
     for (const entry of entries) {
