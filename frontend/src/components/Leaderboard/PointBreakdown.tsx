@@ -40,11 +40,20 @@ const SOURCE_LABELS: Record<string, string> = {
 
 const isLpSource = (source: string) => source === 'lp_data' || source === 'lp_delta';
 
+const resolveSourceLabel = (source: string): string => {
+  if (source.startsWith('dead_')) {
+    const base = source.slice(5);
+    const baseLabel = SOURCE_LABELS[base] ?? base;
+    return `(Chance) ${baseLabel}`;
+  }
+  return SOURCE_LABELS[source] ?? source;
+};
+
 const labelFor = (tx: DailyPointTransaction) => {
   if (isLpSource(tx.source)) {
     return tx.value >= 0 ? 'LP Gain' : 'LP Loss';
   }
-  return SOURCE_LABELS[tx.source] ?? tx.source;
+  return resolveSourceLabel(tx.source);
 };
 
 const formatTime = (iso?: string) => {
