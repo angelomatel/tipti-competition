@@ -38,6 +38,11 @@ export const BASELINE_RANK_REFRESH_INTERVAL_MINUTES = 15;
  * lagging Riot LP updates still have a chance to attribute before timing out.
  */
 export const PENDING_ATTRIBUTION_TTL_MINUTES = 90;
+/**
+ * SLO floor for baseline polling freshness. A baseline player starved beyond this
+ * age bypasses queue-pressure backoff so they are guaranteed to be polled.
+ */
+export const BASELINE_FRESHNESS_FLOOR_MINUTES = 30;
 export const DATABASE_BACKUP_ENABLED = IS_PRODUCTION;
 export const DATABASE_BACKUP_CRON = '0 */12 * * *';
 export const PHT_TIMEZONE = 'Asia/Manila';

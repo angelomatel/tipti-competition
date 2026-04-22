@@ -1,4 +1,5 @@
 import {
+  BASELINE_FRESHNESS_FLOOR_MINUTES,
   BASELINE_RANK_REFRESH_INTERVAL_MINUTES,
   COLD_DISCOVERY_RESERVE_PER_MINUTE,
   CRON_PLAYER_CONCURRENCY,
@@ -137,33 +138,48 @@ async function runSingleCycle(
     return { stop: false };
   };
 
+  const freshnessFloorMs = BASELINE_FRESHNESS_FLOOR_MINUTES * 60 * 1_000;
+  const isBaselineStarved = (player: PlayerDocument, nowMs: number): boolean => {
+    if (cycleType !== 'baseline') return false;
+    const lastPollMs = states.get(player.discordId)?.lastMatchPollAt?.getTime() ?? 0;
+    return lastPollMs === 0 || nowMs - lastPollMs >= freshnessFloorMs;
+  };
+  let starvationOverrides = 0;
+
   const workerLoop = async () => {
     while (true) {
-      const gate = shouldStopScheduling();
-      if (gate.stop) {
-        if (gate.reason === 'queue') queueLimited = true;
-        if (gate.reason === 'reserve') reserveLimited = true;
-        return;
+      const currentIndex = nextIndex;
+      const player = currentIndex < candidates.length ? candidates[currentIndex] : undefined;
+      const starved = player ? isBaselineStarved(player, Date.now()) : false;
+
+      if (!starved) {
+        const gate = shouldStopScheduling();
+        if (gate.stop) {
+          if (gate.reason === 'queue') queueLimited = true;
+          if (gate.reason === 'reserve') reserveLimited = true;
+          return;
+        }
       }
 
-      const currentIndex = nextIndex;
       nextIndex += 1;
       if (currentIndex >= candidates.length) {
         return;
       }
 
-      const player = candidates[currentIndex]!;
-      if (activePlayerLocks.has(player.discordId)) {
+      const selected = player!;
+      if (starved) starvationOverrides += 1;
+
+      if (activePlayerLocks.has(selected.discordId)) {
         lockedPlayers += 1;
         continue;
       }
 
-      activePlayerLocks.add(player.discordId);
+      activePlayerLocks.add(selected.discordId);
       try {
-        await processPlayerCycle(player, cycleType, settings, Boolean(options.catchUp), states);
+        await processPlayerCycle(selected, cycleType, settings, Boolean(options.catchUp), states);
         processedPlayers += 1;
       } finally {
-        activePlayerLocks.delete(player.discordId);
+        activePlayerLocks.delete(selected.discordId);
       }
     }
   };
@@ -186,6 +202,7 @@ async function runSingleCycle(
       playersSkippedByLock: lockedPlayers,
       queueLimited,
       reserveLimited,
+      starvationOverrides,
       hotCandidateCount: selection.eligibleHotCount,
       baselineCandidateCount: selection.eligibleBaselineCount,
       queuedRequests: queueSnapshot.queuedRequests,
