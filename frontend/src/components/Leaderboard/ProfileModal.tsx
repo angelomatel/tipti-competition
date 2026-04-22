@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePlayer } from '@/src/hooks/usePlayer';
 import { formatTier } from '@/src/types/Rank';
@@ -11,6 +11,7 @@ import RankImage from '@/src/components/Images/RankImage/RankImage';
 import LPGraph from '@/src/components/Leaderboard/LPGraph';
 import Avatar from '@/src/components/Shared/Avatar';
 import PointBreakdown from '@/src/components/Leaderboard/PointBreakdown';
+import PollStateInfo, { formatRelativeTime } from '@/src/components/Leaderboard/PollStateInfo';
 import { getGodSplash, getGodBannerOffset } from '@/src/lib/godData';
 
 interface ProfileModalProps {
@@ -21,15 +22,21 @@ interface ProfileModalProps {
 
 const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose, hideGod }) => {
   const [matchLimit, setMatchLimit] = useState(20);
-  useEffect(() => { setMatchLimit(20); }, [discordId]);
+  const [lastDiscordId, setLastDiscordId] = useState(discordId);
+  if (discordId !== lastDiscordId) {
+    setLastDiscordId(discordId);
+    setMatchLimit(20);
+  }
   const { data: freshData, error, isLoading } = usePlayer(discordId, matchLimit);
 
   // Keep previous data only while the same player's limit is changing — not across player switches.
-  const staleRef = useRef<{ discordId: string | null; data: typeof freshData }>(
+  const [staleData, setStaleData] = useState<{ discordId: string | null; data: typeof freshData }>(
     { discordId: null, data: undefined },
   );
-  if (freshData) staleRef.current = { discordId, data: freshData };
-  const data = freshData ?? (staleRef.current.discordId === discordId ? staleRef.current.data : undefined);
+  if (freshData && staleData.data !== freshData) {
+    setStaleData({ discordId, data: freshData });
+  }
+  const data = freshData ?? (staleData.discordId === discordId ? staleData.data : undefined);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -152,17 +159,13 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ discordId, onClose, hideGod
                       new Date(a.capturedAt) > new Date(b.capturedAt) ? a : b
                     );
                     const date = new Date(latest.capturedAt);
-                    const diffMs = Date.now() - date.getTime();
-                    const diffMin = Math.floor(diffMs / 60000);
-                    const relative =
-                      diffMin < 1 ? 'just now'
-                      : diffMin < 60 ? `${diffMin}m ago`
-                      : diffMin < 1440 ? `${Math.floor(diffMin / 60)}h ago`
-                      : `${Math.floor(diffMin / 1440)}d ago`;
                     return (
-                      <p className="text-[0.65rem] text-text-muted" title={date.toLocaleString()}>
-                        Updated {relative}
-                      </p>
+                      <div className="flex items-center gap-1">
+                        <p className="text-[0.65rem] text-text-muted" title={date.toLocaleString()}>
+                          Updated {formatRelativeTime(date)}
+                        </p>
+                        <PollStateInfo pollState={data.pollState ?? null} />
+                      </div>
                     );
                   })()}
                 </div>
