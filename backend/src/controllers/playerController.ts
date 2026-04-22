@@ -3,6 +3,7 @@ import { performance } from 'node:perf_hooks';
 import { LpSnapshot } from '@/db/models/LpSnapshot';
 import { MatchRecord } from '@/db/models/MatchRecord';
 import { God } from '@/db/models/God';
+import { PlayerPollState } from '@/db/models/PlayerPollState';
 import { normalizeLP } from '@/lib/normalizeLP';
 import { QUERY_LIMITS } from '@/constants';
 import {
@@ -103,6 +104,7 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
       scoreBreakdown,
       dailyPoints,
       settings,
+      pollState,
     ] = await Promise.all([
       measureAsyncStep(timings, 'snapshotsQueryMs', () => LpSnapshot.find({ puuid: player.puuid })
         .sort({ capturedAt: -1 })
@@ -116,6 +118,7 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
       measureAsyncStep(timings, 'scoreBreakdownMs', () => computePlayerScoreBreakdown(player.discordId)),
       measureAsyncStep(timings, 'dailyBreakdownMs', () => computePlayerDailyBreakdown(player.discordId)),
       measureAsyncStep(timings, 'settingsQueryMs', () => getTournamentSettings()),
+      measureAsyncStep(timings, 'pollStateQueryMs', () => PlayerPollState.findOne({ playerId: player.discordId }).lean()),
     ]);
 
     rawSnapshots.reverse();
@@ -196,6 +199,10 @@ export async function getPlayer(req: Request, res: Response, next: NextFunction)
       scorePoints: scoreBreakdown.total,
       pointBreakdown: scoreBreakdown,
       dailyPoints,
+      pollState: pollState ? {
+        lastRankPollAt: pollState.lastRankPollAt,
+        lastMatchPollAt: pollState.lastMatchPollAt,
+      } : null,
     });
   } catch (err) { next(err); }
 }

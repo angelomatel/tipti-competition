@@ -76,4 +76,8 @@ export interface PlayerProfileResponse {
   scorePoints: number;
   pointBreakdown: PlayerScoreBreakdown;
   dailyPoints: DailyPointEntry[];
+  pollState?: {
+    lastRankPollAt: string | null;
+    lastMatchPollAt: string | null;
+  } | null;
 }
