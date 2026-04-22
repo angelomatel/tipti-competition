@@ -69,6 +69,17 @@ function formatSignedValue(value: number, unit: string): string {
   return `${value >= 0 ? '+' : ''}${value} ${unit}`;
 }
 
+function formatRelativeAgo(value: string | Date | null | undefined): string {
+  if (!value) return '—';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  const diffMin = Math.floor((Date.now() - date.getTime()) / 60000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffMin < 1440) return `${Math.floor(diffMin / 60)}h ago`;
+  return `${Math.floor(diffMin / 1440)}d ago`;
+}
+
 function formatMatchTimestamp(date: string | Date): string {
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
@@ -286,6 +297,11 @@ export class Profile {
         {
           name: 'Links',
           value: `[tactics.tools](${tacticsToolsProfileUrl})\n[MetaTFT](${metatftProfileUrl})`,
+          inline: true,
+        },
+        {
+          name: 'Last Polled',
+          value: `Rank: ${formatRelativeAgo(profileData.pollState?.lastRankPollAt)}\nMatches: ${formatRelativeAgo(profileData.pollState?.lastMatchPollAt)}`,
           inline: true,
         },
         {
