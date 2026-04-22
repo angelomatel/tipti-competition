@@ -2,6 +2,7 @@ import {
   AHRI_PER_FIRST,
   ASOL_BASE_UPPER,
   ASOL_SHIFT_CAP,
+  ASOL_UPPER_BIAS,
   BUFF_DAILY_CAP,
   EKKO_FLAT_PER_MATCH,
   EKKO_REPEAT_BONUS,
@@ -115,8 +116,9 @@ export function buildDeadGodMatchBuffEntries(params: BuildBuffParams, deadGodSlu
   }));
 }
 
-function randomInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
+function randomIntBiasedHigh(min: number, max: number, bias: number): number {
+  const skewed = Math.pow(Math.random(), 1 / bias);
+  return min + Math.floor((max - min + 1) * skewed);
 }
 
 function getEvelynnLpThreshold(tierOrder: number): number {
@@ -196,7 +198,7 @@ function computeAsolMatchBuff(placement: number): BuffEntry[] {
   const shift = -Math.min(placement - 1, ASOL_SHIFT_CAP);
   const lower = shift;
   const upper = ASOL_BASE_UPPER + shift;
-  const value = randomInt(lower, upper);
+  const value = randomIntBiasedHigh(lower, upper, ASOL_UPPER_BIAS);
   if (value === 0) return [];
 
   return [{

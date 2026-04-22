@@ -236,3 +236,5 @@ export const AHRI_PER_FIRST = 17;
 export const ASOL_BASE_UPPER = 10;
 /** Aurelion Sol: max placement shift for bounds. */
 export const ASOL_SHIFT_CAP = 7;
+/** Aurelion Sol: power exponent biasing rolls toward upper bound. 1.0 = uniform, higher = more skew up. */
+export const ASOL_UPPER_BIAS = 1.7;
