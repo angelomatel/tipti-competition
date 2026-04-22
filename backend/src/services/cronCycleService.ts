@@ -7,6 +7,7 @@ import {
   HOT_PLAYER_TTL_MINUTES,
   HOT_POLL_INTERVAL_SECONDS,
   HOT_RANK_REFRESH_INTERVAL_MINUTES,
+  PENDING_ATTRIBUTION_TTL_MINUTES,
   RIOT_APP_RATE_PER_120_SECONDS,
   SCHEDULER_MAX_BLOCKED_FOR_MS,
   SCHEDULER_MAX_P95_QUEUE_WAIT_MS,
@@ -374,9 +375,13 @@ function needsRankRefresh(
 }
 
 async function countOutstandingMatchAttribution(puuid: string): Promise<number> {
+  // Pending matches older than the TTL are treated as abandoned attributions
+  // (Riot LP never landed in time) so they no longer keep the player in hot mode.
+  const cutoff = new Date(Date.now() - PENDING_ATTRIBUTION_TTL_MINUTES * 60 * 1_000);
   return MatchRecord.countDocuments({
     puuid,
     lpAttributionStatus: 'pending',
+    playedAt: { $gte: cutoff },
   });
 }
 

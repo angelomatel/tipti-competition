@@ -32,6 +32,12 @@ export const HOT_IDLE_POLLS_TO_COOLDOWN = 3;
 export const COLD_DISCOVERY_RESERVE_PER_MINUTE = 10;
 export const HOT_RANK_REFRESH_INTERVAL_MINUTES = 5;
 export const BASELINE_RANK_REFRESH_INTERVAL_MINUTES = 15;
+/**
+ * Pending LP attributions older than this are considered abandoned and no longer
+ * keep a player in hot mode. Must exceed HOT_PLAYER_TTL_MINUTES so genuinely
+ * lagging Riot LP updates still have a chance to attribute before timing out.
+ */
+export const PENDING_ATTRIBUTION_TTL_MINUTES = 90;
 export const DATABASE_BACKUP_ENABLED = IS_PRODUCTION;
 export const DATABASE_BACKUP_CRON = '0 */12 * * *';
 export const PHT_TIMEZONE = 'Asia/Manila';
