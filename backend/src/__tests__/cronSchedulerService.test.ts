@@ -21,6 +21,7 @@ vi.mock('@/db/models/PlayerPollState', () => ({
 import {
   buildDefaultPollState,
   selectPlayersForCycles,
+  selectPlayersForMatchDrain,
   syncActivePollStates,
 } from '@/services/cronSchedulerService';
 
@@ -147,6 +148,42 @@ describe('cronSchedulerService', () => {
     const selection = selectPlayersForCycles(players, states as any, nowMs);
 
     expect(selection.baselineCandidates.map((player) => player.discordId)).toEqual(['user-2', 'user-3', 'user-1']);
+  });
+
+  it('selects match-drain candidates by pendingMatchFetch flag or stale lastMatchPollAt', () => {
+    const players = [
+      makePlayer(1, '2026-01-01T00:00:00.000Z'),
+      makePlayer(2, '2026-01-02T00:00:00.000Z'),
+      makePlayer(3, '2026-01-03T00:00:00.000Z'),
+      makePlayer(4, '2026-01-04T00:00:00.000Z'),
+    ];
+    const nowMs = new Date('2026-02-01T01:00:00.000Z').getTime();
+    const states = new Map([
+      // Flagged by rank cron (skipped due to queue pressure) — must be drained.
+      ['user-1', {
+        ...buildDefaultPollState(players[0]),
+        pendingMatchFetch: true,
+        lastMatchPollAt: new Date(nowMs - 60_000),
+      }],
+      // Fresh match poll, no flag — skip.
+      ['user-2', {
+        ...buildDefaultPollState(players[1]),
+        lastMatchPollAt: new Date(nowMs - 60_000),
+      }],
+      // Stale match poll beyond safety ceiling (>30 min) — drain.
+      ['user-3', {
+        ...buildDefaultPollState(players[2]),
+        lastMatchPollAt: new Date(nowMs - 31 * 60_000),
+      }],
+      // Never polled — drain.
+      ['user-4', {
+        ...buildDefaultPollState(players[3]),
+      }],
+    ]);
+
+    const candidates = selectPlayersForMatchDrain(players, states as any, nowMs);
+
+    expect(candidates.map((player) => player.discordId)).toEqual(['user-1', 'user-3', 'user-4']);
   });
 
   it('demotes stale hot players back to baseline during poll-state sync', async () => {

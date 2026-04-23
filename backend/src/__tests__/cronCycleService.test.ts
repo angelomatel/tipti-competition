@@ -79,7 +79,7 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-import { runCronCycle, resetCronCycleState } from '@/services/cronCycleService';
+import { runCronCycle, runMatchDrainCycle, resetCronCycleState } from '@/services/cronCycleService';
 
 function makeSettings(startOffsetMs = -3_600_000, endOffsetMs = 3_600_000) {
   const now = Date.now();
@@ -119,6 +119,16 @@ const defaultMatchCaptureResult = {
   newMatches: [],
 };
 
+const defaultQueueSnapshot = {
+  queuedRequests: 0,
+  activeRequests: 0,
+  blockedUntil: null,
+  blockedForMs: 0,
+  requestsLastSecond: 0,
+  requestsLastMinute: 0,
+  requestsLast120Seconds: 0,
+};
+
 describe('runCronCycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -138,49 +148,118 @@ describe('runCronCycle', () => {
     mockCountOutstandingMatches.mockResolvedValue(0);
     mockGetRiotClient.mockReturnValue({
       getRequestMetricsSince: vi.fn().mockReturnValue([]),
-      getQueueSnapshot: vi.fn().mockReturnValue({
-        queuedRequests: 0,
-        activeRequests: 0,
-        blockedUntil: null,
-        blockedForMs: 0,
-        requestsLastSecond: 0,
-        requestsLastMinute: 0,
-        requestsLast120Seconds: 0,
-      }),
+      getQueueSnapshot: vi.fn().mockReturnValue({ ...defaultQueueSnapshot }),
     });
   });
 
-  it('promotes a baseline player to hot mode after capturing a new match', async () => {
-    mockCaptureMatchesForPlayer.mockResolvedValue({
-      ...defaultMatchCaptureResult,
-      uncapturedMatchCount: 1,
-      capturedCount: 1,
-      newMatches: [
-        {
-          matchId: 'SG2_1',
-          placement: 2,
-          playedAt: new Date('2026-04-18T00:00:00.000Z'),
-        },
-      ],
-    });
-
+  it('polls rank every cycle but skips the match fetch when nothing changed', async () => {
     await runCronCycle({ cycleType: 'baseline', source: 'scheduled' });
 
+    expect(mockCaptureSnapshotForPlayer).toHaveBeenCalledTimes(1);
+    expect(mockCaptureMatchesForPlayer).not.toHaveBeenCalled();
     expect(mockPlayerPollStateUpdateOne).toHaveBeenCalledWith(
       { playerId: 'user-1' },
       expect.objectContaining({
         $set: expect.objectContaining({
-          mode: 'hot',
-          deferredMatchDetailCount: 0,
-          unresolvedMatchCount: 0,
-          nextEligibleAt: expect.any(Date),
+          mode: 'baseline',
+          pendingMatchFetch: false,
+          lastRankPollAt: expect.any(Date),
         }),
       }),
       { upsert: true },
     );
   });
 
-  it('keeps pending hot players cheap on no-op polls and cools them back to baseline after idle TTL', async () => {
+  it('runs a synchronous match fetch when rank delta is observed and promotes to hot', async () => {
+    // Simulate the player's post-fetch competitive state changing (losses+=1, LP unchanged:
+    // covers the division-floor edge case where a loss doesn't move LP).
+    mockCaptureSnapshotForPlayer.mockImplementation(async (player: any) => ({
+      ...player,
+      currentLosses: player.currentLosses + 1,
+    }));
+    mockCaptureMatchesForPlayer.mockResolvedValue({
+      ...defaultMatchCaptureResult,
+      uncapturedMatchCount: 1,
+      capturedCount: 1,
+      newMatches: [
+        { matchId: 'SG2_1', placement: 6, playedAt: new Date('2026-04-18T00:00:00.000Z') },
+      ],
+    });
+
+    await runCronCycle({ cycleType: 'baseline', source: 'scheduled' });
+
+    expect(mockCaptureSnapshotForPlayer).toHaveBeenCalledTimes(1);
+    expect(mockCaptureMatchesForPlayer).toHaveBeenCalledTimes(1);
+    expect(mockCreateLpDeltaTransaction).toHaveBeenCalledTimes(1);
+    expect(mockPlayerPollStateUpdateOne).toHaveBeenCalledWith(
+      { playerId: 'user-1' },
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          mode: 'hot',
+          pendingMatchFetch: false,
+          lastMatchPollAt: expect.any(Date),
+        }),
+      }),
+      { upsert: true },
+    );
+  });
+
+  it('defers the match fetch and flags pendingMatchFetch when the queue is under pressure', async () => {
+    const now = new Date();
+    // Seed the player as hot so the hot-cycle selector picks them up.
+    mockPlayerPollStateFind.mockReturnValue({
+      lean: vi.fn().mockResolvedValue([
+        {
+          playerId: 'user-1',
+          puuid: 'puuid-1',
+          mode: 'hot',
+          lastProcessedAt: new Date(now.getTime() - 60_000),
+          lastRankPollAt: new Date(now.getTime() - 60_000),
+          lastMatchPollAt: new Date(now.getTime() - 60_000),
+          lastObservedActivityAt: new Date(now.getTime() - 60_000),
+          enteredHotAt: new Date(now.getTime() - 60_000),
+          consecutiveIdleHotPolls: 0,
+          unresolvedMatchCount: 0,
+          deferredMatchDetailCount: 0,
+          pendingMatchFetch: false,
+          nextEligibleAt: new Date(now.getTime() - 1_000),
+        },
+      ]),
+    });
+    mockCaptureSnapshotForPlayer.mockImplementation(async (player: any) => ({
+      ...player,
+      currentLP: player.currentLP + 20,
+    }));
+    // Clean at scheduling time; pressured by the time processPlayerCycle re-checks.
+    let snapshotCall = 0;
+    mockGetRiotClient.mockReturnValue({
+      getRequestMetricsSince: vi.fn().mockReturnValue([]),
+      getQueueSnapshot: vi.fn().mockImplementation(() => {
+        snapshotCall += 1;
+        if (snapshotCall === 1) {
+          return { ...defaultQueueSnapshot };
+        }
+        return { ...defaultQueueSnapshot, queuedRequests: 1_000 };
+      }),
+    });
+
+    await runCronCycle({ cycleType: 'hot', source: 'scheduled' });
+
+    expect(mockCaptureSnapshotForPlayer).toHaveBeenCalledTimes(1);
+    expect(mockCaptureMatchesForPlayer).not.toHaveBeenCalled();
+    expect(mockPlayerPollStateUpdateOne).toHaveBeenCalledWith(
+      { playerId: 'user-1' },
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          mode: 'hot',
+          pendingMatchFetch: true,
+        }),
+      }),
+      { upsert: true },
+    );
+  });
+
+  it('cools a pending hot player back to baseline after idle TTL', async () => {
     const now = new Date();
     mockPlayerPollStateFind.mockReturnValue({
       lean: vi.fn().mockResolvedValue([
@@ -196,6 +275,7 @@ describe('runCronCycle', () => {
           consecutiveIdleHotPolls: 2,
           unresolvedMatchCount: 0,
           deferredMatchDetailCount: 0,
+          pendingMatchFetch: false,
           nextEligibleAt: new Date(now.getTime() - 1_000),
         },
       ]),
@@ -203,7 +283,8 @@ describe('runCronCycle', () => {
 
     await runCronCycle({ cycleType: 'hot', source: 'scheduled' });
 
-    expect(mockCaptureSnapshotForPlayer).not.toHaveBeenCalled();
+    expect(mockCaptureSnapshotForPlayer).toHaveBeenCalledTimes(1);
+    expect(mockCaptureMatchesForPlayer).not.toHaveBeenCalled();
     expect(mockPlayerPollStateUpdateOne).toHaveBeenCalledWith(
       { playerId: 'user-1' },
       expect.objectContaining({
@@ -222,19 +303,14 @@ describe('runCronCycle', () => {
     mockGetRiotClient.mockReturnValue({
       getRequestMetricsSince: vi.fn().mockReturnValue([]),
       getQueueSnapshot: vi.fn().mockReturnValue({
-        queuedRequests: 0,
-        activeRequests: 0,
-        blockedUntil: null,
+        ...defaultQueueSnapshot,
         blockedForMs: 999,
-        requestsLastSecond: 0,
-        requestsLastMinute: 0,
-        requestsLast120Seconds: 0,
       }),
     });
 
     await runCronCycle({ cycleType: 'baseline', source: 'scheduled' });
 
-    expect(mockCaptureMatchesForPlayer).toHaveBeenCalledTimes(1);
+    expect(mockCaptureSnapshotForPlayer).toHaveBeenCalledTimes(1);
   });
 
   it('skips overlapping cycles of the same type', async () => {
@@ -242,9 +318,9 @@ describe('runCronCycle', () => {
     const blocker = new Promise<void>((resolve) => {
       release = resolve;
     });
-    mockCaptureMatchesForPlayer.mockImplementation(async () => {
+    mockCaptureSnapshotForPlayer.mockImplementation(async (player: any) => {
       await blocker;
-      return defaultMatchCaptureResult;
+      return player;
     });
 
     const firstRun = runCronCycle({ cycleType: 'hot', source: 'scheduled' });
@@ -258,5 +334,127 @@ describe('runCronCycle', () => {
       { cycleType: 'hot' },
       '[cron] A conflicting cycle is already running. Skipping overlapping cycle.',
     );
+  });
+});
+
+describe('runMatchDrainCycle', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetCronCycleState();
+
+    mockGetTournamentSettings.mockResolvedValue(makeSettings());
+    mockPlayerPollStateBulkWrite.mockResolvedValue(undefined);
+    mockPlayerPollStateUpdateOne.mockResolvedValue(undefined);
+    mockListActivePlayers.mockResolvedValue([makePlayer()]);
+    mockCaptureMatchesForPlayer.mockResolvedValue(defaultMatchCaptureResult);
+    mockCaptureSnapshotForPlayer.mockImplementation(async (player: any) => player);
+    mockCreateLpDeltaTransaction.mockResolvedValue(undefined);
+    mockProcessNewMatchBuffs.mockResolvedValue(undefined);
+    mockCountOutstandingMatches.mockResolvedValue(0);
+    mockGetRiotClient.mockReturnValue({
+      getRequestMetricsSince: vi.fn().mockReturnValue([]),
+      getQueueSnapshot: vi.fn().mockReturnValue({ ...defaultQueueSnapshot }),
+    });
+  });
+
+  it('drains players flagged with pendingMatchFetch and clears the flag', async () => {
+    const now = new Date();
+    mockPlayerPollStateFind.mockReturnValue({
+      lean: vi.fn().mockResolvedValue([
+        {
+          playerId: 'user-1',
+          puuid: 'puuid-1',
+          mode: 'hot',
+          lastProcessedAt: new Date(now.getTime() - 30_000),
+          lastRankPollAt: new Date(now.getTime() - 30_000),
+          lastMatchPollAt: new Date(now.getTime() - 30_000),
+          lastObservedActivityAt: new Date(now.getTime() - 30_000),
+          enteredHotAt: new Date(now.getTime() - 30_000),
+          consecutiveIdleHotPolls: 0,
+          unresolvedMatchCount: 0,
+          deferredMatchDetailCount: 0,
+          pendingMatchFetch: true,
+          nextEligibleAt: new Date(now.getTime() + 60_000),
+        },
+      ]),
+    });
+
+    await runMatchDrainCycle({ source: 'scheduled' });
+
+    expect(mockCaptureMatchesForPlayer).toHaveBeenCalledTimes(1);
+    expect(mockPlayerPollStateUpdateOne).toHaveBeenCalledWith(
+      { playerId: 'user-1' },
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          pendingMatchFetch: false,
+          lastMatchPollAt: expect.any(Date),
+        }),
+      }),
+      { upsert: true },
+    );
+  });
+
+  it('picks up players whose last match poll is past the safety ceiling even without a flag', async () => {
+    const now = new Date();
+    // 31 min > MATCH_POLL_SAFETY_CEILING_MINUTES (30)
+    mockPlayerPollStateFind.mockReturnValue({
+      lean: vi.fn().mockResolvedValue([
+        {
+          playerId: 'user-1',
+          puuid: 'puuid-1',
+          mode: 'baseline',
+          lastProcessedAt: new Date(now.getTime() - 31 * 60_000),
+          lastRankPollAt: new Date(now.getTime() - 31 * 60_000),
+          lastMatchPollAt: new Date(now.getTime() - 31 * 60_000),
+          lastObservedActivityAt: null,
+          enteredHotAt: null,
+          consecutiveIdleHotPolls: 0,
+          unresolvedMatchCount: 0,
+          deferredMatchDetailCount: 0,
+          pendingMatchFetch: false,
+          nextEligibleAt: null,
+        },
+      ]),
+    });
+
+    await runMatchDrainCycle({ source: 'scheduled' });
+
+    expect(mockCaptureMatchesForPlayer).toHaveBeenCalledTimes(1);
+  });
+
+  it('synchronously refreshes rank when new matches are captured during drain', async () => {
+    const now = new Date();
+    mockPlayerPollStateFind.mockReturnValue({
+      lean: vi.fn().mockResolvedValue([
+        {
+          playerId: 'user-1',
+          puuid: 'puuid-1',
+          mode: 'hot',
+          lastProcessedAt: new Date(now.getTime() - 60_000),
+          lastRankPollAt: new Date(now.getTime() - 60_000),
+          lastMatchPollAt: new Date(now.getTime() - 60_000),
+          lastObservedActivityAt: new Date(now.getTime() - 60_000),
+          enteredHotAt: new Date(now.getTime() - 60_000),
+          consecutiveIdleHotPolls: 0,
+          unresolvedMatchCount: 0,
+          deferredMatchDetailCount: 0,
+          pendingMatchFetch: true,
+          nextEligibleAt: new Date(now.getTime() + 60_000),
+        },
+      ]),
+    });
+    mockCaptureMatchesForPlayer.mockResolvedValue({
+      ...defaultMatchCaptureResult,
+      uncapturedMatchCount: 1,
+      capturedCount: 1,
+      newMatches: [
+        { matchId: 'SG2_2', placement: 1, playedAt: new Date('2026-04-18T00:00:00.000Z') },
+      ],
+    });
+
+    await runMatchDrainCycle({ source: 'scheduled' });
+
+    expect(mockCaptureMatchesForPlayer).toHaveBeenCalledTimes(1);
+    expect(mockCaptureSnapshotForPlayer).toHaveBeenCalledTimes(1);
   });
 });
