@@ -73,7 +73,7 @@ export interface RiotClientRequestMetrics {
   status: 'fulfilled' | 'rejected';
 }
 
-export interface RiotClientQueueSnapshot extends RiotQueueSnapshot {}
+export type RiotClientQueueSnapshot = RiotQueueSnapshot;
 
 export class RiotClient {
   private apiKey: string;
