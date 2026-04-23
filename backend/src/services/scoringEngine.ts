@@ -238,7 +238,34 @@ export async function createLpDeltaTransaction(
   const existingTotal = result[0]?.total ?? 0;
 
   const delta = expectedTotal - existingTotal;
-  if (delta === 0) return;
+  if (delta === 0) {
+    // LP is fully accounted for in existing transactions. However, a previous rank-cron cycle
+    // may have created an LP delta transaction with matchId: null (because queue pressure
+    // deferred the match fetch before the match was in the DB). If pending matches now exist
+    // in the DB, retroactively link the orphaned transaction so the notification feed unblocks.
+    const pendingMatches = await getUnresolvedMatches(player.puuid, options.newMatches ?? []);
+    if (pendingMatches.length > 0) {
+      const orphaned = await PointTransaction.findOne({
+        playerId: player.discordId,
+        type: 'match',
+        source: 'lp_delta',
+        matchId: null,
+      }).sort({ createdAt: -1 });
+      if (orphaned) {
+        const latest = pendingMatches[pendingMatches.length - 1]!;
+        await PointTransaction.updateOne(
+          { _id: orphaned._id },
+          { $set: { matchId: latest.matchId } },
+        );
+        await applyLpAttribution(player.puuid, pendingMatches, true);
+        logger.info(
+          { discordId: player.discordId, riotId: player.riotId ?? null, godSlug: player.godSlug, matchId: latest.matchId },
+          `[scoring] Retroactively linked orphaned LP delta transaction to match ${latest.matchId} for ${playerLabel}`,
+        );
+      }
+    }
+    return;
+  }
 
   const today = getCurrentPhtDay();
   const phase = settings.phases.find((p) => today >= p.startDay && today <= p.endDay);

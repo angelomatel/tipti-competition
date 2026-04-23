@@ -397,9 +397,12 @@ async function processMatchDrainForPlayer(
       competitiveStateChanged = hasCompetitiveStateChanged(beforeState, getCompetitiveState(updatedPlayer));
     }
 
-    if (competitiveStateChanged) {
-      await createLpDeltaTransaction(updatedPlayer, settings, { newMatches: matchResult.newMatches });
-    }
+    // Always attempt LP attribution in the match-drain cron — not just when competitiveStateChanged.
+    // This covers the case where the rank cron created an orphaned LP delta transaction (matchId: null)
+    // due to queue pressure, and the match was captured here afterwards. The delta will be 0 (already
+    // accounted for), but createLpDeltaTransaction will retroactively link the orphaned transaction
+    // to the newly present pending match records.
+    await createLpDeltaTransaction(updatedPlayer, settings, { newMatches: matchResult.newMatches });
 
     const unresolvedMatchCount = await countOutstandingMatchAttribution(player.puuid);
     // Match-drain treats player's current mode as the cycle context so hot/baseline
