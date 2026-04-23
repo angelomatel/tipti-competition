@@ -13,6 +13,7 @@ const PlayerPollStateSchema = new Schema<PlayerPollStateDocument>({
   consecutiveIdleHotPolls: { type: Number, default: 0 },
   unresolvedMatchCount: { type: Number, default: 0 },
   deferredMatchDetailCount: { type: Number, default: 0 },
+  pendingMatchFetch: { type: Boolean, default: false },
   nextEligibleAt: { type: Date, default: null },
 });
 

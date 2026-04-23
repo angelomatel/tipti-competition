@@ -14,6 +14,7 @@ export interface IPlayerPollState {
   consecutiveIdleHotPolls: number;
   unresolvedMatchCount: number;
   deferredMatchDetailCount: number;
+  pendingMatchFetch: boolean;
   nextEligibleAt: Date | null;
 }
 
