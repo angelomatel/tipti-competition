@@ -260,7 +260,7 @@ export async function createLpDeltaTransaction(
         await applyLpAttribution(player.puuid, pendingMatches, true);
         logger.info(
           { discordId: player.discordId, riotId: player.riotId ?? null, godSlug: player.godSlug, matchId: latest.matchId },
-          `[scoring] Retroactively linked orphaned LP delta transaction to match ${latest.matchId} for ${playerLabel}`,
+          `[scoring] Retroactively linked orphaned LP delta transaction to match ${latest.matchId} for ${getPlayerLogLabel(player)}`,
         );
       }
     }
