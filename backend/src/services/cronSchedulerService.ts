@@ -2,6 +2,7 @@ import {
   CRON_PLAYER_CONCURRENCY,
   FETCH_INTERVAL_MINUTES,
   HOT_PLAYER_TTL_MINUTES,
+  MATCH_POLL_SAFETY_CEILING_MINUTES,
 } from '@/constants';
 import { PlayerPollState } from '@/db/models/PlayerPollState';
 import type { PlayerDocument } from '@/types/Player';
@@ -131,6 +132,29 @@ export function selectPlayersForCycles(
   };
 }
 
+/**
+ * Selects players who need a match fetch even when no rank delta was observed:
+ *  - `pendingMatchFetch`: a prior rank cycle saw a delta/outstanding work but skipped
+ *    the synchronous match fetch due to queue pressure.
+ *  - Safety ceiling: `lastMatchPollAt` older than `MATCH_POLL_SAFETY_CEILING_MINUTES`
+ *    (or never polled) — guards against missed rank-delta signals.
+ */
+export function selectPlayersForMatchDrain(
+  players: PlayerDocument[],
+  states: Map<string, PersistedPlayerPollState>,
+  nowMs: number,
+): PlayerDocument[] {
+  const safetyCeilingMs = MATCH_POLL_SAFETY_CEILING_MINUTES * 60 * 1_000;
+  const stablePlayers = [...players].sort(comparePlayersStable);
+  return stablePlayers.filter((player) => {
+    const state = states.get(player.discordId);
+    if (!state) return true;
+    if (state.pendingMatchFetch) return true;
+    const lastMatchPollAtMs = state.lastMatchPollAt?.getTime() ?? 0;
+    return lastMatchPollAtMs === 0 || nowMs - lastMatchPollAtMs >= safetyCeilingMs;
+  });
+}
+
 export function buildDefaultPollState(player: Pick<PlayerDocument, 'discordId' | 'puuid'>): PersistedPlayerPollState {
   return {
     playerId: player.discordId,
@@ -144,6 +168,7 @@ export function buildDefaultPollState(player: Pick<PlayerDocument, 'discordId' |
     consecutiveIdleHotPolls: 0,
     unresolvedMatchCount: 0,
     deferredMatchDetailCount: 0,
+    pendingMatchFetch: false,
     nextEligibleAt: null,
   };
 }
@@ -167,6 +192,7 @@ function normalizePollState(
     consecutiveIdleHotPolls: state.consecutiveIdleHotPolls ?? 0,
     unresolvedMatchCount: state.unresolvedMatchCount ?? 0,
     deferredMatchDetailCount: state.deferredMatchDetailCount ?? 0,
+    pendingMatchFetch: state.pendingMatchFetch ?? false,
     nextEligibleAt: state.nextEligibleAt ? new Date(state.nextEligibleAt) : null,
   };
 }
@@ -184,6 +210,7 @@ function serializePollState(state: PersistedPlayerPollState): Record<string, unk
     consecutiveIdleHotPolls: state.consecutiveIdleHotPolls,
     unresolvedMatchCount: state.unresolvedMatchCount,
     deferredMatchDetailCount: state.deferredMatchDetailCount,
+    pendingMatchFetch: state.pendingMatchFetch,
     nextEligibleAt: state.nextEligibleAt,
   };
 }

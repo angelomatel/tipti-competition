@@ -1,13 +1,11 @@
 import {
   BASELINE_FRESHNESS_FLOOR_MINUTES,
-  BASELINE_RANK_REFRESH_INTERVAL_MINUTES,
   COLD_DISCOVERY_RESERVE_PER_MINUTE,
   CRON_PLAYER_CONCURRENCY,
   FETCH_INTERVAL_MINUTES,
   HOT_IDLE_POLLS_TO_COOLDOWN,
   HOT_PLAYER_TTL_MINUTES,
   HOT_POLL_INTERVAL_SECONDS,
-  HOT_RANK_REFRESH_INTERVAL_MINUTES,
   PENDING_ATTRIBUTION_TTL_MINUTES,
   RIOT_APP_RATE_PER_120_SECONDS,
   SCHEDULER_MAX_BLOCKED_FOR_MS,
@@ -18,7 +16,7 @@ import { MatchRecord } from '@/db/models/MatchRecord';
 import { logger } from '@/lib/logger';
 import { getPlayerLogLabel } from '@/lib/playerLogLabel';
 import { processNewMatchBuffs } from '@/services/matchBuffProcessor';
-import { captureMatchesForPlayer } from '@/services/matchService';
+import { captureMatchesForPlayer, type CaptureMatchesResult } from '@/services/matchService';
 import { getQueueBackpressureSnapshot, summarizeRequestsByEndpoint } from '@/services/cronMetricsService';
 import {
   buildDefaultPollState,
@@ -26,6 +24,7 @@ import {
   hasOutstandingHotWork,
   persistPlayerPollState,
   selectPlayersForCycles,
+  selectPlayersForMatchDrain,
   syncActivePollStates,
   type PersistedPlayerPollState,
 } from '@/services/cronSchedulerService';
@@ -37,6 +36,7 @@ import { getTournamentSettings } from '@/services/tournamentService';
 import type { PlayerDocument } from '@/types/Player';
 
 type CycleType = 'hot' | 'baseline';
+type CycleKind = CycleType | 'match-drain';
 
 export interface RunCronCycleOptions {
   source?: 'scheduled' | 'admin';
@@ -44,12 +44,17 @@ export interface RunCronCycleOptions {
   cycleType?: CycleType | 'all';
 }
 
+export interface RunMatchDrainCycleOptions {
+  source?: 'scheduled' | 'admin';
+  catchUp?: boolean;
+}
+
 type CompetitiveState = Pick<
   PlayerDocument,
   'currentTier' | 'currentRank' | 'currentLP' | 'currentWins' | 'currentLosses'
 >;
 
-const runningCycles = new Set<CycleType | 'all'>();
+const runningCycles = new Set<CycleKind | 'all'>();
 const activePlayerLocks = new Set<string>();
 
 export async function runCronCycle(options: RunCronCycleOptions = {}): Promise<void> {
@@ -64,6 +69,9 @@ export async function runCronCycle(options: RunCronCycleOptions = {}): Promise<v
     if (cycleType === 'all') {
       await runSingleCycle('baseline', options, true);
       await runSingleCycle('hot', options, true);
+      // Drain anything that was deferred (queue pressure) or whose match poll is stale,
+      // so an admin "refresh everything" actually flushes pending match work.
+      await runMatchDrainCycleInternal({ source: options.source, catchUp: options.catchUp });
       await processMatchBuffs();
       return;
     }
@@ -72,6 +80,50 @@ export async function runCronCycle(options: RunCronCycleOptions = {}): Promise<v
   } finally {
     finishCycle(cycleType);
   }
+}
+
+async function runMatchDrainCycleInternal(options: RunMatchDrainCycleOptions): Promise<void> {
+  // Used when we're already inside an 'all' cycle lock — skip the lock to avoid deadlock.
+  const cycleStartedAt = Date.now();
+  const riotClient = getRiotClient();
+  const settings = await getTournamentSettings();
+  const now = new Date();
+  if (!isTournamentActive(now, settings.startDate, settings.endDate)) {
+    return;
+  }
+
+  const players = await listActivePlayers();
+  const states = await syncActivePollStates(players);
+  const candidates = selectPlayersForMatchDrain(players, states, cycleStartedAt);
+  if (candidates.length === 0) return;
+
+  const concurrency = Math.min(
+    getPlayerProcessingConcurrency(),
+    CRON_PLAYER_CONCURRENCY,
+    Math.max(1, candidates.length),
+  );
+  let nextIndex = 0;
+
+  const workerLoop = async () => {
+    while (true) {
+      if (hasQueuePressure(riotClient, Date.now())) return;
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      if (currentIndex >= candidates.length) return;
+
+      const selected = candidates[currentIndex]!;
+      if (activePlayerLocks.has(selected.discordId)) continue;
+
+      activePlayerLocks.add(selected.discordId);
+      try {
+        await processMatchDrainForPlayer(selected, settings, Boolean(options.catchUp), states);
+      } finally {
+        activePlayerLocks.delete(selected.discordId);
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: concurrency }, workerLoop));
 }
 
 export function resetCronCycleState(): void {
@@ -141,7 +193,9 @@ async function runSingleCycle(
   const freshnessFloorMs = BASELINE_FRESHNESS_FLOOR_MINUTES * 60 * 1_000;
   const isBaselineStarved = (player: PlayerDocument, nowMs: number): boolean => {
     if (cycleType !== 'baseline') return false;
-    const lastPollMs = states.get(player.discordId)?.lastMatchPollAt?.getTime() ?? 0;
+    // Rank polls are the per-cycle touchpoint now (match polls only fire on deltas),
+    // so use lastRankPollAt to detect a baseline player starving under load.
+    const lastPollMs = states.get(player.discordId)?.lastRankPollAt?.getTime() ?? 0;
     return lastPollMs === 0 || nowMs - lastPollMs >= freshnessFloorMs;
   };
   let starvationOverrides = 0;
@@ -230,35 +284,59 @@ async function processPlayerCycle(
     ...(states.get(player.discordId) ?? buildDefaultPollState(player)),
   };
   const beforeState = getCompetitiveState(player);
-  const startedAt = new Date();
+  const riotClient = getRiotClient();
 
-  logger.debug({ ...playerContext, cycleType, mode: state.mode }, `[cron] Processing ${playerLabel}`);
+  logger.debug({ ...playerContext, cycleType, mode: state.mode }, `[cron-rank] Processing ${playerLabel}`);
 
   try {
-    const matchMode = catchUp ? 'catch-up' : cycleType === 'hot' ? 'hot' : 'baseline';
-    const matchResult = await captureMatchesForPlayer(player, { settings, mode: matchMode });
-    state.lastMatchPollAt = startedAt;
-
-    const shouldFetchSnapshot = needsRankRefresh(cycleType, state, matchResult, startedAt.getTime());
-    const updatedPlayer = shouldFetchSnapshot ? await captureSnapshotForPlayer(player) : player;
-    if (shouldFetchSnapshot) {
-      state.lastRankPollAt = new Date();
-    }
+    // Rank poll is always run — it's the cheap change detector for this player.
+    const rankPolledAt = new Date();
+    const updatedPlayer = await captureSnapshotForPlayer(player);
+    state.lastRankPollAt = rankPolledAt;
 
     const competitiveStateChanged = hasCompetitiveStateChanged(beforeState, getCompetitiveState(updatedPlayer));
+    const hadCarriedOutstandingWork = state.deferredMatchDetailCount > 0
+      || state.unresolvedMatchCount > 0
+      || state.pendingMatchFetch;
+    // Admin-driven catch-up forces a match fetch so it actually pulls recent history
+    // even for players whose rank snapshot didn't move.
+    const shouldFetchMatchesNow = catchUp || competitiveStateChanged || hadCarriedOutstandingWork;
+
+    let matchResult: CaptureMatchesResult | null = null;
+    let pendingMatchFetch = state.pendingMatchFetch;
+
+    if (shouldFetchMatchesNow) {
+      if (hasQueuePressure(riotClient, Date.now())) {
+        // Defer to match-drain cron to avoid piling on a stressed queue.
+        pendingMatchFetch = true;
+        logger.debug(
+          { ...playerContext, cycleType },
+          `[cron-rank] Deferring match fetch due to queue pressure for ${playerLabel}`,
+        );
+      } else {
+        const matchMode = catchUp ? 'catch-up' : cycleType === 'hot' ? 'hot' : 'baseline';
+        matchResult = await captureMatchesForPlayer(updatedPlayer, { settings, mode: matchMode });
+        state.lastMatchPollAt = new Date();
+        pendingMatchFetch = false;
+      }
+    }
+
     if (competitiveStateChanged) {
-      await createLpDeltaTransaction(updatedPlayer, settings, { newMatches: matchResult.newMatches });
+      await createLpDeltaTransaction(updatedPlayer, settings, {
+        newMatches: matchResult?.newMatches ?? [],
+      });
     }
 
     const unresolvedMatchCount = await countOutstandingMatchAttribution(player.puuid);
     const nextState = getNextPlayerPollState({
       player,
       cycleType,
-      previousState: state,
+      previousState: { ...state, pendingMatchFetch },
       processedAt: new Date(),
       matchResult,
       competitiveStateChanged,
       unresolvedMatchCount,
+      pendingMatchFetch,
     });
 
     states.set(player.discordId, nextState);
@@ -269,16 +347,91 @@ async function processPlayerCycle(
         ...playerContext,
         cycleType,
         competitiveStateChanged,
+        matchFetchRan: matchResult !== null,
+        capturedCount: matchResult?.capturedCount ?? 0,
+        deferredMatchDetailCount: nextState.deferredMatchDetailCount,
+        unresolvedMatchCount,
+        pendingMatchFetch: nextState.pendingMatchFetch,
+        nextMode: nextState.mode,
+        nextEligibleAt: nextState.nextEligibleAt?.toISOString() ?? null,
+      },
+      `[cron-rank] Finished processing ${playerLabel}`,
+    );
+  } catch (err) {
+    logger.error({ err, ...playerContext, cycleType }, `[cron-rank] Failed processing ${playerLabel}`);
+  }
+}
+
+async function processMatchDrainForPlayer(
+  player: PlayerDocument,
+  settings: Awaited<ReturnType<typeof getTournamentSettings>>,
+  catchUp: boolean,
+  states: Map<string, PersistedPlayerPollState>,
+): Promise<void> {
+  const playerLabel = getPlayerLogLabel(player);
+  const playerContext = getPlayerContext(player);
+  const state = {
+    ...(states.get(player.discordId) ?? buildDefaultPollState(player)),
+  };
+  const beforeState = getCompetitiveState(player);
+  const riotClient = getRiotClient();
+
+  logger.debug(
+    { ...playerContext, mode: state.mode, pendingMatchFetch: state.pendingMatchFetch },
+    `[cron-match] Processing ${playerLabel}`,
+  );
+
+  try {
+    const matchMode = catchUp ? 'catch-up' : state.mode === 'hot' ? 'hot' : 'baseline';
+    const matchResult = await captureMatchesForPlayer(player, { settings, mode: matchMode });
+    state.lastMatchPollAt = new Date();
+    state.pendingMatchFetch = false;
+
+    // Symmetric to the rank cron: if we captured new matches, fetch rank immediately so
+    // LP attribution can proceed without waiting for the next rank tick.
+    let updatedPlayer: PlayerDocument = player;
+    let competitiveStateChanged = false;
+    if (matchResult.capturedCount > 0 && !hasQueuePressure(riotClient, Date.now())) {
+      updatedPlayer = await captureSnapshotForPlayer(player);
+      state.lastRankPollAt = new Date();
+      competitiveStateChanged = hasCompetitiveStateChanged(beforeState, getCompetitiveState(updatedPlayer));
+    }
+
+    if (competitiveStateChanged) {
+      await createLpDeltaTransaction(updatedPlayer, settings, { newMatches: matchResult.newMatches });
+    }
+
+    const unresolvedMatchCount = await countOutstandingMatchAttribution(player.puuid);
+    // Match-drain treats player's current mode as the cycle context so hot/baseline
+    // transitions still work correctly.
+    const nextState = getNextPlayerPollState({
+      player,
+      cycleType: state.mode,
+      previousState: state,
+      processedAt: new Date(),
+      matchResult,
+      competitiveStateChanged,
+      unresolvedMatchCount,
+      pendingMatchFetch: false,
+    });
+
+    states.set(player.discordId, nextState);
+    await persistPlayerPollState(player, nextState);
+
+    logger.debug(
+      {
+        ...playerContext,
+        competitiveStateChanged,
         capturedCount: matchResult.capturedCount,
         deferredMatchDetailCount: matchResult.deferredMatchDetailCount,
         unresolvedMatchCount,
         nextMode: nextState.mode,
         nextEligibleAt: nextState.nextEligibleAt?.toISOString() ?? null,
       },
-      `[cron] Finished processing ${playerLabel}`,
+      `[cron-match] Finished processing ${playerLabel}`,
     );
   } catch (err) {
-    logger.error({ err, ...playerContext, cycleType }, `[cron] Failed processing ${playerLabel}`);
+    logger.error({ err, ...playerContext }, `[cron-match] Failed processing ${playerLabel}`);
   }
 }
 
@@ -290,22 +443,32 @@ function getNextPlayerPollState({
   matchResult,
   competitiveStateChanged,
   unresolvedMatchCount,
+  pendingMatchFetch,
 }: {
   player: PlayerDocument;
   cycleType: CycleType;
   previousState: PersistedPlayerPollState;
   processedAt: Date;
-  matchResult: Awaited<ReturnType<typeof captureMatchesForPlayer>>;
+  matchResult: CaptureMatchesResult | null;
   competitiveStateChanged: boolean;
   unresolvedMatchCount: number;
+  pendingMatchFetch: boolean;
 }): PersistedPlayerPollState {
-  const hadObservedActivity = matchResult.capturedCount > 0
-    || matchResult.deferredMatchDetailCount > 0
+  // When matchResult is null (rank cycle that skipped the match fetch) we carry the
+  // previous tick's deferred count forward and assume no new uncaptured matches.
+  const capturedCount = matchResult?.capturedCount ?? 0;
+  const deferredMatchDetailCount = matchResult?.deferredMatchDetailCount
+    ?? previousState.deferredMatchDetailCount;
+  const uncapturedMatchCount = matchResult?.uncapturedMatchCount ?? 0;
+
+  const hadObservedActivity = capturedCount > 0
+    || deferredMatchDetailCount > 0
     || competitiveStateChanged
     || unresolvedMatchCount > 0;
   const isIdleHotPoll = cycleType === 'hot'
     && !hadObservedActivity
-    && matchResult.uncapturedMatchCount === 0;
+    && uncapturedMatchCount === 0
+    && !pendingMatchFetch;
 
   const nextState: PersistedPlayerPollState = {
     ...previousState,
@@ -315,10 +478,13 @@ function getNextPlayerPollState({
     lastMatchPollAt: previousState.lastMatchPollAt,
     lastRankPollAt: previousState.lastRankPollAt,
     unresolvedMatchCount,
-    deferredMatchDetailCount: matchResult.deferredMatchDetailCount,
+    deferredMatchDetailCount,
+    pendingMatchFetch,
     consecutiveIdleHotPolls: isIdleHotPoll
       ? previousState.consecutiveIdleHotPolls + 1
-      : hasOutstandingWork(matchResult, unresolvedMatchCount) || competitiveStateChanged
+      : hasOutstandingWork(capturedCount, deferredMatchDetailCount, unresolvedMatchCount)
+          || competitiveStateChanged
+          || pendingMatchFetch
         ? 0
         : previousState.consecutiveIdleHotPolls,
   };
@@ -327,8 +493,9 @@ function getNextPlayerPollState({
     nextState.lastObservedActivityAt = processedAt;
   }
 
-  const shouldStayHot = hasOutstandingWork(matchResult, unresolvedMatchCount)
+  const shouldStayHot = hasOutstandingWork(capturedCount, deferredMatchDetailCount, unresolvedMatchCount)
     || competitiveStateChanged
+    || pendingMatchFetch
     || (previousState.mode === 'hot' && !canCoolDownHotPlayer(previousState, nextState, processedAt));
 
   if (shouldStayHot) {
@@ -348,12 +515,11 @@ function getNextPlayerPollState({
 }
 
 function hasOutstandingWork(
-  matchResult: Awaited<ReturnType<typeof captureMatchesForPlayer>>,
+  capturedCount: number,
+  deferredMatchDetailCount: number,
   unresolvedMatchCount: number,
 ): boolean {
-  return matchResult.capturedCount > 0
-    || matchResult.deferredMatchDetailCount > 0
-    || unresolvedMatchCount > 0;
+  return capturedCount > 0 || deferredMatchDetailCount > 0 || unresolvedMatchCount > 0;
 }
 
 function canCoolDownHotPlayer(
@@ -372,23 +538,6 @@ function canCoolDownHotPlayer(
 
   return nextState.consecutiveIdleHotPolls >= HOT_IDLE_POLLS_TO_COOLDOWN
     && processedAt.getTime() - lastObservedActivityAt.getTime() >= HOT_PLAYER_TTL_MINUTES * 60 * 1_000;
-}
-
-function needsRankRefresh(
-  cycleType: CycleType,
-  state: PersistedPlayerPollState,
-  matchResult: Awaited<ReturnType<typeof captureMatchesForPlayer>>,
-  nowMs: number,
-): boolean {
-  if (matchResult.capturedCount > 0 || matchResult.deferredMatchDetailCount > 0) {
-    return true;
-  }
-
-  const intervalMinutes = cycleType === 'hot'
-    ? HOT_RANK_REFRESH_INTERVAL_MINUTES
-    : BASELINE_RANK_REFRESH_INTERVAL_MINUTES;
-  const lastRankPollAtMs = state.lastRankPollAt?.getTime() ?? 0;
-  return lastRankPollAtMs === 0 || nowMs - lastRankPollAtMs >= intervalMinutes * 60 * 1_000;
 }
 
 async function countOutstandingMatchAttribution(puuid: string): Promise<number> {
@@ -417,7 +566,7 @@ async function processMatchBuffs(): Promise<void> {
   }
 }
 
-function tryStartCycle(cycleType: CycleType | 'all'): boolean {
+function tryStartCycle(cycleType: CycleKind | 'all'): boolean {
   if (cycleType === 'all') {
     if (runningCycles.size > 0) return false;
     runningCycles.add('all');
@@ -432,8 +581,106 @@ function tryStartCycle(cycleType: CycleType | 'all'): boolean {
   return true;
 }
 
-function finishCycle(cycleType: CycleType | 'all'): void {
+function finishCycle(cycleType: CycleKind | 'all'): void {
   runningCycles.delete(cycleType);
+}
+
+export async function runMatchDrainCycle(options: RunMatchDrainCycleOptions = {}): Promise<void> {
+  if (!tryStartCycle('match-drain')) {
+    logger.warn('[cron-match] A conflicting match-drain cycle is already running. Skipping.');
+    return;
+  }
+
+  const cycleStartedAt = Date.now();
+  const cycleSource = options.source ?? 'scheduled';
+  const riotClient = getRiotClient();
+
+  try {
+    const settings = await getTournamentSettings();
+    const now = new Date();
+    if (!isTournamentActive(now, settings.startDate, settings.endDate)) {
+      return;
+    }
+
+    const players = await listActivePlayers();
+    const states = await syncActivePollStates(players);
+    const candidates = selectPlayersForMatchDrain(players, states, cycleStartedAt);
+    const concurrency = Math.min(
+      getPlayerProcessingConcurrency(),
+      CRON_PLAYER_CONCURRENCY,
+      Math.max(1, candidates.length),
+    );
+    let processedPlayers = 0;
+    let lockedPlayers = 0;
+    let queueLimited = false;
+    let nextIndex = 0;
+
+    logger.info(
+      {
+        source: cycleSource,
+        activePlayerCount: players.length,
+        candidateCount: candidates.length,
+        concurrency,
+      },
+      '[cron-match] Starting match-drain cycle',
+    );
+
+    const workerLoop = async () => {
+      while (true) {
+        if (hasQueuePressure(riotClient, Date.now())) {
+          queueLimited = true;
+          return;
+        }
+
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        if (currentIndex >= candidates.length) {
+          return;
+        }
+
+        const selected = candidates[currentIndex]!;
+        if (activePlayerLocks.has(selected.discordId)) {
+          lockedPlayers += 1;
+          continue;
+        }
+
+        activePlayerLocks.add(selected.discordId);
+        try {
+          await processMatchDrainForPlayer(selected, settings, Boolean(options.catchUp), states);
+          processedPlayers += 1;
+        } finally {
+          activePlayerLocks.delete(selected.discordId);
+        }
+      }
+    };
+
+    await Promise.all(Array.from({ length: concurrency }, workerLoop));
+
+    await processMatchBuffs();
+
+    const requestMetrics = riotClient.getRequestMetricsSince(cycleStartedAt);
+    const queueSnapshot = getQueueBackpressureSnapshot(riotClient, Date.now());
+    logger.info(
+      {
+        source: cycleSource,
+        durationMs: Date.now() - cycleStartedAt,
+        candidateCount: candidates.length,
+        playersProcessed: processedPlayers,
+        playersSkippedByLock: lockedPlayers,
+        queueLimited,
+        queuedRequests: queueSnapshot.queuedRequests,
+        activeRequests: queueSnapshot.activeRequests,
+        blockedForMs: queueSnapshot.blockedForMs,
+        requestsLastMinute: queueSnapshot.requestsLastMinute,
+        p50QueueWaitMs: queueSnapshot.p50QueueWaitMs,
+        p95QueueWaitMs: queueSnapshot.p95QueueWaitMs,
+        riotRequestsByEndpoint: summarizeRequestsByEndpoint(requestMetrics),
+      },
+      '[cron-match] Match-drain cycle summary',
+    );
+  } finally {
+    finishCycle('match-drain');
+  }
 }
 
 function isTournamentActive(now: Date, startDate: Date, endDate: Date): boolean {

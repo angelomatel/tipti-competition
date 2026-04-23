@@ -30,8 +30,19 @@ export const HOT_POLL_INTERVAL_SECONDS = 60;
 export const HOT_PLAYER_TTL_MINUTES = 75;
 export const HOT_IDLE_POLLS_TO_COOLDOWN = 3;
 export const COLD_DISCOVERY_RESERVE_PER_MINUTE = 10;
-export const HOT_RANK_REFRESH_INTERVAL_MINUTES = 5;
-export const BASELINE_RANK_REFRESH_INTERVAL_MINUTES = 15;
+/**
+ * Match-drain cron cadence. The drain cron catches players whose rank cycle skipped
+ * a synchronous match fetch (queue pressure) or whose last match poll is older than
+ * MATCH_POLL_SAFETY_CEILING_MINUTES. Rank deltas trigger synchronous match fetches,
+ * so this cron is a safety net rather than the primary path.
+ */
+export const MATCH_DRAIN_INTERVAL_SECONDS = 60;
+/**
+ * Safety ceiling for match polling. A player whose last match poll is older than this
+ * gets picked up by the match-drain cron even without a rank delta or backpressure
+ * backlog — guards against missed deltas (e.g., rank fetch errored).
+ */
+export const MATCH_POLL_SAFETY_CEILING_MINUTES = 30;
 /**
  * Pending LP attributions older than this are considered abandoned and no longer
  * keep a player in hot mode. Must exceed HOT_PLAYER_TTL_MINUTES so genuinely
@@ -89,15 +100,15 @@ export const RIOT_REQUEST_TIMEOUT_MS = 15_000;
  */
 export const RIOT_APP_RATE_PER_SECOND = parsePositiveIntEnv(
   process.env.RIOT_APP_RATE_PER_SECOND,
-  IS_PRODUCTION ? 80 : 20,
+  IS_PRODUCTION ? 160 : 20,
 );
 export const RIOT_APP_RATE_PER_120_SECONDS = parsePositiveIntEnv(
   process.env.RIOT_APP_RATE_PER_120_SECONDS,
-  IS_PRODUCTION ? 9_600 : 100,
+  IS_PRODUCTION ? 19_200 : 100,
 );
 export const RIOT_QUEUE_MAX_IN_FLIGHT = parsePositiveIntEnv(
   process.env.RIOT_QUEUE_MAX_IN_FLIGHT,
-  IS_PRODUCTION ? 6 : 3,
+  IS_PRODUCTION ? 12 : 3,
 );
 export const SCHEDULER_MAX_PENDING_REQUESTS = parsePositiveIntEnv(
   process.env.SCHEDULER_MAX_PENDING_REQUESTS,
